@@ -1,0 +1,173 @@
+<HTML>
+<HEAD>
+</HEAD>
+<BODY>
+<H1>Stars Program Reference - Setup and Configuration for caenc111c</H1>
+<P>
+<UL>
+<LI><A NAME="SECDSETUP" HREF="#SECSETUP">SETUP</A>
+ <UL>
+  <LI><A NAME="SECDPLACEPROGRAM" HREF="#SECPLACEPROGRAM">Place the Program Files into the same Folder.</A></LI>
+  <LI><A NAME="SECDCOPYKEYFILE" HREF="#SECCOPYKEYFILE">Copy the stars keyfile to Stars Server Folder.</A></LI>
+ </UL>
+</LI>
+<LI><A NAME="SECDCUSTOMIZE config.pl" HREF="#SECCUSTOMIZE config.pl">CUSTOMIZE config.pl</A>
+ <UL>
+  <LI><A NAME="SECD$::Server" HREF="#SEC$::Server">$::Server="{Write IP Address Of Stars Server}"</A></LI>
+  <LI><A NAME="SECD$::CAMAC_HOST" HREF="#SEC$::CAMAC_HOST">$::CAMAC_HOST="{Write IP Address Of CAEN CAMAC Crate Controller C111C}"</A></LI>
+  <LI><A NAME="SECDConfiguration of CAEN C111C" HREF="#SECConfiguration of CAEN C111C">Configuration of CAEN C111C</A>
+   <UL><LI><A NAME="SECDrequire 'caenc111cmod.pl';" HREF="#SECrequire 'caenc111cmod.pl';">require 'caenc111cmod.pl';</A></LI>
+       <LI><A NAME="SECDCAENC111CRegister" HREF="#SECCAENC111CRegister">CAENC111CRegister("{Write caenc111c NodeName}","CAENC111C","1.0");</A></LI>
+   </UL>
+  </LI>
+  <LI><A NAME="SECDConfiguration of Kenetic Systems Model 3655-L1A" HREF="#SECConfiguration of Kenetic Systems Model 3655-L1A">Configuration of Kenetic Systems Model 3655-L1A</A>
+   <UL><LI><A NAME="SECDrequire 'ks3655l1amod.pl';" HREF="#SECrequire 'ks3655l1amod.pl';">require 'ks3655l1amod.pl';</A></LI>
+       <LI><A NAME="SECDKINETICSYSTEMS3655L1ARegister" HREF="#SECKINETICSYSTEMS3655L1ARegister">KINETICSYSTEMS3655L1ARegister("{Write KS 3655-L1A NodeName}","{Write KS 3655-L1A SlotNumber}","CAENC111C","1.0");</A></LI>
+   </UL>
+  </LI>
+  <LI><A NAME="SECDConfiguration of CAEN C257" HREF="#SECConfiguration of CAEN C257">Configuration of CAEN C257</A>
+   <UL><LI><A NAME="SECDrequire 'caenc257mod.pl';" HREF="#SECrequire 'caenc257mod.pl';">require 'caenc257mod.pl';</A></LI>
+       <LI><A NAME="SECD@::CAENC257CounterName" HREF="#SEC@::CAENC257CounterName">@::CAENC257CounterName = ({Write list of Counter Names})"</A></LI>
+	   <LI><A NAME="SECDCAENC257Register" , "CAENC111C","1.0");" HREF="#SECCAENC257Register">CAENC257Register("{Write CAEN C257 NodeName}", "{Write CAEN C257 SlotNumber}", "{Write Parent Name of CAEN C257 Counters}" , "CAENC111C","1.0");</A></LI>
+   </UL>
+  </LI>
+ </UL>
+</LI></UL>
+ 
+<HR>
+<H2><A NAME="SECSETUP" HREF="#SECDSETUP">SETUP</A></H2>
+<H3><A NAME="SECPLACEPROGRAM" HREF="#SECDPLACEPROGRAM">Place the Program Files into the same Folder.</A>
+</H3>
+<DL COMPACT>
+  <DD>
+Place the <A HREF="caenc111cGeneral.html#SECProgram Files">program files of 'caenc111c'</A> in the same folder.
+</DD>
+</DL>
+<H3><A NAME="SECCOPYKEYFILE" HREF="#SECDCOPYKEYFILE">Copy the stars keyfile to Stars Server.</A></H3>
+<DL COMPACT>
+  <DD>
+Stars keyfile name is [<em>Stars Nodename</em>].key.<BR>
+If you name the stars nodename of 'caenc111c' as 'caenc111c', copy the file 'caenc111c.key' to [<em>Stars Server's folder</em>]/takaserv-lib/.
+</DD>
+</DL>
+<HR>
+<H2><A NAME="SECCUSTOMIZE config.pl" HREF="#SECDCUSTOMIZE config.pl">CUSTOMIZE config.pl</A></H2>
+<DL compact>
+  <DD><STRONG>'config.pl'</STRONG> is  the user configuration file. Please modify it.  
+  <DD>&nbsp;</DD>
+</DL>
+<H3><A NAME="SEC$::Server" HREF="#SECD$::Server">$::Server="{Write <em>IP Address Of Stars Server</em>}"</A>
+</H3>
+<DL COMPACT><DD>
+Set the IP Address(or Name) of the StarsServer to the $::Server.
+<BR><BR>[Examples]<BR><Tt>$::Server= "localhost";
+</DD>
+</DT></DL>
+<HR>
+<H3><A NAME="SEC$::CAMAC_HOST" HREF="#SECD$::CAMAC_HOST">$::CAMAC_HOST="{Write <em>IP Address Of CAEN CAMAC Crate Controller C111C</em>}"</A><BR>
+</H3>
+<DL COMPACT><DD>
+Set the IP Address(or Name) of the CAEN C111C CAMAC Crate Controller to the $::CAMAC_HOST.
+<BR><BR>[Examples]<BR><Tt>$::CAMAC_HOST="192.168.11.153";
+</DD>
+</DT></DL>
+<HR>
+<H2><A NAME="SECConfiguration of CAEN C111C" HREF="#SECDConfiguration of CAEN C111C">Configuration of CAEN C111C</A></H2>
+<H3><A NAME="SECrequire 'caenc111cmod.pl';" HREF="#SECDrequire 'caenc111cmod.pl';">require 'caenc111cmod.pl';</A></H3>
+<DL COMPACT><DT>
+<DD>
+Including the CAEN C111C library. (Don't change.)
+</DD>
+</DT></DL>
+
+<HR>
+<H3><A NAME="SECCAENC111CRegister" HREF="#SECDCAENC111CRegister">CAENC111CRegister("{Write <em>caenc111c NodeName</em>}","CAENC111C","1.0");</A></H3>
+<DL COMPACT><DT>
+<DD>
+Registers the information for CAEN C111C.<BR><BR>
+1st parameter: <I>caenc111c NodeName</I>
+<DD>&nbsp;&nbsp;&nbsp;&nbsp;Specify the Stars Nodename for caenc111c. Use &quot;$::Nodename&quot; normally.<BR>
+</DD>
+</DD>
+<DD><BR>
+2nd(="CAENC111C") and 3rd(="1.0") parameters are the tags for future use. Don't change them.
+<BR>
+<BR>[Examples]<BR><Tt>CAENC111CRegister("$::NodeName","CAENC111C","1.0"); # Usually no needs to be changed.
+</DD></DT></DL>
+
+<HR>
+<H2><A NAME="SECConfiguration of Kenetic Systems Model 3655-L1A" HREF="#SECDConfiguration of Kenetic Systems Model 3655-L1A">Configuration of Kenetic Systems Model 3655-L1A</A></H2>
+<H3><A NAME="SECrequire 'ks3655l1amod.pl';" HREF="#SECDrequire 'ks3655l1amod.pl';">require 'ks3655l1amod.pl';</A><BR></H3>
+<DL COMPACT><DT>
+<DD>
+Including the Kenetic Systems Model 3655-L1A library.<BR><BR>
+If no needs to use the Kenetic Systems 3655-L1A module, comment out the line as<BR>
+&nbsp;&nbsp;#require 'ks3655l1amod.pl';</DD>
+</DT></DL>
+
+<HR>
+<H3><A NAME="SECKINETICSYSTEMS3655L1ARegister" HREF="#SECDKINETICSYSTEMS3655L1ARegister">KINETICSYSTEMS3655L1ARegister("{<em>Write KS3655-L1A NodeName</em>}","{Write <em>KS3655-L1A SlotNumber</em>}","CAENC111C","1.0");</A></H3>
+<DL COMPACT><DD>
+Registers the information of Kenetic Systems Model 3655-L1A.<BR><BR>
+If no needs to use Kenetic Systems Model 3655-L1A module, comment out the line as<BR>
+&nbsp;&nbsp;#KINETICSYSTEMS3655L1ARegister(...);<BR><BR>
+1st parameter: <I>KS3655-L1A NodeName</I>
+<DD>&nbsp;&nbsp;&nbsp;&nbsp;Specify the Stars Nodename to use the Stars Commands of Kenetic Systems Model 3655-L1A.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;It should be named as "$::Nodename.xxxx"
+</DD><DD>
+<BR>2nd parameter: <I>KS3655-L1A SlotNumber</I>
+<DD>&nbsp;&nbsp;&nbsp;&nbsp;Specify the Slot Number(1 - 23) the Kenetic Systems Model 3655-L1A has been inserted in.
+</DD>
+</DD>
+</DD>
+<DD><BR>
+3rd(="CAENC111C") and 4th(="1.0") parameters are the tags for future use. Don't change them.
+<BR><BR>[Examples]<BR><Tt>KINETICSYSTEMS3655L1ARegister("$::NodeName.ks3655","23","CAENC111C","1.0");
+</DD></DT></DL>
+
+<HR>
+<H2><A NAME="SECConfiguration of CAEN C257" HREF="#SECDConfiguration of CAEN C257">Configuration of CAEN C257</A></H2>
+<H3><A NAME="SECrequire 'caenc257mod.pl';" HREF="#SECDrequire 'caenc257mod.pl';">require 'caenc257mod.pl';</A><BR></H3>
+<P>
+<DL COMPACT><DT>
+<DD>Including the CAEN C257 library.<BR><BR>If no needs to use the CAEN C257 module, comment out the line as<BR>&nbsp;&nbsp;#require 'caenc257mod.pl';
+</DD></DT></DL>
+<HR>
+<H3><A NAME="SEC@::CAENC257CounterName" HREF="#SECD@::CAENC257CounterName">@::CAENC257CounterName = ({Write <em>list of Counter Names</em>})</A></H3>
+<DL COMPACT><DT>
+<DD>
+Set the name list for CAEN C257 Counter from 0 to 15(16 items).<BR>
+These are used to construct the Stars Nodename for CAEN C257 Counters.<BR><BR>
+If no needs to use the CAEN C257 module, comment out the line as<BR>
+&nbsp;&nbsp;#@::CAENC257CounterName=(...);
+<BR><BR>[Examples]<BR><Tt>@::CAENC257CounterName=qw(C01 C02 C03 C04 C05 C06 C07 C08 C09 C10 C11 C12 C13 C14 C15 C16);
+</DD></DT></DL>
+<HR>
+<H3><A NAME="SECCAENC257Register" HREF="#SECDCAENC257Register">CAENC257Register("{Write <em>CAEN C257 NodeName</em>}", "{Write <em>CAEN C257 SlotNumber</em>}", "{Write <em>Stars Parent Name of CAEN C257 Counters</em>}" , "CAENC111C","1.0");</A></H3>
+<DL COMPACT><DD>
+Registers the information of CAEN C257.<BR><BR>
+If no needs to use the CAEN C257 module, comment out the line as<BR>
+&nbsp;&nbsp;#CAENC257Register(...);<BR><BR>
+1st parameter: <I>CAEN C257 NodeName</I>
+<DD>&nbsp;&nbsp;&nbsp;&nbsp;Specify the Stars Nodename to use the Stars CAEN C257 Controller Commands.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;It should be named as "$::Nodename.xxxx"
+</DD>
+<DD>
+<BR>2nd parameter: <I>CAEN C257 SlotNumber</I>
+<DD>&nbsp;&nbsp;&nbsp;&nbsp;Specify the Slot Number(1 - 23) the CAEN C257 has been inserted in.
+</DD>
+</DD>
+<DD><BR>
+3rd parameter: <I>Stars Parent Name of CAEN C257 Counters</I>
+<DD>&nbsp;&nbsp;&nbsp;&nbsp;Used to construct the Stars CAEN C257 Counters NodeName to use the Stars CAEN C257 Counter Commands.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;If "$::NodeName" specified, "$::Nodename.C01" (See <A HREF="#SEC@::CAENC257CounterName">previous step for what is 'C01'</A>) is the Stars Nodename for CAEN C257 Counter 0.<BR>
+&nbsp;&nbsp;&nbsp;&nbsp;If "$::NodeName.c257" specified, "$::Nodename.c257.C01" is it for CAEN C257 Counter 0.
+</DD>
+</DD>
+</DD>
+<DD><BR>
+4th(="CAENC111C") and 5th(="1.0") parameters are the tags for future use. Don't change them.
+<BR><BR>[Examples]<BR>CAENC257Register("$::NodeName.c257","22","$::NodeName","CAENC111C","1.0");
+</DD></DD></DT></DL>
+
+</BODY></HTML>

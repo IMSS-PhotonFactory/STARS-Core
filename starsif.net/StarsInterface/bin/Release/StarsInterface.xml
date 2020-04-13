@@ -1,0 +1,193 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>StarsInterface</name>
+    </assembly>
+    <members>
+        <member name="T:STARS.StarsMessage">
+            <summary>Class for StarsMessage.</summary>
+            <remarks>This class is used to store the data of Stars Message.</remarks>
+        </member>
+        <member name="F:STARS.StarsMessage.from">
+            <summary>Used to indicate the 'fromnode', the element of Stars Message.</summary>
+        </member>
+        <member name="F:STARS.StarsMessage.to">
+            <summary>Used to indicate the 'tonode', the element of Stars Message.</summary>
+        </member>
+        <member name="F:STARS.StarsMessage.command">
+            <summary>Used to indicate the 'command', a part of 'Message' element of Stars Message.</summary>
+        </member>
+        <member name="F:STARS.StarsMessage.parameters">
+            <summary>Used to indicate the 'parameters', a part of 'Message' element of Stars Message.</summary>
+        </member>
+        <member name="M:STARS.StarsMessage.#ctor(System.String,System.String,System.String,System.String)">
+            <summary>Constructor for StarsMessage.</summary>
+            <remarks>Parameters for constructor are reflected to class fields and properties.</remarks>
+            <param name="from">Used to indicate the 'fromnode', the element of Stars Message.</param>
+            <param name="to">Used to indicate the 'tonode', the element of Stars Message.</param>
+            <param name="command">Used to indicate the 'command', a part of 'Message' element of Stars Message.</param>
+            <param name="parameters">Used to indicate the 'parameters', a part of 'Message' element of Stars Message.</param>
+        </member>
+        <member name="M:STARS.StarsMessage.#ctor">
+            <summary>Constructor for StarsMessage.</summary>
+            <remarks>Class fields and properties are cleared. (Method Clear() called)</remarks>
+        </member>
+        <member name="M:STARS.StarsMessage.Clear">
+            <summary>Method for Clear.</summary>
+            <remarks>Clear class fields and properties of StarsMessage.</remarks>
+        </member>
+        <member name="P:STARS.StarsMessage.allMessage">
+            <summary>Used to indicate the whole Stars Message.</summary>
+        </member>
+        <member name="P:STARS.StarsMessage.Message">
+            <summary>Used to indicate the 'Message', the element of Stars Message.</summary>
+        </member>
+        <member name="T:STARS.StarsCbArgs">
+            <summary>Class for StarsCbArgs.</summary>
+            <remarks>
+            This class is used for Callback.
+            </remarks>
+        </member>
+        <member name="F:STARS.StarsCbArgs.from">
+            <summary>Used to indicate the 'fromnode', the element of Stars Message.</summary>
+        </member>
+        <member name="F:STARS.StarsCbArgs.to">
+            <summary>Used to indicate the 'tonode', the element of Stars Message.</summary>
+        </member>
+        <member name="F:STARS.StarsCbArgs.command">
+            <summary>Used to indicate the 'command', a part of 'Message' element of Stars Message.</summary>
+        </member>
+        <member name="F:STARS.StarsCbArgs.parameters">
+            <summary>Used to indicate the 'parameters', a part of 'Message' element of Stars Message.</summary>
+        </member>
+        <member name="M:STARS.StarsCbArgs.#ctor(System.String,System.String,System.String,System.String)">
+            <summary>Constructor for StarsCbArgs.</summary>
+            <remarks>Parameters for constructor are reflected to class fields and properties.</remarks>
+            <param name="from">Used to indicate the 'fromnode', the element of Stars Message.</param>
+            <param name="to">Used to indicate the 'tonode', the element of Stars Message.</param>
+            <param name="command">Used to indicate the 'command', a part of 'Message' element of Stars Message.</param>
+            <param name="parameters">Used to indicate the 'parameters', a part of 'Message' element of Stars Message.</param>
+        </member>
+        <member name="M:STARS.StarsCbArgs.Clear">
+            <summary>Method for Clear.</summary>
+            <remarks>Clear class fields and properties of StarsMessage.</remarks>
+        </member>
+        <member name="P:STARS.StarsCbArgs.allMessage">
+            <summary>Used to indicate the whole Stars Message.</summary>
+        </member>
+        <member name="P:STARS.StarsCbArgs.Message">
+            <summary>Used to indicate the 'Message', the element of Stars Message.</summary>
+        </member>
+        <member name="T:STARS.StarsException">
+            <summary>Class for StarsException.</summary>
+            <remarks>This class is called when Stars Exception occurred.</remarks>
+        </member>
+        <member name="M:STARS.StarsException.#ctor(System.String)">
+            <summary>
+             Constructor for StarsException.
+            </summary>
+            <remarks>
+            Automatically called for Stars Exception.
+            </remarks>
+            <param name="message">Using inherited message.</param>
+        </member>
+        <member name="T:STARS.StarsCbHandler">
+            <summary>Delegate for StarsCbHandler.</summary>
+            <remarks>For using Callback.</remarks>
+            <param name="obj">Object.</param>
+            <param name="ev">StarsCbArgs which contains Stars Message.</param>
+        </member>
+        <member name="T:STARS.StarsInterface">
+            <summary>Class for StarsInterface.</summary>
+            <remarks>This class is used to talk with Stars Server.</remarks>
+        </member>
+        <member name="F:STARS.StarsInterface.nodeName">
+            <summary>Used to indicate the nodename of Stars client.</summary>
+        </member>
+        <member name="F:STARS.StarsInterface.svrHost">
+            <summary>Used to indicate the Stars Server hostname. (default: 'localhost')</summary>
+        </member>
+        <member name="F:STARS.StarsInterface.svrPort">
+            <summary>Used to indicate the Stars Server portno. (default: 6057)</summary>
+        </member>
+        <member name="F:STARS.StarsInterface.keyFile">
+            <summary>Used to indicate the certification keyfile's name. (default: 'nodeName'.key)</summary>
+        </member>
+        <member name="M:STARS.StarsInterface.#ctor(System.String,System.String,System.String,System.Int32)">
+            <summary>Constructor for StarsInterface.</summary>
+            <remarks>Parameters for constructor are reflected to class fields and properties.</remarks>
+            <param name="nodeName">Used to indicate the nodename of Stars client.</param>
+            <param name="svrHost">Used to indicate the Stars Server hostname.</param>
+            <param name="keyFile">Used to indicate the certification keyfile's name.</param>
+            <param name="svrPort">Used to indicate the Stars Server portno.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.#ctor(System.String,System.String,System.String)">
+            <summary>Constructor for StarsInterface.</summary>
+            <remarks>Parameters for constructor are reflected to class fields and properties.</remarks>
+            <param name="nodeName">Used to indicate the nodename of Stars client.</param>
+            <param name="svrHost">Used to indicate the Stars Server hostname.</param>
+            <param name="keyFile">Used to indicate the certification keyfile's name.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.#ctor(System.String,System.String)">
+            <summary>Constructor for StarsInterface.</summary>
+            <remarks>Parameters for constructor are reflected to class fields and properties.</remarks>
+            <param name="nodeName">Used to indicate the nodename of Stars client.</param>
+            <param name="svrHost">Used to indicate the Stars Server hostname.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.Connect">
+            <summary>Method for Connect.</summary>
+            <remarks>Start connecting to Stars Server.</remarks>
+        </member>
+        <member name="M:STARS.StarsInterface.Disconnect">
+            <summary>Method for Disconnect.</summary>
+            <remarks>Disconnect from Stars Server.</remarks>
+        </member>
+        <member name="M:STARS.StarsInterface.Send(System.String,System.String,System.String)">
+            <summary>Method for Send.</summary>
+            <remarks>
+            Send Stars Message to Stars Server.
+            Indicate the 'fromnode', 'tonode' and 'Message' of Stars Message.
+            </remarks>
+            <param name="sndFrom">Used to indicate the 'fromnode', the element of Stars Message.</param>
+            <param name="sndTo">Used to indicate the 'tonode', the element of Stars Message.</param>
+            <param name="sndCommand">Used to indicate the 'Message', the element of Stars Message.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.Send(System.String,System.String)">
+            <summary>Method for Send.</summary>
+            <remarks>
+            Send Stars Message to Stars Server.
+            Indicate the 'tonode' and 'Message' of Stars Message.
+            </remarks>
+            <param name="sndTo">Used to indicate the 'tonode', the element of Stars Message.</param>
+            <param name="sndCommand">Used to indicate the 'Message', the element of Stars Message.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.Send(System.String)">
+            <summary>Method for Send.</summary>
+            <remarks>
+            Send Stars Message to Stars Server.
+            Indicate the text of Stars Message.
+            </remarks>
+            <param name="sndCommand">Used to indicate the text of Stars Message.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.Receive(System.Int32)">
+            <summary>Method for Receive.</summary>
+            <remarks>
+            Receive Stars Message form Stars Server with timeout indicating.
+            </remarks>
+            <param name="timeout">Used to indicate the timeout milliseconds.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.Receive">
+            <summary>Method for Receive.</summary>
+            <remarks>Receive Stars Message form Stars Server.</remarks>
+        </member>
+        <member name="M:STARS.StarsInterface.StartCbHandler(STARS.StarsCbHandler)">
+            <summary>Method for StartCbHandler.</summary>
+            <remarks>Add Stars handler.</remarks>
+            <param name="cb">Indicate 'new StarsCbHandler(starshandlername)'.</param>
+        </member>
+        <member name="M:STARS.StarsInterface.Finalize">
+            <summary>This is Finalize.</summary>
+            <remarks>Disconnect from Stars Server. (Method Disconnect() called)</remarks>
+        </member>
+    </members>
+</doc>

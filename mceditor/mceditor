@@ -1,0 +1,757 @@
+#################################################################
+# Proguram Name	:mceditor										#
+# 																#
+#===============================================================#
+# Proguram Title:												#
+#	Measurement and Control EDITOR proguram						#
+#																#
+#							Create by	Yuji.Miyama (ICube)		#
+#===============================================================#
+# Command														#
+#	set [param]	:SG-4311 Data Rcive	[param:PFG Command]			#
+#	delay [nnn]	:Delay Time Set [nnn:msec]						#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+
+#! /usr/bin/perl
+
+#########################
+#		Declaration		#
+#########################
+#####	Module Read		#####
+use strict;									#Standard Module
+use Getopt::Long;							#Standard Module
+use stars;									#Stars Module
+#use Time::HiRes qw( usleep ualarm gettimeofday tv_interval );
+use Tk;
+											#High level Time Module
+#####	ToDo: parameter set	#####
+$::NodeName	=	'mceditor';        			#Default node name.
+
+#####	Library Read	#####
+require 'config.pl';						#Configuration of mcdirec client.
+
+#####	Options Get		#####
+### ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'mcdirec=s' => \$::McDirector,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+'d'      => \$::Debug
+) or die "Bad switch.\n";
+
+#####	Open Stars server	#####
+if ($_ = shift(@ARGV)) { $::Server = $_; }
+
+#####	$::tak is a Stars object	#####
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+#####	Main window create	#####
+window_start();
+
+exit(1);
+
+#################################################################
+# Function Name	:usage											#
+#===============================================================#
+# Function Title:												#
+#	Print Usage.												#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub usage {
+#####	Todo: Please modify help message for "-h" option.	#####
+  print "Usage: dmmcon [-h] [-node MyNodeName] [-mcdirec McDirectorName] [StarsServer]\n";
+  exit(0);
+}
+
+#################################################################
+# Function Name	:window_start									#
+#===============================================================#
+# Function Title:												#
+#	Editor window create										#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out													#
+#	Return		:Return code (Excute result)					#
+#					1	-	OK									#
+#					0	-	Error								#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub window_start {
+#########################
+#		Declaration		#
+#########################
+#####	Mai window create 	#####
+	$::mwin = MainWindow->new;				# Main window create
+	$::mwin->title("<MCEDITOR Ver.0.1>");
+	$::mwin->geometry("1017x700+0+0");
+#	$mwin->geometry("1024x768+0+0");
+	$::dtname_prev = "";
+
+#####	Global variable 	#####
+	### Class backup
+	@::clsname = ( '', '', '', '', '', '', '', '', '', '' );
+											# Class name
+	$::clsnum = 1;							# Class number
+
+	### Script data name
+	$::nmarea = '';							# Data name box area
+	$::dtname = '';							# Access data name
+
+	### List box name
+	$::swin = '';							# Sub window (List box)
+	$::slname = '';							# List select name
+	$::list = '';							# Listbox list area
+
+	### Text box name
+	$::txtarea = '';						# Text box area
+
+	### Title data
+	$::ttlarea = '';						# Title box area
+	$::ttldata = '';						# Title data
+
+	### Information data
+	$::rstarea = '';						# Result box area
+	$::stsarea = '';						# Status box area
+	$::info1 = '';							# File access result information
+	$::info2 = '';							# File access status information
+	
+	$::syntaxcheck = 1;	## Syntax Checkbox on
+
+#########################
+#	Function Main		#
+#########################
+#####	Winjet create 	#####
+	###	Title area create
+	$::ttlarea = $::mwin->Frame(-borderwidth => 1, -relief => 'sunken')->
+		pack(-side => 'top', -fill => 'x');
+	$::ttlarea->Label(-text => "   ", -font => "Century 12 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::ttlarea->Label(-text => "  Title   ", -relief => 'sunken', -font => "Century 12 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::ttlarea->Entry(-textvariable => \$::ttldata,
+		 -font => "Century 12 normal", -foreground => 'red')->
+		pack(-side => 'left', -anchor => 'w', -fill => 'x', -expand => 1);
+
+	$::ttlarea->Label(-text => "                                                 ",
+		-font => "Century 12 normal")->
+		pack(-side => 'left', -anchor => 'w');
+
+
+
+	$::ttlarea->Button(-text => "Exit", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 9, -height => 1, -command => sub { exit })->
+		pack(-side => 'right');
+
+	###	File name area create
+	$::nmarea = $::mwin->Frame(-borderwidth => 1, -relief => 'sunken')->
+		pack(-side => 'top', -fill => 'x');
+	$::nmarea->Label(-text => "   ", -font => "Century 11 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::nmarea->Button(-text => "Execute", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 8, -height => 1, -command => \&script_exec, -state => "normal")->
+		pack(-side => 'left', -anchor => 'e');
+	$::nmarea->Label(-text => " ", -font => "Century 1 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::nmarea->Button(-text => "Break", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 8, -height => 1, -command => \&exec_break, -state => "normal")->
+		pack(-side => 'left', -anchor => 'e');
+	$::nmarea->Label(-text => " ", -font => "Century 11 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::nmarea->Label(-text => "    Script Name   ", -relief => 'sunken', -font => "Century 11 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::nmarea->Entry(-textvariable => \$::dtname,
+		-font => "Century 11 normal", -foreground => 'blue')->
+		pack(-side => 'left', -anchor => 'w', -fill => 'x', -expand => 1);
+	$::nmarea->Button(-text => "List", -font => "Century 11 bold", -takefocus => 0,
+#		-borderwidth => 4, -width => 5, -height => 1, -command => \&load_file, -state => "disabled")->
+		-borderwidth => 4, -width => 5, -height => 1, -command => \&flist_window, -state => "normal")->
+		pack(-side => 'left', -anchor => 'e');
+	$::nmarea->Button(-text => "Load", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 5, -height => 1, -command => \&load_file)->
+		pack(-side => 'left', -anchor => 'e');
+	$::nmarea->Label(-text => " ", -font => "Century 1 normal")->
+		pack(-side => 'left', -anchor => 'w');
+	$::nmarea->Button(-text => "Save", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 5, -height => 1, -command => \&save_file)->
+		pack(-side => 'left', -anchor => 'e');
+#	$::nmarea->Button(-text => "MakeClass", -font => "Century 11 bold", -takefocus => 0,
+#		-borderwidth => 4, -width => 10, -height => 1, -command => \&save_file, -state => "disabled")->
+#		-borderwidth => 4, -width => 10, -height => 1, -command => \&save_file, -state => "normal")->
+#		pack(-side => 'left', -anchor => 'e');
+#	$::nmarea->Label(-text => "          ", -font => "Century 11 normal")->
+#		pack(-side => 'left', -anchor => 'w');
+	$::nmarea->Checkbutton(-variable => \$::syntaxcheck, -text => "  Syntax Check  ", -font => "Century 11 normal",  -offvalue => 0, -onvalue => 1, -relief => 'sunken')->
+		pack(-side => 'left', -anchor => 'w');
+
+	###	Status information area create
+	$::stsarea = $::mwin->Label(-textvariable => \$::info2,
+		-font => "Century 11 normal", -foreground => 'red', -relief => 'sunken')->
+		pack(-side => 'bottom', -fill => 'x');
+
+	###	Status information area create
+#	$::rstarea = $::mwin->Label(-textvariable => \$::info1, -width => 100, -height => 5,
+#		-font => "Century 11 normal", -foreground => 'blue', -relief => 'sunken')->
+#		pack(-side => 'bottom', -fill => 'x');
+	$::rstarea = $::mwin->Scrolled("Text", -scrollbars => 'osow', -width => 100, -height => 5,
+		-font => "Century 11 normal", -background => 'gray', -foreground => 'blue', -relief => 'sunken')->
+		pack(-side => 'bottom', -fill => 'both');
+
+	###	Text window create
+	$::txtarea = $::mwin->Scrolled("Text", -width => 100, -height => 30,
+		-font => "Century 12 normal")->
+		pack(-side => 'bottom', -fill => 'both', -expand => 1);
+
+	###	Main loop
+	MainLoop;
+
+#########################
+#	Function End		#
+#########################
+#####	Normal return (0)	#####
+	return(1);
+}
+
+#################################################################
+# Function Name	:load_file										#
+#===============================================================#
+# Function Title:												#
+#	Scd (Script Data) file data load.							#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Script data									#
+#					1 - Read error								#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub load_file {
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my $rt = '';									# Return code
+	my $fromto = '';
+	my $mess = '';
+	my $cmd = '';
+	my $upd_tm = '';
+	my @list;
+
+	## Check ScriptFileName
+if($::Debug) {
+	print "dtname=$::dtname\n";
+}
+	if( $::dtname eq "" ) {
+		$::ttldata = "";
+		$::info1 = "";
+		$::rstarea->delete("1.0", "end");
+		
+		$::info2 = "No Script Name.";
+		$::txtarea->delete("1.0", "end");
+		return(0);
+	} elsif( $::dtname =~ /[ ]/ ) {
+		$::ttldata = "";
+		$::info1 = "";
+		$::rstarea->delete("1.0", "end");
+
+		$::info2 = "Script Name Invalid.(Space Character Invalid)";
+		$::txtarea->delete("1.0", "end");
+		return(0);
+	}
+if($::Debug) {
+	print "rt=$::dtname\n";
+}
+
+	## Get Data
+	$rt = $::tak->act("$::McDirector load $::dtname");
+	($fromto, $mess, $::dtname, $cmd) = split((/[ ]+/),$rt,4);
+if($::Debug) {
+	print "rt=$rt:cmd=$cmd:\n";
+}
+
+	if ($cmd =~ s/^Er://) {
+		$::ttldata = "";
+		$::info1 = $rt;
+		$::rstarea->delete("1.0", "end");
+		$::rstarea->insert("end", $::info1);
+
+		$::info2 = "Data Unloaded.";
+		$::txtarea->delete("1.0", "end");
+		return(0);
+	}
+	
+
+	##	Read Data From Script File
+	($::ttldata, $upd_tm, $cmd) = split(/\t+/ ,$cmd, 3);
+	$cmd =~ s/\t/\n/g;
+
+	$::info1 = $rt;
+	$::rstarea->delete("1.0", "end");
+	$::rstarea->insert("end", $::info1);
+
+	$::info2 = "'$::dtname' loaded";
+	$::txtarea->delete("1.0", "end");
+	$::txtarea->insert('end', $cmd);
+
+#####	Normal Return Normal	#####
+	$::dtname_prev = $::dtname;
+#	$::dtname_prev = "";
+	return(1);
+}
+
+#################################################################
+# Function Name	:save_file										#
+#===============================================================#
+# Function Title:												#
+#	Scd (Script Data) file data save.							#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Write result									#
+#					OK 		- 0									#
+#					Error 	- 1									#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub save_file {
+#####	Private variable 	#####
+	my $rt;									# Return code
+	my $rbuf;								# Read buffer
+	my $title;								# Title data
+
+	my $fromto;
+	my $mess;
+	my $cmd;
+
+	my @list;
+	my $last_line;
+	
+	## Check ScriptFileName
+	if( $::dtname eq "" ) {
+		$::info1 = "";
+		$::rstarea->delete("1.0", "end");
+		$::info2 = "No Script Name.";
+		return(0);
+	} elsif( $::dtname =~ /[ ]/ ) {
+		$::info1 = "";
+		$::rstarea->delete("1.0", "end");
+		$::info2 = "Script Name Invalid.(Space Character Invalid)";
+		return(0);
+	}
+
+	## Check Script Data
+	$rbuf = $::txtarea->get("1.0", "end");
+	$rbuf =~ s/^[\s ]*//;	## First Space Cut
+	$rbuf =~ s/[\s ]*$//;	## Last Space Cut
+	if( $rbuf eq "" ) {
+		$::info1 = "";
+		$::rstarea->delete("1.0", "end");
+		$::info2 = "No Script Data.";
+		return(0);
+	}
+
+#####	Initialize 	#####
+	$rbuf = $::ttldata."\n";
+	$rbuf .= $::txtarea->get("1.0", "end");
+
+	### \n & \r Charactor delete
+	$rbuf =~ s/\n/\t/g;
+	$rbuf =~ s/\r//g;
+
+	## Get Last Line For Error Check
+	@list = split(/\t+/ ,$rbuf);
+	$last_line = @list[scalar(@list)-1];
+
+	if( $::syntaxcheck eq 1) {
+		## Complie Check
+		$rt = $::tak->act("$::McDirector compile $::dtname $rbuf");
+		$::info1 = $rt;
+		$::rstarea->delete("1.0", "end");
+		$::rstarea->insert("end", $::info1);
+		($fromto, $mess, $::dtname, $cmd) = split((/[ ]+/),$rt,4);
+		@list = split(/\t+/ ,$cmd);
+		if (@list[scalar(@list)-1] =~ s/^ Er:// or @list[scalar(@list)-1] =~ s/^$last_line Er://) {
+			@list[scalar(@list)-1] =~ s/^[\s ]*//;	## First Space Cut
+			@list[scalar(@list)-1] =~ s/[\s ]*$//;	## Last Space Cut
+			$::info2 = @list[scalar(@list)-1];
+			return(0);
+		}
+	}
+
+	if($::dtname ne $::dtname_prev) { ## Confirm Save
+	
+		## File Exist Check
+		$rt = $::tak->act("$::McDirector fexist $::dtname");
+		$::info1 = $rt;
+		$::rstarea->delete("1.0", "end");
+		$::rstarea->insert("end", $::info1);
+		($fromto, $mess, $::dtname, $cmd) = split((/[ ]+/),$rt,4);
+		if ($cmd =~ s/^exist//) {
+			$mess = $::mwin->messageBox( -type => "okcancel", -icon => "warning", -title => "warning",
+                    -message => "Script Name[$::dtname] Overwrite.\n\nOk => Continue. Overwrite Data." );
+			unless(lc($mess) eq "ok") {
+				$::info2 = "Operation Canceled";
+				return(0);
+			}
+		} elsif ($cmd =~ s/^Er://) {
+			$::info2 = "Data UnSaved.";
+			return(0);
+		} elsif ($cmd =~ s/^none//) { 
+		} else {
+			$::info2 = "Data UnSaved.";
+			return(0);
+		}
+	}
+
+	$::dtname_prev = $::dtname;
+
+	## Save
+	$rt = $::tak->act("$::McDirector save $::dtname $rbuf");
+	$::info1 = $rt;
+	$::rstarea->delete("1.0", "end");
+	$::rstarea->insert("end", $::info1);
+
+	($fromto, $mess, $::dtname, $cmd) = split((/[ ]+/),$rt,4);
+
+	##	Read Data From Script File
+	@list = split(/\t+/ ,$cmd);
+	if (@list[scalar(@list)-1] =~ s/^ Er:// or @list[scalar(@list)-1] =~ s/^$last_line Er://) {
+		$::info2 = "Data UnSaved.";
+		return(0);
+	} else {
+		$::info2 = "Data Saved.";
+		return(1);
+	}
+}
+
+#################################################################
+# Function Name	:script_exec									#
+#===============================================================#
+# Function Title:												#
+#	Scd (Script Data) file data execute.						#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Write result									#
+#					OK 		- 0									#
+#					Error 	- 1									#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub script_exec {
+	my $rt;
+	my $fromto;
+	my $mess;
+	my $cmd;
+	my $saveflg = 0;
+
+	$rt = $::tak->act("$::McDirector getbgstatus"); ## Future: Parameter Sended
+	($fromto, $mess, $cmd) = split((/[ ]+/),$rt,3);
+	if ($cmd =~ /Running/) {
+		$::mwin->messageBox( -type => "ok", -icon => "warning", -title => "warning",
+                   -message => "Execute Still Running.\n\nPress button\[Break\] for Terminate Execute." );
+		return(0);
+	}
+
+	if( $::syntaxcheck eq 0) {
+		$saveflg = 1;
+		$::syntaxcheck = 1;
+	}
+
+	$rt = save_file;
+	if( $saveflg eq 1) {
+		$::syntaxcheck = 0;
+	}
+
+	unless($rt) {return(0);}
+
+
+	$::tak->Send("$::McDirector bgexec $::dtname"); ## Future: Parameter Sended
+	$::rstarea->delete("1.0", "end");
+	$::info2 = "Execute Is Running.";
+
+	$::bgid = $::mwin->after(2000, \&getbgstatus);
+	return(1);
+}
+
+sub getbgstatus {
+	my $rt;
+	my $fromto;
+	my $mess;
+	my $cmd;
+
+	$rt = $::tak->act("$::McDirector getbgstatus"); ## Future: Parameter Sended
+	
+	($fromto, $mess, $cmd) = split((/[ ]+/),$rt,3);
+	if ($cmd =~ /^Er:/) {
+		$::bgid->cancel();
+	} elsif ($cmd =~ /Running/) {
+		$::bgid = $::mwin->after(10000, \&getbgstatus);
+	} else {
+		$cmd =~ s/.+@(.+)$/$1/;
+		$::info1 = $rt;
+		$::rstarea->delete("1.0", "end");
+		$::rstarea->insert("end", $::info1);
+		$::info2 = "Execute Terminated. Status\[\@$cmd\]";
+		$::bgid = $::mwin->after(10000, \&getbgstatus);
+	}
+	return;
+}
+
+#################################################################
+# Function Name	:exec_break										#
+#===============================================================#
+# Function Title:												#
+#	Scd (Script Data) file data execute break					#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Write result									#
+#					OK 		- 0									#
+#					Error 	- 1									#
+#===============================================================#
+# History														#
+#	2004/07/26:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub exec_break {
+	my $rt;
+	my $fromto;
+	my $mess;
+	my $cmd;
+
+	$rt = $::tak->act("$::McDirector break");
+	$::info1 = $rt;
+	$::rstarea->delete("1.0", "end");
+	$::rstarea->insert("end", $::info1);
+	($fromto, $mess, $cmd) = split((/[ ]+/),$rt,3);
+	if ($cmd =~ s/^Er://) {
+		$::info2 = "Break Not Sended.";
+		return(0);
+	} else {
+		$::info2 = "Break Sended.";
+		return(1);
+	}
+}
+
+#################################################################
+# Function Name	:flist_window									#
+#===============================================================#
+# Function Title:												#
+#	Scd (Script Data) file list window display.					#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Write result									#
+#					OK 		- 0									#
+#					Error 	- 1									#
+#===============================================================#
+# History														#
+#	2004/08/23:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub flist_window {
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+#	my $rt;									# Return code
+#	my $title;								# Title data
+	my @list = '';							# File name list
+	my $btn;								# Button frame area
+	my $rt;									# Return code
+	my $fname = '';							# File name
+	my $entry;								# Listbox entry
+	my $search;								# Listbox search
+
+	my $fromto;
+	my $mess;
+	my $cmd;
+
+#########################
+#	Function Main		#
+#########################
+	###	Class path set
+#	$::clsname[$::clsnum] = 
+#	$::clsnum = '';							# Class number
+
+	###	Class information get
+	$rt = $::tak->act("$::McDirector list $::clsname[$::clsnum]");
+	$::info1 = $rt;
+	$::rstarea->delete("1.0", "end");
+	$::rstarea->insert("end", $::info1);
+	if($::clsname[$::clsnum] eq "") {
+		($fromto, $mess, $cmd) = split((/[ ]+/),$rt,3);
+	} else {
+		($fromto, $mess, $::clsname[$::clsnum], $cmd) = split((/[ ]+/),$rt,4);
+	}
+	if ($cmd =~ s/^Er://) {
+		$::info2 = "List Not Found.";
+		return(0);
+	}
+
+	$cmd =~ s/^\.\t//g;
+	$cmd =~ s/\.\.\t//g;
+	$cmd =~ s/([a-zA-Z0-9]+)\t/<$1>\t/g;
+	$cmd =~ s/\.<scd>//g;
+	$cmd =~ s/\t/\n/g;
+	@list = split (/\n/, $cmd);
+
+#####	Main window create 	#####
+	$::swin = MainWindow->new;				# Sub window create
+	$::swin->title("<Script File List>");
+	$::swin->geometry("400x250+500+250");
+
+	###	List box area create
+	$::lstarea = $::swin->Scrolled("Listbox", -scrollbars => "e", -selectmode => "browse", 
+		-font => "Century 11 normal", -foreground => 'black', -relief => 'sunken')->
+		pack(-side => 'top', -fill => 'x');
+	$::lstarea->insert(0, @list);
+	$::lstarea->selectionSet(0);
+
+	###	List box bind set
+	$::lstarea->bind("<Button-1>", \&do_search);
+
+	###	Button area create
+	$btn = $::swin->Frame(-borderwidth => 1, -relief => 'sunken')->
+		pack(-side => 'bottom', -fill => 'x');
+	$btn->Button(-text => "Back", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 9, -height => 1, -command => \&bk_search)->
+		pack(-side => 'left');
+	$btn->Button(-text => "Cancel", -font => "Century 11 bold", -takefocus => 0,
+		-borderwidth => 4, -width => 9, -height => 1, -command => sub { $::swin->destroy() })->
+		pack(-side => 'right');
+
+#########################
+#	Function End		#
+#########################
+#####	Normal return (0)	#####
+	return(1);
+}
+
+
+#################################################################
+# Function Name	:do_search										#
+#===============================================================#
+# Function Title:												#
+#	Listbox index data search.									#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Write result									#
+#					OK 		- 0									#
+#					Error 	- 1									#
+#===============================================================#
+# History														#
+#	2004/08/23:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub do_search {
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my $scname;								# Script name
+
+#########################
+#	Function Main		#
+#########################
+	###	Listbox selection set
+	$scname = $::lstarea->get($::lstarea->curselection());
+
+	###	Listbox select execute
+	if ($scname =~ s/<([a-zA-Z0-9]+)>/$1/) {
+#		$::bname = $::slname;
+#		$::slname .= '/'.$scname;
+		$::clsnum++;
+		if($::clsname[$::clsnum-1] eq "") {
+			$::clsname[$::clsnum] = $scname;
+		} else {
+			$::clsname[$::clsnum] = $::clsname[$::clsnum-1].'.'.$scname;
+		}
+		$::swin->destroy();
+		flist_window();
+	} else {
+#		$::slname = '';
+		$::swin->destroy();
+		if($::clsname[$::clsnum] eq "") {
+			$::dtname = $scname;
+		} else {
+			$::dtname = $::clsname[$::clsnum].'.'.$scname;
+		}
+
+		load_file();
+	}
+
+#########################
+#	Function End		#
+#########################
+#####	Normal return (0)	#####
+	return(1);
+}
+
+
+#################################################################
+# Function Name	:bk_search										#
+#===============================================================#
+# Function Title:												#
+#	Listbox index data  backup search.							#
+#===============================================================#
+# Argument In													#
+# Argument Out													#
+#	Return		:Write result									#
+#					OK 		- 0									#
+#					Error 	- 1									#
+#===============================================================#
+# History														#
+#	2004/08/23:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub bk_search {
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my $scname;								# Script name
+
+#########################
+#	Function Main		#
+#########################
+	###	Class number -1
+	if ($::clsnum>1) {
+		$::clsnum--;
+	}
+	###	backup search
+#	$::slname = $::bname;
+	$::swin->destroy();
+	flist_window();
+
+#########################
+#	Function End		#
+#########################
+#####	Normal return (0)	#####
+	return(1);
+}

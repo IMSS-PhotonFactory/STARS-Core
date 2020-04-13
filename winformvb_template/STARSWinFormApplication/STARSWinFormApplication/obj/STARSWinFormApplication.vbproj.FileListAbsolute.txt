@@ -1,0 +1,12 @@
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\bin\Debug\STARSWinFormApplication.exe
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\bin\Debug\STARSWinFormApplication.pdb
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\bin\Debug\STARSWinFormApplication.xml
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\bin\Debug\StarsInterface.dll
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\bin\Debug\StarsInterfaceWinForm.dll
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\ResolveAssemblyReference.cache
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\STARSWinFormApplication.Resources.resources
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\STARSWinFormApplication.vbproj.GenerateResource.Cache
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\STARSWinFormApplication.exe
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\STARSWinFormApplication.xml
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\STARSWinFormApplication.pdb
+C:\Users\kosuge\cvs-wb\stars\winformvb_template\STARSWinFormApplication\STARSWinFormApplication\obj\Debug\STARSWinFormApplication.Form1.resources

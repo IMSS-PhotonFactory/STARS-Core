@@ -1,0 +1,382 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use nportserv;
+#################################################################
+# erxc
+# Tsuji ER4C-04, ER2C-04, ER4C-03A, ER2C-03A Encoder counter.
+#
+# Original Author: Takashi Kosuge
+# $Author$
+$::Version .= '$Id$';
+#
+$::Version =~ s/\$//g;
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+@::IsBusy        = (0, 0, 0, 0);   #flag scan mode;
+$::Interval_Time = 500; #Interval time for checking status of scanning Z pulse.
+
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}else{usage();}
+require 'config.pl';
+
+
+#2014-05-16 (Fri)
+## Datalength for GetCommand. ('L' or 'l' is 10 degits, otherwize 7degits.)
+if(uc($::DataLengthOption) eq 'L'){
+	$::GetCmd = 'S3';
+	$::GetLen = 10;
+}else{
+	$::GetCmd = 'S2';
+	$::GetLen = 7;
+}
+
+
+## For calc;
+init_calc();
+
+## Open XPort
+$::enc = nportserv->new($::NPORT_HOST, $::NPORT_PORT)
+	or die "Could not connect Encoder";
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+
+$::tak->addcallback(\&handler);
+stars->Mainloop(\&interval, \$::Interval_Time);
+
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h] [-d] MyNodeName
+       -h   Show this help.
+       -d   Run with debug mode.
+__USAGE__
+
+exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	my $rt;
+	my $ch;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+if($to eq $::NodeName){
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess eq 'help'){
+		$rt="help hello getversion listnodes";
+	}elsif($mess eq 'listnodes'){
+		$rt=join(" ", @::ChName);
+	}elsif($mess eq 'getversion'){
+		$rt= "$::Version, " . getversion();
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+}elsif(($ch = chk_ch($to)) >= 0){
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess eq 'help'){
+		$rt="help hello GetValue GetRawValue Preset SetHPMode GetHPMode ScanHome StopScan IsBusy SetOffset GetOffset";
+
+	}elsif($mess eq 'GetValue'){
+		$rt=GetValue($ch);
+
+	}elsif($mess eq 'GetRawValue'){
+		$rt=GetValue($ch, 1);
+
+	}elsif($mess =~ /^Preset ([+\-]*\d+)/){
+		$rt=Preset($ch, $1);
+
+	}elsif($mess =~ /^SetOffset ([+\-]*[0-9.]+)/){
+		$::Offset[$ch] = $1;
+		$rt='Ok:';
+
+	}elsif($mess eq 'GetOffset'){
+		$rt=$::Offset[$ch];
+
+	}elsif($mess =~ /^SetHPMode ([01UuDd])/){
+		$rt=SetHPMode($ch, $1);
+
+	}elsif($mess eq 'ScanHome'){
+		$rt=ScanHome($ch);
+
+	}elsif($mess eq 'StopScan'){
+		$rt=StopScan($ch);
+
+	}elsif($mess eq 'IsBusy'){
+		$rt=IsBusy($ch);
+
+	}elsif($mess eq 'GetHPMode'){
+		$rt=GetHPMode($ch);
+
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+}else{
+	$to =~ s/$::NodeName\.//;
+	$::tak->Send("$::NodeName>$from \@$mess Er: $to is down.");
+	if($::Debug){
+		print "STARS SND: $::NodeName>$from \@$mess $rt\n";
+	}
+	return;
+}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+
+sub interval{
+	my $ch;
+	my $rt;
+	for($ch = 0; $ch <= $#::ChName; $ch++){
+		unless($::IsBusy[$ch]){next;}
+		$rt=IsBusy($ch);
+		unless($rt){
+			$::tak->Send("$::NodeName.$::ChName[$ch]>System _ChangedIsBusy 0");
+			$::IsBusy[$ch] = 0;
+		}
+	}
+}
+
+
+sub chk_ch{
+	my $cname = shift;
+	my $ch;
+	$cname =~ s/$::NodeName\.//;
+	for($ch = 0; $ch <= $#::ChName; $ch++){
+		if($::ChName[$ch] eq $cname){
+			return($ch);
+		}
+	}
+	return(-1);
+}
+
+sub wtrd{
+	my $cmd = shift;
+	my $rt;
+	if($::Debug){
+		print "WT: $cmd";
+	}
+	$::enc->OutSIO($cmd);
+	if($::Debug){
+		print "RD: ";
+	}
+	unless($rt = $::enc->InSIO(undef, "\r\n")){
+		if($::Debug){
+			print "Device error.\n";
+		}
+		$::Error = "Device error.";
+		return('');
+	}
+	if($::Debug){
+		print "$rt\n";
+	}
+	return($rt);
+}
+
+sub getversion{
+	my $rtbuf = '';
+	my $rt;
+	my $cmd = "VER?\r\n";
+	$rt=wtrd($cmd); if($rt eq ''){return('');}
+	$rtbuf = "Firmware: $rt";
+	$cmd = "VERH?\r\n";
+	$rt=wtrd($cmd); if($rt eq ''){return('');}
+	$rtbuf .= ", Hardware: $rt";
+	$rtbuf =~ s/[\r\n]//g;
+	return($rtbuf);
+}
+
+sub GetValue{
+	my $ch = shift;
+	my $flgraw = shift;
+	my $rt;
+	my $lp;
+	my $total = 0;
+
+#2014-05-16 (Fri) suport 10 degits data.
+#	my $cmd = sprintf("S2%d\r\n", $ch * 2);
+	my $cmd = sprintf("%s%d\r\n", $::GetCmd, $ch * 2);
+	for($lp = 1; $lp <= $::Average[$ch]; $lp++){
+		$rt=wtrd($cmd); if($rt eq ''){return('');}
+
+#2014-05-16 (Fri) suport 10 degits data.
+#		unless($rt =~ /R[ABCD]([+\-]\d{7})/){
+		unless($rt =~ /R[ABCD]([+\-]\d{$::GetLen})/){
+			if($::Debug){
+				print "Device returned bad format.: $rt\n";
+			}
+			$::Error = "Device returned bad format.";
+			return('');
+		}
+		$rt = $1;
+		$total += $rt;
+	}
+	$rt = int($total / $::Average[$ch]);
+
+	if($flgraw){
+		return($rt * 1);
+	}else{		
+		return(calc_value($ch, $rt));
+	}
+}
+
+sub init_calc(){
+	my $ch;
+	for($ch = 0; $ch <= $#::ChName; $ch++){
+		$::Calc[$ch] =~ s/INPUT/\$x/g;
+		$::Calc[$ch] =~ s/FACTOR/\$::Factor[\$ch]/g;
+		$::Calc[$ch] =~ s/OFFSET/\$::Offset[\$ch]/g;
+	}
+}
+
+
+sub calc_value{
+	my $ch = shift;
+	my $x = shift;
+	my $y;
+	my $cmd = '$y=sprintf("'. $::Format[$ch] . '", ' . $::Calc[$ch] . ');';
+	eval($cmd);
+	return($y);
+}
+
+sub Preset{
+	my $ch = shift;
+	my $val= shift;
+	if($val > 8388607 or $val < -8388607){
+		$::Error = "Out of range.";
+		return('');
+	}
+	my $cmd = sprintf("S%s%+08d\r\n", qw(A B C D)[$ch], $val);
+	if($::Debug){
+		print "WT: $cmd";
+	}
+	$::enc->OutSIO($cmd);
+	return("Ok:");
+}
+
+
+sub SetHPMode{
+	my $ch = shift;
+	my $val= shift;
+	if(uc($val) eq 'U' or $val eq '1'){$val = 'U';}else{$val = 'D';}
+
+	my $cmd = sprintf("ZT%s%s\r\n", qw(A B C D)[$ch], $val);
+	if($::Debug){
+		print "WT: $cmd";
+	}
+	$::enc->OutSIO($cmd);
+	return("Ok:");
+}
+
+sub ScanHome{
+	my $ch = shift;
+	my $cmd = sprintf("ZC%s\r\n", qw(A B C D)[$ch]);
+	if($::Debug){
+		print "WT: $cmd";
+	}
+	$::enc->OutSIO($cmd);
+	unless($::IsBusy[$ch]){
+		$::tak->Send("$::NodeName.$::ChName[$ch]>System _ChangedIsBusy 1");
+		$::IsBusy[$ch] = 1;
+	}
+	return("Ok:");
+}
+
+sub StopScan{
+	my $ch = shift;
+	my $cmd = sprintf("ZN%s\r\n", qw(A B C D)[$ch]);
+	if($::Debug){
+		print "WT: $cmd";
+	}
+	$::enc->OutSIO($cmd);
+	return("Ok:");
+}
+
+
+sub IsBusy{
+	my $ch = shift;
+	my $rt;
+	my $cmd = sprintf("ZS%s\r\n", qw(A B C D)[$ch]);
+	$rt=wtrd($cmd); if($rt eq ''){return('');}
+	unless($rt =~ /Z[ABCD]([CN])[UD]/){
+		if($::Debug){
+			print "Device returned bad format.: $rt\n";
+		}
+		$::Error = "Device returned bad format.";
+		return('');
+	}
+	if($1 eq 'C'){$rt = 1;}else{$rt = 0;}
+	return($rt);
+}
+
+sub GetHPMode{
+	my $ch = shift;
+	my $rt;
+
+	my $cmd = sprintf("ZS%s\r\n", qw(A B C D)[$ch]);
+	$rt=wtrd($cmd); if($rt eq ''){return('');}
+	unless($rt =~ /Z[ABCD][CN]([UD])/){
+		if($::Debug){
+			print "Device returned bad format.: $rt\n";
+		}
+		$::Error = "Device returned bad format.";
+		return('');
+	}
+	if($1 eq 'U'){$rt = 1;}else{$rt = 0;}
+	return($rt);
+
+}

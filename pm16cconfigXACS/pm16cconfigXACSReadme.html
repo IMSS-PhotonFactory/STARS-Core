@@ -1,0 +1,2149 @@
+<html>
+<header>
+
+<head>
+<title>pm16cconfigXACS Application Client概要</title>
+<style>
+<!--
+p.usage{font-style:italic;}
+p.body{text-indent:1em;}
+address{text-align:right}
+-->
+</style>
+</header>
+</head>
+
+<body>
+<h1>pm16cconfigXACS Application Client概要</h1> 
+2007-10-01
+<h2>はじめに</h2>
+<p class="body">ツジ電子製PM16C-04Xシリーズに「Auto-Change-Drive機能」が追加されました。</p> 
+<p class="body">「Auto-Change-Drive機能」は、モータ毎にあらかじめ登録された速度変更条件と速度変更内容に基づきモータ動作中の速度変更が可能となる機能です。<BR>
+詳細は、「<a href="速度変更ポイント予約機能.pdf">速度変更ポイント予約機能（ツジ電子）</a>」をご確認ください。</p> 
+<p class="body">本Stars Application Clientプログラム「pm16cconfigXACS」は、「Auto-Change-Drive機能」のモータ毎の速度変更条件と速度変更内容を登録する機能です。</p>
+<h2>アプリケーションの起動</h2>
+<pre>
+  perl pm16cconfigXACS [<i>MotorNumber</i>] [<i>StarsServer</i>] [-c <i>PM16C-04X_StarsNodename</i>] [-node <i>StarsNodeNameMe</i>] [-row <i>NumberOfDataToEdit</i>] [-h] 
+    <i>MotorNumber</i>                    '0' is the default value. Set motor number to be displayed after start-up.
+    <i>StarsServer</i>                    'localhost' is the default value. Set Stars Server's network name/address.
+    -c <i>PM16C-04X_StarsNodename</i>     'pm16c4x' is the default value. Set nodename of the Stars I/O client controlling 'PM16C-04X'.
+    -node <i>StarsNodename</i>            'pm16cconfigXACS' is the default value. Set nodename me.
+    -row <i>NumberOfDataToEdit</i>        '128' is the default value. Set display rows you want to set, to save display speed or computer memory.
+    -h option help:Show command line help.
+</pre>
+
+<h2>画面項目</h2>
+<table border=1 cellpadding=0 cellspacing=0>
+ <tr>
+  <td align='center'>POINT</td>
+  <td align='center'>Condition of Change Speed</td>
+  <td align='center'>PVAL(<i>JJJ</i>)</td>
+  <td align='center'>FUNC</td>
+  <td align='center'>FVAL(<i>LLL</i>)</td>
+  <td align='center'>PM16C-04X送信データ</td>
+ </tr>
+ <tr>
+  <td align='center'>END</td>
+  <td align='left'>End of Data.</td>
+  <td align='center' colspan='3'>Input ignored.</td>
+  <td align='left'>ACS/<i>xyyy</i>/END/</td>
+ </tr>
+ <tr>
+  <td align='center' rowspan='5'>ADD</td>
+  <td align='left' rowspan='5'>Relative address from start-point.</td>
+  <td align='center' rowspan='5'>-2147483647～2147483647</td>
+  <td align='center'>SPD</td>
+  <td align='center'>1～5000000 (pps)</td>
+  <td align='left'>ACS/<i>xyyy</i>/ADD/<i>JJJ</i>/SPD/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>RTE</td>
+  <td align='center'>0～115 (Rate CodeNo.※1)</td>
+  <td align='left'>ACS/<i>xyyy</i>/ADD/<i>JJJ</i>/RTE/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>SLW</td>
+  <td align='center' rowspan='3'>Input ignored.</td>
+  <td align='left'>ACS/<i>xyyy</i>/ADD/<i>JJJ</i>/SLW/</td>
+ </tr>
+ <tr>
+  <td align='center'>FST</td>
+  <td align='left'>ACS/<i>xyyy</i>/ADD/<i>JJJ</i>/FST/</td>
+ </tr>
+ <tr>
+  <td align='center'>NOP</td>
+  <td align='left'>ACS/<i>xyyy</i>/ADD/<i>JJJ</i>/NOP/</td>
+ </tr>
+ <tr>
+  <td align='center' rowspan='5'>TIM</td>
+  <td align='left' rowspan='5'>Relative time from previous-point.</td>
+  <td align='center' rowspan='5'>0～65535 (ms)</td>
+  <td align='center'>SPD</td>
+  <td align='center'>1～5000000 (pps)</td>
+  <td align='left'>ACS/<i>xyyy</i>/TIM/<i>JJJ</i>/SPD/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>RTE</td>
+  <td align='center'>0～115 (Rate CodeNo.※1)</td>
+  <td align='left'>ACS/<i>xyyy</i>/TIM/<i>JJJ</i>/RTE/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>SLW</td>
+  <td align='center' rowspan='3'>Input ignored.</td>
+  <td align='left'>ACS/<i>xyyy</i>/TIM/<i>JJJ</i>/SLW/</td>
+ </tr>
+ <tr>
+  <td align='center'>FST</td>
+  <td align='left'>ACS/<i>xyyy</i>/TIM/<i>JJJ</i>/FST/</td>
+ </tr>
+ <tr>
+  <td align='center'>NOP</td>
+  <td align='left'>ACS/<i>xyyy</i>/TIM/<i>JJJ</i>/NOP/</td>
+ </tr>
+ <tr>
+  <td align='center' rowspan='5'>ACC</td>
+  <td align='left' rowspan='5'>Speed data while acceralating.</td>
+  <td align='center' rowspan='5'>1～5000000 (pps)</td>
+  <td align='center'>SPD</td>
+  <td align='center'>1～5000000 (pps)</td>
+  <td align='left'>ACS/<i>xyyy</i>/ACC/<i>JJJ</i>/SPD/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>RTE</td>
+  <td align='center'>0～115 (Rate CodeNo.※1)</td>
+  <td align='left'>ACS/<i>xyyy</i>/ACC/<i>JJJ</i>/RTE/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>SLW</td>
+  <td align='center' rowspan='3'>Input ignored.</td>
+  <td align='left'>ACS/<i>xyyy</i>/ACC/<i>JJJ</i>/SLW/</td>
+ </tr>
+ <tr>
+  <td align='center'>FST</td>
+  <td align='left'>ACS/<i>xyyy</i>/ACC/<i>JJJ</i>/FST/</td>
+ </tr>
+ <tr>
+  <td align='center'>NOP</td>
+  <td align='left'>ACS/<i>xyyy</i>/ACC/<i>JJJ</i>/NOP/</td>
+ </tr>
+ <tr>
+  <td align='center' rowspan='5'>DCC</td>
+  <td align='left' rowspan='5'>Speed data while deceralating.</td>
+  <td align='center' rowspan='5'>1～5000000 (pps)</td>
+  <td align='center'>SPD</td>
+  <td align='center'>1～5000000 (pps)</td>
+  <td align='left'>ACS/<i>xyyy</i>/DCC/<i>JJJ</i>/SPD/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>RTE</td>
+  <td align='center'>0～115 (Rate CodeNo.※1)</td>
+  <td align='left'>ACS/<i>xyyy</i>/DCC/<i>JJJ</i>/RTE/<i>LLL</i></td>
+ </tr>
+ <tr>
+  <td align='center'>SLW</td>
+  <td align='center' rowspan='3'>Input ignored.</td>
+  <td align='left'>ACS/<i>xyyy</i>/DCC/<i>JJJ</i>/SLW/</td>
+ </tr>
+ <tr>
+  <td align='center'>FST</td>
+  <td align='left'>ACS/<i>xyyy</i>/DCC/<i>JJJ</i>/FST/</td>
+ </tr>
+ <tr>
+  <td align='center'>NOP</td>
+  <td align='left'>ACS/<i>xyyy</i>/DCC/<i>JJJ</i>/NOP/</td>
+ </tr>
+</table>
+<i>x</i> : Motor number <i>yyy</i> : Data number
+<pre>
+
+</pre>
+<h3>※1 Function「RTE」選択時の注意事項</h3>
+&nbsp;&nbsp;モータのAccRate（加減速レート）の値によって、「Auto Change Drive機能」のRTE（加減速レート）選択時の値の有効範囲が決まります。<br>
+&nbsp;&nbsp;モータのAccRateと「Auto Change Drive機能」のRTE選択時の有効値FVAL（<i>LLL</i>)の関係は以下の通りです。<br>
+<pre>
+  AccRateはStars Application Client「pm16cconfig」から変更できます。AccRateはRate Data(not Rate Code)で入力してください。
+  「Auto Change Drive機能」はRate Codeでの入力になります。
+</pre>
+<i><i>S</i></i> : AccRate selected. <i><i>V</i></i> : Auto Change Drive Rate Valid(有効)
+<table border=1 cellpadding=0 cellspacing=0>
+ <tr>
+  <td align='center' colspan=2>RATE</td>
+  <td align='center' colspan=2>H2 TYPE</td>
+  <td align='center' colspan=2>H1 TYPE</td>
+  <td align='center' colspan=2>M2 TYPE</td>
+  <td align='center' colspan=2>M1 TYPE</td>
+  <td align='center' colspan=2>L2 TYPE</td>
+  <td align='center' colspan=2>L1 TYPE</td>
+ </tr>
+ <tr>
+  <td align='center'>NO</td>
+  <td align='center'>DATA</td>
+  <td align='center'>AccRate</td>
+  <td align='center'>ACS</td>
+  <td align='center'>AccRate</td>
+  <td align='center'>ACS</td>
+  <td align='center'>AccRate</td>
+  <td align='center'>ACS</td>
+  <td align='center'>AccRate</td>
+  <td align='center'>ACS</td>
+  <td align='center'>AccRate</td>
+  <td align='center'>ACS</td>
+  <td align='center'>AccRate</td>
+  <td align='center'>ACS</td>
+ </tr>
+ <tr>
+  <td align='center'>115</td>
+  <td align='center'>0.016</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>114</td>
+  <td align='center'>0.018</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>113</td>
+  <td align='center'>0.02</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>112</td>
+  <td align='center'>0.022</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>111</td>
+  <td align='center'>0.024</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>110</td>
+  <td align='center'>0.027</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>109</td>
+  <td align='center'>0.03</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>108</td>
+  <td align='center'>0.033</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>107</td>
+  <td align='center'>0.036</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>106</td>
+  <td align='center'>0.039</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>105</td>
+  <td align='center'>0.043</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>104</td>
+  <td align='center'>0.047</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>103</td>
+  <td align='center'>0.051</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>102</td>
+  <td align='center'>0.056</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>101</td>
+  <td align='center'>0.062</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>100</td>
+  <td align='center'>0.068</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>99</td>
+  <td align='center'>0.075</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>98</td>
+  <td align='center'>0.082</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>97</td>
+  <td align='center'>0.091</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>96</td>
+  <td align='center'>0.1</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>95</td>
+  <td align='center'>0.11</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>94</td>
+  <td align='center'>0.12</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>93</td>
+  <td align='center'>0.13</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>92</td>
+  <td align='center'>0.15</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>91</td>
+  <td align='center'>0.16</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>90</td>
+  <td align='center'>0.18</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>89</td>
+  <td align='center'>0.2</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>88</td>
+  <td align='center'>0.22</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>87</td>
+  <td align='center'>0.24</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>86</td>
+  <td align='center'>0.27</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>85</td>
+  <td align='center'>0.3</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>84</td>
+  <td align='center'>0.33</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>83</td>
+  <td align='center'>0.36</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>82</td>
+  <td align='center'>0.39</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>81</td>
+  <td align='center'>0.43</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>80</td>
+  <td align='center'>0.47</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>79</td>
+  <td align='center'>0.51</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>78</td>
+  <td align='center'>0.56</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>77</td>
+  <td align='center'>0.62</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>76</td>
+  <td align='center'>0.68</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>75</td>
+  <td align='center'>0.75</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>74</td>
+  <td align='center'>0.82</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>73</td>
+  <td align='center'>0.91</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>72</td>
+  <td align='center'>1</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>71</td>
+  <td align='center'>1.1</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>70</td>
+  <td align='center'>1.2</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>69</td>
+  <td align='center'>1.3</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>68</td>
+  <td align='center'>1.5</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>67</td>
+  <td align='center'>1.6</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>66</td>
+  <td align='center'>1.8</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>65</td>
+  <td align='center'>2</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>64</td>
+  <td align='center'>2.2</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>63</td>
+  <td align='center'>2.4</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>62</td>
+  <td align='center'>2.7</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>61</td>
+  <td align='center'>3</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+ </tr>
+ <tr>
+  <td align='center'>60</td>
+  <td align='center'>3.3</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>59</td>
+  <td align='center'>3.6</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>58</td>
+  <td align='center'>3.9</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>57</td>
+  <td align='center'>4.3</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>56</td>
+  <td align='center'>4.7</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>55</td>
+  <td align='center'>5.1</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>54</td>
+  <td align='center'>5.6</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>53</td>
+  <td align='center'>6.2</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>52</td>
+  <td align='center'>6.8</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>51</td>
+  <td align='center'>7.5</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>50</td>
+  <td align='center'>8.2</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>49</td>
+  <td align='center'>9.1</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>48</td>
+  <td align='center'>10</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>47</td>
+  <td align='center'>11</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>46</td>
+  <td align='center'>12</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>45</td>
+  <td align='center'>13</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>44</td>
+  <td align='center'>15</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>43</td>
+  <td align='center'>16</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>42</td>
+  <td align='center'>18</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>41</td>
+  <td align='center'>20</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>40</td>
+  <td align='center'>22</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>39</td>
+  <td align='center'>24</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>38</td>
+  <td align='center'>27</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>37</td>
+  <td align='center'>30</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>36</td>
+  <td align='center'>33</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>35</td>
+  <td align='center'>36</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>34</td>
+  <td align='center'>39</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>33</td>
+  <td align='center'>43</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>32</td>
+  <td align='center'>47</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>31</td>
+  <td align='center'>51</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>30</td>
+  <td align='center'>56</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>29</td>
+  <td align='center'>62</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>28</td>
+  <td align='center'>68</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>27</td>
+  <td align='center'>75</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>26</td>
+  <td align='center'>82</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>25</td>
+  <td align='center'>91</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>24</td>
+  <td align='center'>100</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>23</td>
+  <td align='center'>110</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>22</td>
+  <td align='center'>120</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>21</td>
+  <td align='center'>130</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>20</td>
+  <td align='center'>150</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>19</td>
+  <td align='center'>160</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>18</td>
+  <td align='center'>180</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>17</td>
+  <td align='center'>200</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>16</td>
+  <td align='center'>220</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>15</td>
+  <td align='center'>240</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>14</td>
+  <td align='center'>270</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>13</td>
+  <td align='center'>300</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>12</td>
+  <td align='center'>330</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>11</td>
+  <td align='center'>360</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>10</td>
+  <td align='center'>390</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>9</td>
+  <td align='center'>430</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>8</td>
+  <td align='center'>470</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>7</td>
+  <td align='center'>510</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>6</td>
+  <td align='center'>560</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>5</td>
+  <td align='center'>620</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>4</td>
+  <td align='center'>680</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>3</td>
+  <td align='center'>750</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>2</td>
+  <td align='center'>820</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>1</td>
+  <td align='center'>910</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+ <tr>
+  <td align='center'>0</td>
+  <td align='center'>1000</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'>&nbsp;</td>
+  <td align='center'><i>S</i></td>
+  <td align='center'><i>V</i></td>
+ </tr>
+</table>
+<pre>
+
+</pre>
+<h2>関連コマンド</h2>
+<pre>
+<h3>SetAutoChangeSpeedReady(オートチェンジスキャンセット／解除コマンド)</h3>
+Usage:    SetAutoChangeSpeedReady 1
+Synopsis: オートチェンジスキャンを実行可状態にします。
+Reply:    @SetAutoChangeSpeedReady 1 Ok: 
+Error:    @SetAutoChangeSpeedReady 1 Er: <i>Reason</i> 
+Example: 
+<i>pm16c4x.th SetAutoChangeSpeedReady 1</i> (term1から送信) 
+<i>pm16c4x.th&gt;term1 @SetAutoChangeSpeedReady 1 Ok:</i> (受信) 
+<i>pm16c4x.th GetAutoChangeSpeedReady</i> 
+<i>pm16c4x.th&gt;term1 @GetAutoChangeSpeedReady Ok: 1</i> (受信) 
+
+Usage:    SetAutoChangeSpeedReady 0
+Synopsis: オートチェンジスキャンを実行可状態を解除します。
+Reply:    @SetAutoChangeSpeedReady 0 Ok: 
+Error:    @SetAutoChangeSpeedReady 0 Er: <i>Reason</i>
+Example: 
+<i>pm16c4x.th SetAutoChangeSpeedReady 0</i> (term1から送信) 
+<i>pm16c4x.th&gt;term1 @SetAutoChangeSpeedReady 0 Ok:</i> (受信) 
+<i>pm16c4x.th GetAutoChangeSpeedReady</i> 
+<i>pm16c4x.th&gt;term1 @GetAutoChangeSpeedReady Ok: 0</i> (受信) 
+
+</pre>
+<pre>
+<h3>GetAutoChangeSpeedReady(オートチェンジスキャン状態確認コマンド)</h3>
+Usage:    GetAutoChangeSpeedReady
+Synopsis: オートチェンジスキャンが実行可状態かを返します。
+Reply(1): @GetAutoChangeSpeedReady Ok 1: (実行可状態の時）
+Reply(2): @GetAutoChangeSpeedReady Ok 0: (実行可状態でない時） 
+Error:    @GetAutoChangeSpeedReady Er: <i>Reason</i> 
+Example: 
+<i>pm16c4x.th SetAutoChangeSpeedReady 1</i> (term1から送信) 
+<i>pm16c4x.th&gt;term1 @SetAutoChangeSpeedReady 1 Ok:</i> (受信) 
+<i>pm16c4x.th GetAutoChangeSpeedReady</i> 
+<i>pm16c4x.th&gt;term1 @GetAutoChangeSpeedReady Ok: 1</i> (受信) 
+<i>pm16c4x.th SetValue 100000</i> (thを100000へ移動、駆動開始) 
+
+</pre>
+<pre>
+<h3>SetValue(絶対位置指定によるモータ移動コマンド)</h3>
+Usage:    SetValue <i>Value</i> 
+Synopsis: モータをValueの値まで動かします。
+Reply:    @SetValue <i>Value</i> Ok: 
+Error:    @SetValue Er: <i>Reason</i> 
+Example: 
+<i>PM16C04.th SetValue 12345</i> (term1から送信) 
+<i>PM16C04.th&gt;term1 @SetValue 12345 Ok:</i> (受信) 
+
+</pre>
+<pre>
+<h3>SetValueREL(現在位置からの相対値指定によるモータ移動コマンド)</h3>
+Usage:    SetValue <i>Value</i> 
+Synopsis: モータを現在位置からValueの値分動かします。 
+Reply:    @SetValueREL <i>Value</i> Ok: 
+Error:    @SetValueREL Er: <i>Reason</i> 
+Example: 
+<i>PM16C04.th SetValueREL 1000</i> (term1から送信) 
+<i>PM16C04.th&gt;term1 @SetValueREL 1000 Ok:</i> (受信) 
+
+</pre>
+<pre>
+<h3>Standby(複数モータ同期スタート準備コマンド)</h3>
+Usage:    Standby 
+Synopsis: 同時駆動のために全チャンネルをStandby状態にする。 
+Reply:    @Standby Ok: 
+Error:    @Standby Er: <i>Reason</i> 
+Example: 
+<i>pm16c4x.th SetAutoChangeSpeedReady 1</i> (term1から送信) 
+<i>pm16c4x.th&gt;term1 @SetAutoChangeSpeedReady 1 Ok:</i> (受信) 
+<i>pm16c4x.th GetAutoChangeSpeedReady</i>
+<i>pm16c4x.th&gt;term1 @GetAutoChangeSpeedReady Ok: 1</i> (受信) 
+<i>pm16c4x.dth1 SetAutoChangeSpeedReady 1</i> 
+<i>pm16c4x.dth1&gt;term1 @SetAutoChangeSpeedReady 1 Ok:</i> (受信) 
+<i>pm16c4x.dth1 GetAutoChangeSpeedReady</i> 
+<i>pm16c4x.dth1&gt;term1 @GetAutoChangeSpeedReady Ok: 1</i> (受信) 
+<i>pm16c4x Standby</i> (term1から送信) 
+<i>pm16c4x&gt;term1 @Standby Ok:</i> (受信) 
+<i>pm16c4x.th SetValue 100000</i> (thを100000へ、まだ駆動は開始しない) 
+<i>pm16c4x.th&gt;term1 @SetValue 100000 Ok:</i> (受信) 
+<i>pm16c4x.dth1 SetValue 100000</i> (dth1を100000へ、まだ駆動は開始しない) 
+<i>pm16c4x.dth1&gt;term1 @SetValue 100000 Ok:</i> (受信) 
+<i>pm16c4x SyncRun</i> (駆動開始)) 
+<i>pm16c4x&gt;term1 @SyncRun Ok:</i> (受信) 
+
+</pre>
+<pre>
+<h3>SyncRun(複数モータ同期スタート開始コマンド)</h3>
+Usage:    SyncRun 
+Synopsis: 同時駆動の開始。 
+Reply:    @SyncRun Ok: 
+Error:    @SyncRun Er: <i>Reason</i> 
+Example:  Standbyの項を参照 
+</pre>
+</body>
+</html>

@@ -1,0 +1,993 @@
+#! /usr/bin/perl
+#################################################################
+# ID gateway STARS client
+# 2006-10-23 Yasuko Nagatani
+##-------------------------------------------------------
+## CVS $Revision: 1.2 $ $Date: 2010-05-12 00:36:32 $ $Author: yasukon $
+##-------------------------------------------------------
+## Updated : Ver 1.01 :06/12/11 Interval Tuning @BL3A
+##-------------------------------------------------------
+## 10/23 1st Release for BL3A
+#################################################################
+use strict;
+use Getopt::Long;
+use stars;
+use Time::HiRes qw(gettimeofday tv_interval);
+#################################################################
+## ToDo: Constant Variables here.
+use constant PGM_VERSION    => '2.00'; # PGM Ver.No
+use constant INTERVAL_RUN   =>  500;   # Busy
+use constant INTERVAL_STOP  => 1000;   # NonBusy: use Event
+use constant BUF_INTERVAL   =>    2;   # INTERVAL_STOP / INTERVAL_RUN
+use constant WAIT_MEMWRITE  =>   30;   # Wait for  Write to memories.
+#################################################################
+## ToDo: Set parameters here.
+$::PGMVersion  = PGM_VERSION;          # Default Program Version
+$::Server     = '192.168.0.10';        # Default stars server.
+$::NodeName   = 'idgateway';    	   # Default node name.
+$::Debug      = '';
+$::LogDir     = ".";
+#$::LogDir     = "../logdata";
+$::Logging    = 0;
+$::LOCKINT = 0;
+$::LOCKHND = 0;
+$::Interval_Time = INTERVAL_RUN;
+$::myIntervalTime=[gettimeofday];
+$::Buf_Interval= BUF_INTERVAL; 
+$::RefreshDateTime='';
+
+$::PollingRateIsBusy=500;
+$::BusyStopAllowDifferenceRetry=4;
+#%::myPollingRateDeviceIsBusy=();
+#------------------------
+
+##### Used for Default Settings Only
+@::IDDeviceStarsCommand=qw(Gap Tpr Mode Rho2 Phi2 Kx Ky GapY GapX Phase);
+@::DEFAULT_IDDeviceMaxDifference=qw(0 0 0 0.001 0 0 0 0.001 0 0);
+@::DEFAULT_IDDeviceCheckFunction=qw(G G M R - - - G - -);
+@::DEFAULT_IDDeviceMaxLimit     =qw(999 0 0 999 0 0 0 0 0 0);
+@::DEFAULT_IDDeviceMinLimit     =qw(-999 0 0 -999 0 0 0 0 0 0);
+
+##### Program Referencial Properties
+%::IDDeviceMaxDifference=();
+%::IDDeviceCheckFunction=();
+%::IDDeviceMaxLimit=();
+%::IDDeviceMinLimit=();
+
+%::IDDeviceAutoResetBusyTime=();
+%::IDDeviceSetValueStartTime=();
+%::IDDeviceSetValue=();
+%::IDDevicePermission=();
+%::IDDeviceIsBusy=();
+%::IDDeviceCurrent=();
+%::myPollingRateDeviceIsBusy=();
+$::SetValueOkMessage = 'put value finished';
+#################################################################
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'        => \$::Debug,
+'h'        => \&usage,
+'pollingrateisbusy' => \&$::PollingRateIsBusy,
+) or die "Bad switch.\n";
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+$|=1;
+
+#########################
+# Read Configure 
+#########################
+%::ConfigFunctionEnable=();
+%::ConfigLimitMaximum=();
+%::ConfigLimitMinimum=();
+%::ConfigMaximumDifference=();
+require 'config.pl';
+foreach my $key (keys(%::ConfigFunctionEnable)){
+	my $value=$::ConfigFunctionEnable{$key};
+	unless($value=~/^(0|1)$/){
+		die 'Bad config.pl. $::ConfigFunctionEnable{'.$key."}=$::ConfigFunctionEnable{$key}";
+	}
+}
+foreach my $key (keys(%::ConfigMaximumDifference)){
+	my $value=$::ConfigMaximumDifference{$key};
+	unless($value=~/^([-]?\d*\.?\d+|\d+\.?\d*)$/){
+		die 'Bad config.pl. $::ConfigMaximumDifference{'.$key."}=$::ConfigMaximumDifference{$key}";
+	}
+}
+foreach my $key (keys(%::ConfigLimitMaximum)){
+	my $value=$::ConfigLimitMaximum{$key};
+	unless($value=~/^([-]?\d*\.?\d+|\d+\.?\d*)$/){
+		die 'Bad config.pl. $::ConfigLimitMaximum{'.$key."}=$::ConfigLimitMaximum{$key}";
+	}
+}
+foreach my $key (keys(%::ConfigLimitMinimum)){
+	my $value=$::ConfigLimitMinimum{$key};
+	unless($value=~/^([-]?\d*\.?\d+|\d+\.?\d*)$/){
+		die 'Bad config.pl. $::ConfigLimitMinimum{'.$key."}=$::ConfigLimitMinimum{$key}";
+	}
+}
+
+################################################################
+# Interface library
+# Prease include your own interface library.
+# "device_read", "device_write" and "device_init" must be included
+# in the library.
+require 'nportsvr.pl';    #For nport server
+################################################################
+## Init device
+device_init();
+if($::Debug){print "Connected to RINGServer.\n";}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+## Init functions
+InitBeamVariables();
+InitIDGapVariables();
+
+$::tak->addcallback(\&handler);
+
+if($::Debug){print "Started with debug mode.\n";}
+
+stars->Mainloop(\&interval, 100);
+exit(1);
+
+#============Interval============================
+sub interval{
+	my($key,$xx,$yy);
+	my $busy=0;
+
+	if(($::LOCKINT+$::LOCKHND)>0){
+		#$::Buf_Interval=0;
+		return;
+	}
+	if((tv_interval($::myIntervalTime)*1000)<$::Interval_Time){return;}
+	$::LOCKINT=1;
+	$::myIntervalTime=[gettimeofday];
+	# Device is Moving
+	if($::Interval_Time eq INTERVAL_RUN){
+		foreach $key (sort(keys(%::IDDeviceIsBusy))){
+			$key=~/^([^\s#]+)#(\S+)$/;
+			if($::IDDeviceIsBusy{$key} eq 1){
+				GetIDDeviceValue($1,$2);mywait();
+				$xx=GetIDDeviceIsBusy($1,$2);mywait();
+				if($xx eq 1){
+					$busy=1;
+				}
+			}
+		}
+		if($busy eq 0){
+			$::Interval_Time=INTERVAL_STOP;
+		}else{
+			$::Buf_Interval=$::Buf_Interval - 1;
+		}
+	}
+
+
+	if($::Buf_Interval<=0 or $::Interval_Time eq INTERVAL_STOP){
+		$::RefreshDateTime=my_localtime();
+		if($::Debug){
+			print "STARS SND: $::NodeName\.Ring.DATETIME>System _ChangedValue $::RefreshDateTime\n";
+		}
+		$::tak->Send("$::NodeName\.Ring.DATETIME>System _ChangedValue $::RefreshDateTime");
+		foreach $key (sort(keys(%::BeamNodes))){GetBeamValue($key);mywait();}
+		GetListOfIDGapValue();mywait();
+		foreach $key (sort(keys(%::IDDeviceCurrent))){
+			$key=~/^([^\s#]+)#(\S+)$/;
+			GetIDDeviceValue($1,$2);mywait();
+			if(defined($::IDDeviceIsBusy{$key})){
+				$xx=GetIDDeviceIsBusy($1,$2);mywait();
+				if($xx eq 1){$busy=1;}
+			}
+#			GetIDDeviceValue($1,$2);mywait();
+		}
+		$::Buf_Interval= BUF_INTERVAL;
+		if($busy eq 1){
+			$::Interval_Time=INTERVAL_RUN;
+		}else{
+			$::Interval_Time=INTERVAL_STOP;
+		}
+	}
+
+	$::LOCKINT=0;
+	return(1);
+}
+
+#============flushdata============================
+sub myflushdata{
+	my $to=shift;
+	my($id,$cmd)=('','');
+	if($to eq ''){$to='System';}
+	if($::Debug){
+		print "STARS SND: $::NodeName\.Ring.DATETIME>System _ChangedValue $::RefreshDateTime\n";
+	}
+	$::tak->Send("$::NodeName\.DATETIME>System _ChangedValue $::RefreshDateTime");
+	foreach (sort(keys(%::BeamNodes))){
+		SendBeamCurrent($_,$to);
+	}
+	SendListOfIDGapCurrent($to);
+	foreach my $key (sort(keys(%::IDDeviceCurrent))){
+		$key=~/^([^\s#]+)#(\S+)$/;
+		$id=$1;$cmd=$2;
+		SendIDDeviceCurrent($id,$cmd,$to);
+		if(defined($::IDDeviceIsBusy{$key})){
+			SendIDDeviceIsBusy($id,$cmd,$to);
+		}
+	}
+	foreach my $key (sort(keys(%::IDDeviceMaxLimit))){
+		$key=~/^([^\s#]+)#(\S+)$/;
+		$id=$1;$cmd=$2;
+		$::tak->Send("$::NodeName.$id.$cmd.LimitMaximum>$to _ChangedValue ".$::IDDeviceMaxLimit{"$id#$cmd"});
+	}
+	foreach my $key (sort(keys(%::IDDeviceMinLimit))){
+		$key=~/^([^\s#]+)#(\S+)$/;
+		$id=$1;$cmd=$2;
+		$::tak->Send("$::NodeName.$id.$cmd.LimitMinimum>$to _ChangedValue ".$::IDDeviceMinLimit{"$id#$cmd"});
+	}
+	return('Ok:');
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: idgateway [-h] [-d] MyNodeName\n";
+  exit(0);
+}
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+	my ($from, $to, $mess) = @_;
+	my $rt='';
+	my $addok=0;
+	my($mname,$attr,$id,$prop);
+	my $cmd='';
+	$::Error='';
+	my $intflg=0;
+
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+## Controller commands ##
+	if($to eq $::NodeName){
+		if($mess eq 'hello'){$rt = '@hello nice to meet you.';$addok=0;
+		}elsif($mess eq 'help'){$rt = 'hello help flushdata flushdatatome GetIDnameList';$addok=0;
+		}elsif($mess eq 'flushdata'){
+			$rt=myflushdata('System');
+		}elsif($mess eq 'flushdatatome'){
+			$rt=myflushdata($from);
+		}elsif($mess eq 'GetIDnameList'){
+			$rt=GetIDnameList();
+		}elsif($mess=~/^SetLogEnable\s+(0|1)$/){
+			$::Logging=$1;
+			$rt="Ok:";
+		}elsif($mess=~/^devact\s(\S+)$/){
+			$rt=myact($1);
+		}elsif($mess=~/^EtoN\s(\S+)$/){
+			$rt=myEtoN($1);
+		}elsif($mess =~ /^[_@]/){return;
+		}else{
+			$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+			if($::Debug){
+				print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+			}return();
+		}
+## Time Ring Infomation Read ##
+	}elsif($to eq "$::NodeName\.Ring\.DATETIME" and $mess eq 'GetValue'){
+		$rt=$::RefreshDateTime;
+## Beam commands ##
+	}elsif($attr=CheckBeamAttr($to)){
+		if($mess eq 'hello'){$rt = 'nice to meet you.';$addok=0;
+		}elsif($mess eq 'help'){$rt = 'hello help GetValue';$addok=0;
+		}elsif($mess eq 'GetValue'){GetBeamValue($attr);$rt=$::BeamCurrents{$attr};
+		}elsif($mess =~ /^[_@]/){return;
+		}else{
+			$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+			if($::Debug){
+				print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+			}return();
+		}
+## List of Gap commands ##
+	}elsif($attr=CheckListOfIDGapName($to)){
+		if($mess eq 'hello'){$rt = 'nice to meet you.';$addok=0;
+		}elsif($mess eq 'help'){$rt = 'hello help GetValue';$addok=0;
+		}elsif($mess eq 'GetValue'){GetListOfIDGapValue();$rt=$::ListOfIDGapCurrent;
+		}elsif($mess =~ /^[_@]/){return;
+		}else{
+			$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+			if($::Debug){
+				print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+			}return();
+		}
+## ID commands ##
+	}elsif($to=~/^$::NodeName\.(\S+)\.(\S+)$/ and IsIDDeviceCmd($2) and IsIDDeviceName($1,$2)){
+		$id=$1;$cmd=$2;
+		if($mess eq 'hello'){$rt = 'nice to meet you.';$addok=0;
+		}elsif($mess eq 'help'){$rt = 'hello help GetValue SetValue GetPermission';$addok=0;
+		}elsif($mess eq 'GetPermission'){$rt=GetIDDevicePermission($id,$cmd);
+		}elsif($mess eq 'GetValue'){
+			$::LOCKHND=1;$rt=GetIDDeviceValue($id,$cmd);$::LOCKHND=0;$intflg=1
+		}elsif($mess=~/^SetValue\s(\S+)$/){
+			$::LOCKHND=1;$rt=GetIDDeviceValue($id,$cmd);
+			$rt=SetIDDeviceValue($id,$cmd,$1);$::LOCKHND=0;$intflg=1;
+		}elsif($mess eq 'GetTimeStamp'){$rt='Sorry. Under construction';
+		}elsif($mess eq 'ResetBusy'){
+			$::LOCKHND=1;$rt=ResetIDDeviceIsBusy($id,$cmd);$::LOCKHND=0;$intflg=1
+## ABOLISH RESET
+		}elsif($mess eq 'Reset'){
+			$::LOCKHND=1;$rt=ResetIDDeviceIsBusy($id,$cmd);$::LOCKHND=0;$intflg=1
+		}elsif($mess eq 'IsBusy'){
+			$::LOCKHND=1;$rt=GetIDDeviceValue($id,$cmd);
+			$rt=GetIDDeviceIsBusy($id,$cmd);$::LOCKHND=0;$intflg=1
+		}elsif($mess =~ /^[_@]/){return;
+		}elsif($mess=~/^test\s(\S+)$/){
+			$rt=IsIDDeviceCheckValue($id,$cmd,$1);
+		}else{
+			$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+			if($::Debug){
+				print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+			}return();
+		}
+## ID commands with Property##
+	}elsif($to=~/^$::NodeName\.(\S+)\.(\S+)\.(\S+)$/ and IsIDDeviceCmd($2) and IsIDDeviceName($1,$2)){
+		$id=$1;$cmd=$2;$prop=$3;
+		if($mess eq 'hello'){$rt = 'nice to meet you.';$addok=0;
+		}elsif($mess eq 'help'){$rt = 'hello help GetValue SetValue';$addok=0;
+		}elsif($mess eq 'GetValue'){
+			if($prop eq "LimitMaximum"){
+				$rt=$::IDDeviceMaxLimit{"$id#$cmd"};
+			}elsif($prop eq "LimitMinimum"){
+				$rt=$::IDDeviceMinLimit{"$id#$cmd"};
+			}elsif($prop eq "MaximumDifference"){
+				$rt=$::IDDeviceMaxDifference{"$id#$cmd"};
+			}else{
+				$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+				if($::Debug){
+					print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+				}return();
+			}
+		}elsif($mess=~/^SetValue\s(\S+)$/){
+			if($prop eq "LimitMaximum"){
+				if(IsIDDeviceCheckValue($id,$cmd,$1,1)){
+					$::IDDeviceMaxLimit{"$id#$cmd"}=$1;
+					Log("$to Changed => ".$::IDDeviceMaxLimit{"$id#$cmd"});
+					$rt="Ok:";
+				}
+				if($::Debug){
+					print "STARS SND: $to>System _ChangedValue $::IDDeviceMaxLimit{\"$id#$cmd\"}\n";
+				}
+				$::tak->Send("$to>System _ChangedValue $::IDDeviceMaxLimit{\"$id#$cmd\"}");
+			}elsif($prop eq "LimitMinimum"){
+				if(IsIDDeviceCheckValue($id,$cmd,$1,1)){
+					$::IDDeviceMinLimit{"$id#$cmd"}=$1;
+					Log("$to Changed => ".$::IDDeviceMinLimit{"$id#$cmd"});
+					$rt="Ok:";
+				}
+				if($::Debug){
+					print "STARS SND: $to>System _ChangedValue $::IDDeviceMinLimit{\"$id#$cmd\"}\n";
+				}
+				$::tak->Send("$to>System _ChangedValue $::IDDeviceMinLimit{\"$id#$cmd\"}");
+			}elsif($prop eq "MaximumDifference"){
+				if(IsIDDeviceCheckValue($id,$cmd,$1,1)){
+					$::IDDeviceMaxDifference{"$id#$cmd"}=$1;
+					Log("$to Changed => ".$::IDDeviceMaxDifference{"$id#$cmd"});
+					$rt="Ok:";
+				}
+			}else{
+				$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+				if($::Debug){
+					print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+				}return();
+			}
+		}elsif($mess =~ /^[_@]/){return;
+		}else{
+			$::tak->Send("\@$mess Er: Bad command or parameter", $from);
+			if($::Debug){
+				print "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+			}return();
+		}
+## Bad device name ##
+	}else{
+		$::tak->Send("\@$mess Er: $to is down.", $from);
+		if($::Debug){
+			print "STARS SND: $::NodeName>$from \@$mess Er: $to is down.\n";
+		}return();
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}elsif($addok){
+		unless($rt=~/^Ok:/){$rt="Ok: $rt";}
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+	if($intflg){
+		interval();
+	}
+}
+
+#=========== IDGap Functions =====================
+sub InitIDGapVariables{
+	my($id,$cmd,$key,$xx);
+	my $i;
+	$::ListOfIDGapCurrent='';
+	%::IDDeviceSetValue=();
+	%::IDDevicePermission=();
+	%::IDDeviceIsBusy=();
+	%::IDDeviceCurrent=();
+	%::myPollingRateDeviceIsBusy=();
+
+	foreach $id (@::IDCANWRITE){
+#		foreach $cmd (@::IDDeviceStarsCommand){
+		for($i=0;$i<=$#::IDDeviceStarsCommand;$i++){
+			$cmd=$::IDDeviceStarsCommand[$i];
+			$key="$id#$cmd";
+			$::IDDevicePermission{$key}=6;
+			$xx=GetIDDeviceValue($id,$cmd);
+			if($xx eq ''){
+				if($::Debug){ "$key $::Error\n"; }
+				undef($::IDDevicePermission{$key});
+			}else{
+				$::IDDeviceCurrent{$key}=$xx;
+				$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+				$::IDDeviceIsBusy{$key}='';
+				$::myPollingRateDeviceIsBusy{$key}=[gettimeofday];
+				$::IDDeviceMaxDifference{$key}=$::DEFAULT_IDDeviceMaxDifference[$i];
+				$::IDDeviceCheckFunction{$key}=$::DEFAULT_IDDeviceCheckFunction[$i];
+				$::IDDeviceMaxLimit{$key}=$::DEFAULT_IDDeviceMaxLimit[$i];
+				$::IDDeviceMinLimit{$key}=$::DEFAULT_IDDeviceMinLimit[$i];
+#print $::ConfigFunctionEnable{"$cmd"},$cmd,"\n";
+				if(defined($::ConfigFunctionEnable{"$cmd"})){
+					unless($::ConfigFunctionEnable{"$cmd"}){
+						$::IDDeviceCheckFunction{$key}="-";
+					}
+				}
+				if(defined($::ConfigFunctionEnable{"$id.$cmd"})){
+					unless($::ConfigFunctionEnable{"$id.$cmd"}){
+						$::IDDeviceCheckFunction{$key}="-";
+					}
+				}
+#print $::IDDeviceCheckFunction{$key},$key,"\n";
+				if(defined($::ConfigMaximumDifference{"$cmd"})){
+					$::IDDeviceMaxDifference{$key}=$::ConfigMaximumDifference{$cmd};
+				}
+				if(defined($::ConfigLimitMaximum{"$cmd"})){
+					$::IDDeviceMaxLimit{$key}=$::ConfigLimitMaximum{$cmd};
+				}
+				if(defined($::ConfigLimitMinimum{"$cmd"})){
+					$::IDDeviceMinLimit{$key}=$::ConfigLimitMinimum{$cmd};
+				}
+				if(defined($::ConfigAutoResetBusyTime{"$cmd"})){
+					$::IDDeviceAutoResetBusyTime{$key}=$::ConfigAutoResetBusyTime{$cmd};
+				}
+				if(defined($::ConfigMaximumDifference{"$id.$cmd"})){
+					$::IDDeviceMaxDifference{$key}=$::ConfigMaximumDifference{"$id.$cmd"};
+				}
+				if(defined($::ConfigLimitMaximum{"$id.$cmd"})){
+					$::IDDeviceMaxLimit{$key}=$::ConfigLimitMaximum{"$id.$cmd"};
+				}
+				if(defined($::ConfigLimitMinimum{"$id.$cmd"})){
+					$::IDDeviceMinLimit{$key}=$::ConfigLimitMinimum{"$id.$cmd"};
+				}
+				if(defined($::ConfigAutoResetBusyTime{"$id.$cmd"})){
+					$::IDDeviceAutoResetBusyTime{$key}=$::ConfigAutoResetBusyTime{"$id.$cmd"};
+				}
+				Log("$key CheckFunction     => $::IDDeviceCheckFunction{$key}");
+				Log("$key MaximumDifference => $::IDDeviceMaxDifference{$key}");
+				Log("$key LimitMaximum      => $::IDDeviceMaxLimit{$key}");
+				Log("$key LimitMinimum      => $::IDDeviceMinLimit{$key}");
+				if(defined($::IDDeviceAutoResetBusyTime{$key})){
+					Log("$key AutoResetBusyTime => $::IDDeviceAutoResetBusyTime{$key}");
+				}else{
+					Log("$key AutoResetBusyTime => N/A");
+				}
+				$::tak->Send("$::NodeName.$id.$cmd.LimitMaximum>System _ChangedValue ".$::IDDeviceMaxLimit{$key});
+				$::tak->Send("$::NodeName.$id.$cmd.LimitMinimum>System _ChangedValue ".$::IDDeviceMinLimit{$key});
+			}
+		}
+	}
+	return(1);
+}
+#===========for IDGapList=====================
+sub CheckListOfIDGapName{
+	my $mname=shift;
+	if($mname=~/^$::NodeName\.Ring\.IDGap$/){
+		return('IDGAP');
+	}elsif($mname=~/^$::NodeName\.IDGAP$/){
+		return('IDGAP');
+	}return(undef);
+}
+sub GetListOfIDGapValue{
+	my $xx=myact("GET,IDGAP");
+	$xx=~s/^\[//;$xx=~s/\]$//;
+	$xx=~s/\s//g;
+	if($::ListOfIDGapCurrent ne $xx){
+		$::ListOfIDGapCurrent=$xx;
+		SendListOfIDGapCurrent();
+	}
+	return($xx);
+}
+sub SendListOfIDGapCurrent{
+	my($to)=(shift);
+	if($to eq ''){$to='System';}
+	if($::Debug){
+		print "STARS SND: $::NodeName\.Ring\.IDGap>$to _ChangedValue $::ListOfIDGapCurrent\n";
+	}
+	$::tak->Send("$::NodeName\.Ring\.IDGap>$to _ChangedValue $::ListOfIDGapCurrent");
+#	$::tak->Send("$::NodeName\.IDGAP>$to _ChangedValue $::ListOfIDGapCurrent");
+	return(1);
+}
+#===========for IDGap=====================
+sub GetIDnameList{
+	my $rt='';
+	foreach (sort(keys(%::IDDevicePermission))){
+		unless(s/#Gap$//){next;}
+		$rt="$rt,$_";
+	}
+	$rt=~s/^\,//;return($rt);
+}
+#===========for IDGap Device=====================
+sub IsIDDeviceName{
+	my($id,$cmd)=(shift,shift);
+	if(defined($::IDDevicePermission{"$id#$cmd"})){return(1);}
+	return(undef);
+}
+#-------------------------
+sub GetIDDevicePermission{
+	my($id,$cmd)=(shift,shift);
+	if(defined($::IDDevicePermission{"$id#$cmd"})){
+		return($::IDDevicePermission{"$id#$cmd"});
+	}
+	$::Error='Bad Id.';return(undef);
+}
+#-------------------------
+sub GetIDDeviceValue{
+	my($id,$cmd)=(shift,shift);
+	my($xx)=('');
+	my $key="$id#$cmd";
+	unless($id){$::Error='Bad Id.';return(undef);}
+	if(IsIDDeviceCmd($cmd)){
+		unless($::IDDevicePermission{$key}=~/^(4|6)$/){
+			$::Error="$id unreadable.";return(undef);
+		}
+		$xx=myact("GET,$id,$cmd");
+#		$xx=~s/^([-+]?[0-9]+)\.0+$/$1/;
+	}else{
+		Log("GET,$id,$cmd >> $xx");
+		$::Error='Bad Command.';return(undef);
+	}
+	unless(defined($xx)){
+		Log("GET,$id,$cmd >> undef");
+		$::IDDeviceCurrent{$key}='';
+		return(undef);
+	}
+	if($xx=~/\,/){
+		Log("GET,$id,$cmd >> $xx");
+		$::IDDeviceCurrent{$key}='';
+		$::Error="$xx";return(undef);
+	}
+	if($xx ne $::IDDeviceCurrent{$key}){
+		Log("GET,$id,$cmd >> $xx");
+		$::IDDeviceCurrent{$key}=$xx;
+		SendIDDeviceCurrent($id,$cmd);
+	}
+	return($xx);
+}
+#-------------------------
+sub SetIDDeviceValue{
+	my($id,$cmd)=(shift,shift);
+	my($xx)=(shift);
+	my $key="$id#$cmd";
+	unless($id){$::Error='Bad Id.';return(undef);}
+	unless(IsIDDeviceCmd($cmd)){return(undef);}
+	unless(IsIDDeviceCheckValue($id,$cmd,$xx)){return(undef);}
+	unless($::IDDevicePermission{$key}=~/^(2|6)$/){
+		$::Error="$id unwritable.";return(undef);
+	}
+	if(GetIDDeviceIsBusy($id,$cmd)){
+		$::Error='Busy.';return(undef);
+	}
+	if($key eq "ID161#Rho2"){
+		my $mode=$::IDDeviceCurrent{"$id#Mode"}+0;
+		#$0:C+R 1:C-R 2:LHR 3:LVR 4:E+R 5:E-R 14:TRANSITION 15:N/A
+		if($mode eq 0){
+			unless($xx>=0 and $xx<=14){
+				$::Error="$id Rho2 is out of range.";return(undef);
+			}
+		}elsif($mode eq 1){
+			unless($xx>=-14 and $xx<=0){
+				$::Error="$id Rho2 is out of range.";return(undef);
+			}
+		}elsif($mode eq 2){
+			unless($xx>=0 and $xx<=14){
+				$::Error="$id Rho2 is out of range.";return(undef);
+			}
+		}elsif($mode eq 3){
+			unless($xx>=0 and $xx<=14){
+				$::Error="$id Rho2 is out of range.";return(undef);
+			}
+		}elsif($mode eq 4){
+			unless($xx>=0 and $xx<=14){
+				$::Error="$id Rho2 is out of range.";return(undef);
+			}
+		}elsif($mode eq 5){
+			unless($xx>=-14 and $xx<=0){
+				$::Error="$id Rho2 is out of range.";return(undef);
+			}
+		}else{
+				$::Error="$id Mode is out of control.";return(undef);
+		}
+		if($::IDDeviceCurrent{$key}+0 eq 0){
+			my $rt=myact("SET,$id,$cmd,0");
+			Log("SET,$id,$cmd,0 >> $rt");
+			unless($rt=~/$::SetValueOkMessage/){$::Error="$rt";return(undef);}
+			mywait();
+		}
+	}
+
+	my $rt=myact("SET,$id,$cmd,$xx");
+	Log("SET,$id,$cmd,$xx >> $rt");
+	unless($rt=~/$::SetValueOkMessage/){$::Error="$rt";return(undef);}
+	$::IDDeviceIsBusy{$key}=1;
+	$::IDDeviceSetValue{$key}=$xx;
+	$::IDDeviceSetValueStartTime{$key}=[gettimeofday];
+	SendIDDeviceIsBusy($id,$cmd);
+	$::Interval_Time=INTERVAL_RUN;
+	$::Buf_Interval= BUF_INTERVAL; 
+	$::BusyStopAllowDifferenceRetry=3;
+	return('Ok:');
+}
+#-------------------------
+sub ResetIDDeviceIsBusy{
+	my($id,$cmd)=(shift,shift);
+	my $key="$id#$cmd";
+	unless($id){$::Error='Bad Id.';return(undef);}
+	unless(IsIDDeviceCmd($cmd)){return(undef);}
+	unless($::IDDevicePermission{$key}=~/^(2|6)$/){
+		$::Error='$id unwritable.';return(undef);
+	}
+	$::IDDeviceSetValue{$key}='';
+	return('Ok:');
+}
+#-------------------------
+sub GetIDDeviceIsBusy{
+	my($id,$cmd)=(shift,shift);
+	my($xx)=('');
+	my $key="$id#$cmd";
+	unless($id){$::Error='Bad Id.';return(undef);}
+	unless(IsIDDeviceCmd($cmd)){return(undef);}
+	unless($::IDDevicePermission{$key}=~/^(2|6)$/){
+		$::Error='$id unwritable.';return(undef);
+	}
+	$xx=$::IDDeviceIsBusy{$key};
+	if($::IDDeviceCurrent{$key} ne ''){
+		if($::IDDeviceSetValue{$key} ne ''){
+# Stop Value Gosa Yurusu changed by Nagatani 10/2/9
+			if(($::IDDeviceSetValue{$key}+0) eq ($::IDDeviceCurrent{$key}+0)){
+				$xx=0;
+				$::IDDeviceSetValue{$key}='';
+			}elsif($::IDDeviceCurrent4Busy{$key} ne ''){
+				if(($key=~/^(ID161#)/) and (($::IDDeviceCurrent4Busy{"$1"."Mode"}+0) eq 14)){
+					$::IDDeviceSetValue{"$1"."Rho2"} = "0";
+				}
+				unless($::IDDeviceCurrent4Busy{$key} eq $::IDDeviceCurrent{$key}){
+					$::IDDeviceSetValueStartTime{$key}=[gettimeofday];
+				}
+				if(abs($::IDDeviceSetValue{$key}+0-$::IDDeviceCurrent{$key})
+				       <=abs($::IDDeviceMaxDifference{$key})){
+					if($::IDDeviceCurrent4Busy{$key} eq $::IDDeviceCurrent{$key}){
+						$::BusyStopAllowDifferenceRetry--;
+						if($::BusyStopAllowDifferenceRetry<=0){
+							$::IDDeviceSetValue{$key}='';
+						}
+					}
+				}elsif(defined($::IDDeviceAutoResetBusyTime{$key})
+				   and ($::IDDeviceCurrent4Busy{$key} eq $::IDDeviceCurrent{$key})){
+					if((tv_interval($::IDDeviceSetValueStartTime{$key})*1000)>$::IDDeviceAutoResetBusyTime{$key}){
+							$::IDDeviceSetValue{$key}='';
+					}
+				}
+			}
+			$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+			$::myPollingRateDeviceIsBusy{$key}=[gettimeofday];
+		}elsif($::IDDeviceCurrent4Busy{$key} ne ''){
+#print "$key: $::myPollingRateDeviceIsBusy{$key} : $::PollingRateIsBusy:".tv_interval($::myPollingRateDeviceIsBusy{$key})*1000,"\n";
+			if(($key=~/^(ID161#)/) and (($::IDDeviceCurrent4Busy{"$1"."Mode"}+0) eq 14)){
+				$xx=1;
+				$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+				$::myPollingRateDeviceIsBusy{$key}=[gettimeofday];
+				$::IDDeviceSetValue{"$1"."Rho2"} = "0";
+			}elsif((tv_interval($::myPollingRateDeviceIsBusy{$key})*1000)>$::PollingRateIsBusy){
+#print "$::IDDeviceCurrent4Busy{$key} ne $::IDDeviceCurrent{$key}\n";
+				if($::IDDeviceCurrent4Busy{$key} ne $::IDDeviceCurrent{$key}){
+					if(abs($::IDDeviceCurrent4Busy{$key}+0-$::IDDeviceCurrent{$key})
+					       <=abs($::IDDeviceMaxDifference{$key})){
+						$xx=0;
+						#NE1 Yuragi Taiou
+						#$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+					}else{
+						$xx=1;
+						$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+					}
+				}else{
+					$xx=0;
+					$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+				}
+				$::myPollingRateDeviceIsBusy{$key}=[gettimeofday];
+			}
+		}else{
+			$::IDDeviceCurrent4Busy{$key}=$::IDDeviceCurrent{$key};
+		}
+	}
+	if($xx eq ''){$xx=0;}
+	if($xx ne $::IDDeviceIsBusy{$key}){
+		$::IDDeviceIsBusy{$key}=$xx;
+		SendIDDeviceIsBusy($id,$cmd);
+	}
+	if($xx eq 1){
+		$::Interval_Time=INTERVAL_RUN;
+		#$::Buf_Interval= BUF_INTERVAL;
+	}
+	return($xx);
+}
+#-------------------------
+sub SendIDDeviceCurrent{
+	my($id,$cmd,$to)=(shift,shift,shift);
+	my $value=$::IDDeviceCurrent{"$id#$cmd"};
+	if($to eq ''){$to='System';}
+	if($::Debug){
+		print "STARS SND: $::NodeName\.$id\.$cmd>$to _ChangedValue $value\n";
+	}
+	$::tak->Send("$::NodeName\.$id\.$cmd>$to _ChangedValue $value");
+	return(1);
+}
+#-------------------------
+sub SendIDDeviceIsBusy{
+	my($id,$cmd,$to)=(shift,shift,shift);
+	my $value=$::IDDeviceIsBusy{"$id#$cmd"};
+	if($to eq ''){$to='System';}
+	if($::Debug){
+		print "STARS SND: $::NodeName\.$id\.$cmd>$to _ChangedIsBusy $value\n";
+	}
+	$::tak->Send("$::NodeName\.$id\.$cmd>$to _ChangedIsBusy $value");
+	return(1);
+}
+#-------------------------
+sub IsIDDeviceCheckValue{
+	my $id=shift;
+	my $cmd=shift;
+	my $value=shift;
+	my $propflg=shift;
+	my $key="$id#$cmd";
+	my $type;
+	$type=$::IDDeviceCheckFunction{$key};
+	
+	if($type eq 'G'){
+#		unless($value=~/^(\d*\.?\d+|\d+\.?\d*)$/){
+		unless($value=~/^([-]?\d*\.?\d+|\d+\.?\d*)$/){
+			$::Error = "$cmd value invalid number.";
+			return(undef);
+		}
+		unless($propflg){
+			unless(($::IDDeviceMinLimit{$key}<=$value) and ($value<=$::IDDeviceMaxLimit{$key})){
+				$::Error = "$cmd value's range is between $::IDDeviceMinLimit{$key} and $::IDDeviceMaxLimit{$key}.";
+				return(undef);
+			}
+		}
+	}if($type eq 'R'){
+#		unless($value=~/^(\d*\.?\d+|\d+\.?\d*)$/){
+		unless($value=~/^([-]?\d*\.?\d+|\d+\.?\d*)$/){
+			$::Error = "$cmd value invalid number.";
+			return(undef);
+		}
+		unless($propflg){
+			unless(($::IDDeviceMinLimit{$key}<=$value) and ($value<=$::IDDeviceMaxLimit{$key})){
+				$::Error = "$cmd value's range is between $::IDDeviceMinLimit{$key} and $::IDDeviceMaxLimit{$key}.";
+				return(undef);
+			}
+		}
+	}elsif($type eq 'V'){
+#		unless($value=~/^(\d*\.?\d+|\d+\.?\d*)$/){
+		unless($value=~/^([-]?\d*\.?\d+|\d+\.?\d*)$/){
+			$::Error = "$cmd value invalid number.";
+			return(undef);
+		}
+		unless($propflg){
+		}
+	}elsif($type eq '-'){
+		$::Error = "Sorry. $cmd is not changable.";
+		return(undef);
+	}elsif($type eq 'M'){
+		unless($value=~/^(0|1|2|3|4|5|14|15)(\.0+)?$/){
+			$::Error = "$cmd $value invalid.";
+			return(undef);
+		}
+	}
+	return(1);
+}
+#-------------------------
+sub IsIDDeviceCmd{
+	my $cmd=shift;
+	my $starscmd="@::IDDeviceStarsCommand";
+	if($starscmd=~/(^|\s)$cmd(\s|$)/){
+		return(1);
+	}
+	$::Error='Bad Command.';
+	return(undef);
+}
+
+#=========== Beam Functions =====================
+sub InitBeamVariables{
+	%::BeamTypes=();
+	$::BeamTypes{'Ring.DCCT'}    ='CUR';
+	$::BeamTypes{'Ring.Energy'}  ='ENE';
+	$::BeamTypes{'Ring.Vacuum'}  ='PAV';
+	$::BeamTypes{'Ring.Lifetime'}='LIF';
+	$::BeamTypes{'Ring.Status'}  ='MOD';
+	$::BeamTypes{'Ring.Message'} ='MES';
+	%::BeamNodes=();
+	$::BeamNodes{'CUR'}    ='Ring.DCCT';
+	$::BeamNodes{'ENE'}    ='Ring.Energy';
+	$::BeamNodes{'PAV'}    ='Ring.Vacuum';
+	$::BeamNodes{'LIF'}    ='Ring.Lifetime';
+	$::BeamNodes{'MOD'}    ='Ring.Status';
+	$::BeamNodes{'MES'}    ='Ring.Message';
+	%::BeamCurrents=();
+	$::RefreshDateTime=my_localtime();
+	if($::Debug){
+		print "STARS SND: $::NodeName\.Ring.DATETIME>System _ChangedValue $::RefreshDateTime\n";
+	}
+	$::tak->Send("$::NodeName\.Ring.DATETIME>System _ChangedValue $::RefreshDateTime");
+	foreach (sort(keys(%::BeamNodes))){
+		GetBeamValue($_);mywait();
+	}
+	return(1);
+}
+sub CheckBeamAttr{
+	my $mname=shift;
+	my $key;
+	if($mname=~/^$::NodeName\.(\S+)$/){
+		$key=$1;
+		if(defined($::BeamTypes{$key})){
+			return($::BeamTypes{$key});
+		}elsif($key=~/^BEAM(\S+)$/ and defined($::BeamNodes{$1})){
+			return($1);
+		}
+	}return(undef);
+}
+sub GetBeamValue{
+	my $attr=shift; # checked value only
+	my $xx;
+	unless(defined($::BeamNodes{$attr})){
+		$::Error='Bad Attributes.';return(undef);
+	}
+	$xx=myact("GET,BEAM,$attr");
+	if($::BeamCurrents{$attr} ne $xx){
+		$xx=myEtoN($xx);
+		$::BeamCurrents{$attr}=$xx;
+		SendBeamCurrent($attr);
+	}
+	return($xx);
+}
+sub SendBeamCurrent{
+	my($attr,$to)=(shift,shift);
+	if($to eq ''){$to='System';}
+	if(defined($::BeamNodes{$attr})){
+		if($::Debug){
+			print "STARS SND: $::NodeName\.$::BeamNodes{$attr}>$to _ChangedValue $::BeamCurrents{$attr}\n";
+		}
+		$::tak->Send("$::NodeName\.$::BeamNodes{$attr}>$to _ChangedValue $::BeamCurrents{$attr}");
+#		$::tak->Send("$::NodeName\.BEAM".uc($attr).">$to _ChangedValue $::BeamCurrents{$attr}");
+		return(1);
+	}return(undef);
+}
+
+sub myEtoN{
+	my $xx=shift;
+	if($xx=~/^(\d*)([\.]?)(\d*)[e|E]([-|+]?)(\d+)$/){
+		my($n1,$dot,$n2,$sign,$mul)=($1,$2,$3,$4,$5);
+		my($num,$len);
+		if($mul=~/^0+$/){
+			return($xx);
+		}elsif($n1 eq '' and $n2 eq ''){
+			return($xx);
+		}elsif($sign eq '-'){
+			if($dot eq ''){
+				$num=$n1.$n2;
+			}else{
+				$num=$n1;
+			}
+			$len=length($num);
+			if($len<=$mul){
+				$num='0.' . ('0' x ($mul-$len)) . $num;
+			}else{
+				$num = substr($num,0,$len-$mul) .'.'. substr($num,$len-$mul,$mul);}
+			if($dot eq ''){
+			}else{
+				$num=$num.$n2;
+			}
+			return($num);
+		}else{
+			if($dot eq ''){
+				$num=$n1.$n2 . ('0' x $mul);
+			}else{
+				$num=$n2;
+				$len=length($num);
+				if($len<=$mul){
+					$num=$n1.$num . ('0' x ($mul-$len));
+				}else{
+					$num=$n1. substr($num,0,$mul) .'.'. substr($num,$mul,$len-$mul);
+				}
+			}
+			return($num);
+		}
+	}
+	return($xx);
+}
+#=========== device access functions =====================
+sub myact{
+	my $cmd=shift;
+	my $rt=mywrite($cmd);stars->Sleep(WAIT_MEMWRITE);return(myread());
+}
+sub mywait{
+	stars->Sleep(WAIT_MEMWRITE);
+}
+sub mywrite{
+	my $cmd=shift;return(device_write($cmd));
+}
+sub myread{
+	my $rt=device_read();
+	unless(defined($rt)){
+		$::Error="No Response from ID-Server. Please restart Stars client '$::NodeName'.";
+		return(undef);
+	}
+	$rt=~s/^>>\s//;$rt=~s/>>\s$//;return($rt);
+}
+#-- Get Date -------------------------
+sub my_localtime{
+#	my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime(time);
+#	return(sprintf("%04d-%02d-%02d %02d:%02d:%02d",$year+1900,$mon+1,$mday,$hour,$min,$sec));
+	return(time());
+}
+#------------------------------------------------------------
+# Added: RETRY
+sub hires2secdate {
+    my($t) = shift;
+    my $t1 = int($t);
+    my($sec,$min,$hour,$day,$mon,$year,$wday) = localtime($t1);
+    return sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d",
+        $year+1900,$mon+1,$day, $hour, $min, $sec, ($t-$t1)*100000);
+}
+#------------------------------------------------------------
+# Added: RETRY
+sub gethiresdate{
+	my($seconds, $microseconds) = gettimeofday;	
+	return("$seconds.$microseconds"+0.0);
+}
+sub Log {
+    my $msg = shift;
+	my $mydate = hires2secdate(gethiresdate());
+
+	unless($::Logging){return(1);}
+	$mydate=~/^(\S+)/;
+    if(open(my $f, ">>$::LogDir/$::NodeName"."log$1.txt")){
+	    print $f "$mydate $msg\n";
+    	close $f;
+    }else{
+		$::Logging=0;
+	    return(0);
+    }
+    return(1);
+}

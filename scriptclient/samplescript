@@ -1,0 +1,52 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  This program is sample script. List is used for return value
+of stSetParam().
+';
+#####################################################
+
+require 'scriptlib.pl';
+
+stLoadParam();
+my ($prefix, $display, $start, $end, $step)
+ = stSetParam('Prefix_of_data_file Display_terminal_name Start End Step',@ARGV);
+stSaveParam();
+
+$::DataFile = $prefix;
+stAddSuffixDataFile();
+
+stPrint("Start sample script.\n");
+stWriteFile( "#Start ".stGetLocaltime()."\n" );
+
+my $rt = stSendCommand("System hello");
+stPrint("$rt\n");
+
+my $lp;
+
+for $lp (stGetScanList($start, $end, $step)){
+	stFprintf("%d %d\n", $lp, $lp*2+rand(100));
+	stSendEvent("$display _ChangedValue $lp");
+	stSleep(0.5);
+}
+
+
+$::TimeOut = 1;
+
+stSendEvent("System help");
+stSendEvent("System hello");
+$rt = stWait('@hello', 'System', '@help', 'System');
+
+
+
+if($rt eq ''){
+	stPrint("Timeout!\n");
+}else{
+	stPrint("$rt\n");
+}
+
+
+stWriteFile( "#End ".stGetLocaltime()."\n" );

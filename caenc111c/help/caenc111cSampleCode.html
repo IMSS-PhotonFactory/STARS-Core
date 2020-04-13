@@ -1,0 +1,226 @@
+<HTML>
+<HEAD>
+</HEAD>
+<BODY>
+<H1>Stars Program Reference&nbsp;- Sample Code for caenc111c</H1>
+<H1>Introduction</H1>
+Here are the sample codes of 'caenc111c' to calculate the inputs during the specified time seconds, using Kenetic Systems 6485-L1A module(KS3655) and CAEN C257 module(C257) via CAEN C111C CAMAC Controller(C111C).<BR>
+<BR>
+There are 2 scripts, 'CountStartKS3655' and 'CountGetKS3655'.(which runs on 'mcdirec' program, it's almost perl language)
+<OL><LI>
+'CountStartKS3655' receives the time seconds parameter, setups the timer using the inhibit control function of KS3655, then starts.<BR>
+</LI><LI>
+'CountGetKS3655' waits for the LAM which notifies the calcultion's over, and reads the inputs for CAEN C257.
+</LI>
+</OL>
+<H3>Execute the scripts 'CountStarsKS3655' and 'CountGetKS3655' from Stars Client 'term1'.</H3>
+<table border="0" cellpadding="1" cellspacing="0" width="100%" bgcolor="#000000">
+<tr>
+<td align="center">
+
+  <table border="0" cellpadding="4" cellspacing="0" width="100%" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+  <pre>
+mcdirec CountStartKS3655 30
+mcdirec>term1 @CountStartKS3655 Ok:
+mcdirec CountGetKS3655
+mcdirec>term1 @CountGetKS3655 Ok: 3967,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0</pre></td></tr></table>
+</td></tr></table></p>
+<p>
+<H3>Monitoring the Event Messages  sended by caenc111c program at Stars Client 'test'.</H3>
+* In this case, monitoring the value of  C257 CH0 input only (which Stars client name is 'caenc111c.C01'), because only it's connectted and it's value can be changed.
+<table border="0" cellpadding="1" cellspacing="0" width="100%" bgcolor="#000000">
+<tr>
+<td align="center">
+  <table border="0" cellpadding="4" cellspacing="0" width="100%" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+  <pre>System flgon caenc111c
+System&gt;test @flgon Node caenc111c has been registered.
+
+System flgon caenc111c.ks3655
+System&gt;test @flgon Node caenc111c.ks3655 has been registered.
+
+System flgon caenc111c.c257<br>System&gt;test @flgon Node caenc111c.c257 has been registered.
+<br>System flgon caenc111c.C01<br>System&gt;test @flgon Node caenc111c.C01 has been registered.<br>
+caenc111c flushdata<br>caenc111c&gt;test _ChangedInhibitIsBusy 0<br>caenc111c&gt;test @flushdata Ok:
+
+caenc111c.ks3655 flushdata<br>caenc111c.ks3655&gt;test _ChangedValueLAMStatusBits 0<br>caenc111c.ks3655&gt;test _ChangedLAMIsBusy 0<br>caenc111c.ks3655&gt;test @flushdata Ok:<br>
+caenc111c.c257 flushdata<br>caenc111c.c257&gt;test _ChangedInhibitIsBusy 0<br>caenc111c.c257&gt;test _ChangedLAMIsBusy<br>caenc111c.C01&gt;test _ChangedValue 111<br>caenc111c.c257&gt;test @flushdata Ok:<br>
+(term1 sends the message 'mcdirec CountStartKS3655 30')
+
+caenc111c.c257&gt;test _ChangedInhibitIsBusy 1<br>caenc111c.C01&gt;test _ChangedValue 0<br>caenc111c.c257&gt;test _ChangedInhibitIsBusy 0<br>caenc111c.C01&gt;test _ChangedValue 12<br>caenc111c.ks3655&gt;test _ChangedValueLAMStatusBits 1<br>caenc111c.C01&gt;test _ChangedValue 277<br>caenc111c.C01&gt;test _ChangedValue 555<br>caenc111c.C01&gt;test _ChangedValue 803<br>caenc111c.C01&gt;test _ChangedValue 1093<br>caenc111c.C01&gt;test _ChangedValue 1360<br>caenc111c.C01&gt;test _ChangedValue 1641<br>caenc111c.C01&gt;test _ChangedValue 1928<br>caenc111c.C01&gt;test _ChangedValue 2202<br>caenc111c.C01&gt;test _ChangedValue 2497<br>caenc111c.C01&gt;test _ChangedValue 2731<br>caenc111c.C01&gt;test _ChangedValue 3018<br>caenc111c.C01&gt;test _ChangedValue 3274<br>caenc111c.C01&gt;test _ChangedValue 3525<br>caenc111c.C01&gt;test _ChangedValue 3808<br>caenc111c.ks3655&gt;test _ChangedLAMIsBusy 1<br>caenc111c.ks3655&gt;test _ChangedValueLAMStatusBits 3<br>caenc111c.ks3655&gt;test _ChangedLAMIsBusy 1<br>caenc111c.c257&gt;test _ChangedInhibitIsBusy 1<br>caenc111c.C01&gt;test _ChangedValue 3967
+
+(term1 receives the reply of 'mcdirec CountGetKS3655')</pre>
+  </td></tr></table>
+</td></tr></table></p>
+<p>
+<H3>Mcdirec script - `CountStartKS3655`</H3>
+<H3><A HREF="perl.html#top" NAME="Reference-Manual"></A></H3>
+<table border="0" cellpadding="1" cellspacing="0" width="100%" bgcolor="#000000">
+<tr>
+<td align="center">
+  <table border="0" cellpadding="4" cellspacing="0" width="100%" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+  <pre>my $rt;
+my $i;
+my $sname="CountStartKS3655";
+my $destCamac="caenc111c";
+my $destKS    ="caenc111c.ks3655";
+my $destC257="caenc111c.c257";
+my $delaysec=int(shift);
+
+#Check count time(sec)
+unless(($delaysec>=1) and ($delaysec<=65535-1)){
+send_error_msg "\@$sname Er: Arg Delay Invalid."
+return;
+}
+
+#CCCZ
+act $rt "$destCamac RunDatawayInit"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Enable KS3655 Inhibit Function
+act $rt "$destKS SetInhibitEnable 1"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Clear C257 Counter 1-16
+act $rt "$destC257 GetValueInhibitReset 15"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Inhibit cleared after t1 and Inhibitted after t2
+act $rt "$destKS SetInhibitRegister 1 0"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Using 1Hz Clock Freq and Output Pulse t1,t2 And 1 cycle only
+act $rt "$destKS SetCycleControlRegister 0 1 0"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Output Pulse t1 1(Sec) after t0
+act $rt "$destKS SetDelayMultiplier 0 1"
+snd "System _debugMULTIPLE 0 1"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Output Pulse t2 $deleysec+1(Sec) after t0
+$delaysec=$delaysec+1;
+act $rt "$destKS SetDelayMultiplier 1 $delaysec"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#LAM on after Output Pulse t2
+act $rt "$destKS SetLAMMaskRegister 2"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#Check if C257 C01-C16 Cleared.
+for($i=0;$i<16;$i++){
+  act $rt "$destC257 GetValueInhibitReset $i"
+  DoEvents
+  if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+    send_error_msg "\@$sname Er: $rt"
+    return;
+  }
+  $rt=~/Ok:\s(.+)/;
+  unless($1 eq '0'){
+    send_error_msg "\@$sname Er: C257 Counter $i is not 0 but $1."
+    return;
+  }  
+}
+
+#ks3655 Start Output Pulse.
+act $rt "$destKS Run"
+DoEvents
+if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+send_error_msg "\@$sname Er: $rt"
+return;
+}
+
+#END
+send_normal_msg "\@$sname Ok:"
+return;</pre></td></tr></table>
+</td></tr></table></p>
+
+<p>
+<H3>Mcdirec script - `CountGetKS3655`</H3>
+<table border="0" cellpadding="1" cellspacing="0" width="100%" bgcolor="#000000">
+<tr>
+<td align="center">
+  <table border="0" cellpadding="4" cellspacing="0" width="100%" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+  <pre>my $rt;
+my $i;
+my $sname="CountGetKS3655";
+my $destKS="caenc111c.ks3655";
+my $destC257="caenc111c.c257";
+my @values=();
+
+while(1){
+  act $rt "$destKS GetLAMIsBusy"
+  DoEvents
+  if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+    send_error_msg "\@$sname Er: $rt"
+    return;
+  }
+  $rt=~/\Ok:\s(\S+)/;
+  if($1 eq 1){last;}
+    $::tak->Sleep(1000);
+}
+
+#Read C257 C01-C16.
+for($i=0;$i<16;$i++){
+  act $rt "$destC257 GetValue $i"
+  DoEvents
+  if($rt eq '' or $rt =~ /Er:/ or check_cancel){
+    send_error_msg "\@$sname Er: $rt"
+    return;
+  }
+  $rt=~/Ok:\s(.+)/;
+  if($1 eq ''){
+    send_error_msg "\@$sname Er: $rt"
+    return;
+  }
+  push(@values,$1); 
+}
+
+#Return Values
+send_normal_msg "\@$sname Ok: ".join(',',@values)
+
+return;
+</pre></td></tr></table>
+</td></tr></table></p>
+
+
+</BODY></HTML>

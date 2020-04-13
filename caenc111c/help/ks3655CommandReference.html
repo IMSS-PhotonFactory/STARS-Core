@@ -1,0 +1,434 @@
+<HTML>
+<HEAD>
+<style type="text/css">
+UL  {list-style-type:none}
+</style>
+</HEAD>
+<BODY>
+<H1>Stars Program Reference <BR>&nbsp;&nbsp;&nbsp;&nbsp;- Kenetic Systems Model 3655-L1A Commands.</H1><P><UL><LI>Comamnd List<UL><LI><A NAME="SECDGeneral" HREF="#SECGeneral">General</A></LI><UL>
+  <LI><A NAME="SECDStars destination client name of Kenetic System Model 3655-L1A" HREF="#SECStars destination client name of Kenetic System Model 3655-L1A">Stars  client name of Kenetic System Model 3655-L1A</A>
+  <LI><A NAME="SECDHow to execute the Stars Command of Kenetic System Model 3655-L1A" HREF="#SECHow to execute the Stars Command of Kenetic System Model 3655-L1A">How to execute the Stars Command of Kenetic System Model 3655-L1A</A><LI><A NAME="SECDError General" HREF="#SECError General">Error General</A></UL><LI><A NAME="SECDStars Information Command" HREF="#SECStars Information Command">Stars Information Command</A></LI><UL><LI><A NAME="SECDhello" HREF="#SEChello">hello</A><LI><A NAME="SECDhelp" HREF="#SEChelp">help</A><LI><A NAME="SECDhelp" HREF="#SEChelp">help</A><LI><A NAME="SECDGetSlotNumber" HREF="#SECGetSlotNumber">GetSlotNumber</A></UL><LI><A NAME="SECDStars Event Information Command" HREF="#SECStars Event Information Command">Stars Event Information Command</A></LI><UL><LI><A NAME="SECDflushdatatome" HREF="#SECflushdatatome">flushdatatome</A><LI><A NAME="SECDflushdata" HREF="#SECflushdata">flushdata</A></UL><LI><A NAME="SECDController Command (Control Kenetic System Model 3655-L1A)" HREF="#SECController Command (Control Kenetic System Model 3655-L1A)">Controller Command (Control Kenetic System Model 3655-L1A)</A></LI><UL><LI><A NAME="SECDGetModuleNumber" HREF="#SECGetModuleNumber">GetModuleNumber</A><LI><A NAME="SECDSetCycleControlRegister" HREF="#SECSetCycleControlRegister">SetCycleControlRegister</A><LI><A NAME="SECDSetDelayMultiplier" HREF="#SECSetDelayMultiplier">SetDelayMultiplier</A><LI><A NAME="SECDSetInhibitEnable" HREF="#SECSetInhibitEnable">SetInhibitEnable</A><LI><A NAME="SECDSetInhibitRegister" HREF="#SECSetInhibitRegister">SetInhibitRegister</A><LI><A NAME="SECDSetLAMMaskRegister" HREF="#SECSetLAMMaskRegister">SetLAMMaskRegister</A><LI><A NAME="SECDGetDelayMultiplier" HREF="#SECGetDelayMultiplier">GetDelayMultiplier</A><LI><A NAME="SECDResetValueLAM" HREF="#SECResetValueLAM">ResetValueLAM</A><LI><A NAME="SECDRun" HREF="#SECRun">Run</A><LI><A NAME="SECDRun2" HREF="#SECRun2">Run2</A><LI><A NAME="SECDGetValueLAMStatusBits" HREF="#SECGetValueLAMStatusBits">GetValueLAMStatusBits</A><LI><A NAME="SECDGetLAMIsBusy" HREF="#SECGetLAMIsBusy">GetLAMIsBusy</A></UL><LI><A NAME="SECDEvent Message List" HREF="#SECEvent Message List">Event Message List</A></LI><UL><LI><A NAME="SECD_ChangedValueLAMStatusBits" HREF="#SEC_ChangedValueLAMStatusBits">_ChangedValueLAMStatusBits</A><LI><A NAME="SECD_ChangedLAMIsBusy" HREF="#SEC_ChangedLAMIsBusy">_ChangedLAMIsBusy</A></UL></UL></LI></UL><HR><H2><A NAME="SECGeneral" HREF="#SECDGeneral">General</A></H2>
+<H3><A NAME="SECStars destination client name of Kenetic System Model 3655-L1A" HREF="#SECDStars destination client name of Kenetic System Model 3655-L1A">Stars client name of Kenetic System Model 3655-L1A</A><BR>
+</H3>
+<P>
+<DL COMPACT>
+  <DT><SAMP>Stars client name of Kenetic System Model 3655-L1A</SAMP>
+</DT>
+  <DD>
+In this Manual, '<B>caenc111c.ks3655</B>' is used for the client name of Kenetic System Model 3655-L1A.
+</Tt>
+</DL>
+<HR>
+<H3><A NAME="SECHow to execute the Stars Command of Kenetic System Model 3655-L1A" HREF="#SECDHow to execute the Stars Command of Kenetic System Model 3655-L1A">How to execute the Stars Command of Kenetic System Model 3655-L1A</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>How to execute the Stars Command of Kenetic System Model 3655-L1A</SAMP>
+</DT>
+<DD>
+<BR>Send the Stars message as following format<BR>
+<BR>caenc111c.ks3655 <I>KS3655_Stars_Command</I> <I>Command_Parameters</I>
+<BR><UL>
+<BR>
+<LI>'caenc111c.ks3655' is the Stars client name for Kenetic System Model 3655-L1A.</LI>
+<BR><LI><I>KS3655_Stars_Command</I></LI>
+<BR><LI><I>Command_Parameters</I>&nbsp;&nbsp;&nbsp;&nbsp;(Only necessary)</LI>
+<BR></UL>
+<BR>Then reply arrives as following<BR>
+<BR>caenc111c.ks3655&gt;<I>test</I> <I>@KS3655_Stars_Command</I> <I>Command_Parameters</I> <I>Command_Message</I>
+<BR><UL>
+<BR>
+<LI>'<I>test</I>' is used, in this manual, as the Stars client name that sends the Stars message.</LI>
+<BR><LI><I>Command_Message</I><UL><LI>starts with 'Ok: ' : the Stars command executed with success.</LI>
+<BR><LI>starts with 'Er: ' : the Stars command did not executed because of command nonexistent, command paramarer invalid, etc.</LI>
+<BR><LI>starts with 'Ng: ' : the Stars command executed but failed.</LI>
+<BR></UL></LI></UL>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECError General" HREF="#SECDError General">Error General</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Error General</SAMP>
+</DT>
+<DD>
+<OL>
+<BR><LI>Destination client name nonexistent  :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111c.ks365 hello<BR>(reply)&nbsp;&nbsp;System&gt;test @hello <I>Er: caenc111c.ks365 is down.</I></LI></UL></LI>
+<BR><LI>Command nonexistent :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111c.ks3655 hell<BR>(reply)&nbsp;&nbsp;caenc111c&gt;test @hell <I>Er: Bad Command.</I></LI></UL></LI>
+<BR><LI>Command parameter missing or invalid :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111 SetDelayMultiplier 1<BR>(reply)&nbsp;&nbsp;caenc111c&gt;test @SetDelayMultiplier 1 <I>Er: Bad Parameter.</I></LI></UL></LI>
+<BR><LI>Command executed but network error occured :<br>
+  (Usually not happens. But if it's happened, stop 'caenc111c' Program, restart CAMAC Controller CAEN C111C. then start 'caenc111c')<BR>
+<UL><LI>(send)&nbsp;&nbsp;caenc111c SetDelayMultiplier 0 1<BR>
+(reply)&nbsp;&nbsp;caenc111c&gt;test @SetDelayMultiplier 0 1<I>Er: -4</I>
+</LI>
+  </UL>
+</LI>
+</OL>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECStars Information Command" HREF="#SECDStars Information Command">Stars Information Command</A></H2>
+<H3><A NAME="SEChello" HREF="#SECDhello">hello</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>hello</SAMP>
+</DT>
+<DD>
+Returns 'nice to meet you.'
+<BR><BR>[Usage]<BR>caenc111c.ks3655 hello
+<BR><BR>[Reply Message Format]<BR>@hello <I>nice to meet you.</I>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 hello
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @hello nice to meet you.
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEChelp" HREF="#SECDhelp">help</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>help</SAMP>
+</DT>
+<DD>
+Show StarsCommand list.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 help
+<BR><BR>[Reply Message Format]<BR>@help <I>command1 command2 ... commandN</I>&nbsp;&nbsp;&nbsp;&nbsp;(each command separated by a space)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 help
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @help GetDelayMultiplier GetLAMIsBusy GetModuleNumber GetS
+<BR>lotNumber GetValueLAMStatusBits ResetValueLAM Run Run2 SetCycleControlRegister S
+<BR>etDelayMultiplier SetInhibitEnable SetInhibitRegister SetLAMMaskRegister flushda
+<BR>ta flushdatatome hello help
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEChelp" HREF="#SECDhelp">help</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>help</SAMP>
+</DT>
+<DD>
+Show command help.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 help <I>StarsCommand</I>
+<BR><BR>[Reply Message Format]<BR>@help <I>StarsCommand</I> <I>helpText</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@help <I>StarsCommand</I> <I>Ng: Bad Command.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified <I>StarsCommand</I> invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 help GetLAMIsBusy
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @help GetLAMIsBusy [F(8) A(15)]  Tests whether a LAM reque
+<BR>st is present.
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetSlotNumber" HREF="#SECDGetSlotNumber">GetSlotNumber</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetSlotNumber</SAMP>
+</DT>
+<DD>
+Returns the slot number of the selfnode.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 GetSlotNumber
+<BR><BR>[Reply Message Format]<BR>@GetSlotNumber <I>Ok: SlotNumber</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)<ol><li>SlotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li></ol>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 GetSlotNumber
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @GetSlotNumber Ok: 21
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECStars Event Information Command" HREF="#SECDStars Event Information Command">Stars Event Information Command</A></H2>
+<H3><A NAME="SECflushdatatome" HREF="#SECDflushdatatome">flushdatatome</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>flushdatatome</SAMP>
+</DT>
+<DD>
+Send event messages to fromnode. See caenc111c.ks3655 <A HREF="#SECEvent Message List">Event Message List</A>.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 flushdatatome
+<BR><BR>[Reply Message Format]<BR>@flushdatatome <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 flushdatatome
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest _ChangedValueLAMStatusBits 0
+<BR>caenc111c.ks3655&gttest _ChangedLAMIsBusy 0
+<BR>caenc111c.ks3655&gttest @flushdatatome Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECflushdata" HREF="#SECDflushdata">flushdata</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>flushdata</SAMP>
+</DT>
+<DD>
+Send event messages to System. See caenc111c.ks3655 <A HREF="#SECEvent Message List">Event Message List</A>.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 flushdata
+<BR><BR>[Reply Message Format]<BR>@flushdata <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>System flgon caenc111c.ks3655
+<BR>caenc111c.ks3655 flushdata
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest _ChangedValueLAMStatusBits 0
+<BR>caenc111c.ks3655&gttest _ChangedLAMIsBusy 0
+<BR>caenc111c.ks3655&gttest @flushdata Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECController Command (Control Kenetic System Model 3655-L1A)" HREF="#SECDController Command (Control Kenetic System Model 3655-L1A)">Controller Command (Control Kenetic System Model 3655-L1A)</A></H2>
+<H3><A NAME="SECGetModuleNumber" HREF="#SECDGetModuleNumber">GetModuleNumber</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetModuleNumber</SAMP>
+</DT>
+<DD>
+Returns the module identifying number(3655). [F(1) A(15)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 GetModuleNumber
+<BR><BR>[Reply Message Format]<BR>@GetModuleNumber <I>Ok: 3655</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 GetModuleNumber
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @GetModuleNumber Ok: 3655
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetCycleControlRegister" HREF="#SECDSetCycleControlRegister">SetCycleControlRegister</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetCycleControlRegister</SAMP>
+</DT>
+<DD>
+Set the Control Register value to select timing source, the number of output channels and single cycle/recycle. [F(17) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 SetCycleControlRegister <I>TimingSource NumberOfChannels SingleCycleOrRecycle</I>
+<BR><ol>
+<BR><li>TimingSource<ul>
+<BR><li>Select the internal Time Base
+<BR><ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;1-SEC Time Base</li>
+<BR><li>1&nbsp;&nbsp;&nbsp;&nbsp;100m-SEC  Time Base</li>
+<BR><li>2&nbsp;&nbsp;&nbsp;&nbsp;10m-SEC  Time Base</li>
+<BR><li>3&nbsp;&nbsp;&nbsp;&nbsp;1m-SEC  Time Base</li>
+<BR><li>4&nbsp;&nbsp;&nbsp;&nbsp;100micro-SEC  Time Base</li>
+<BR><li>5&nbsp;&nbsp;&nbsp;&nbsp;10micro-SEC  Time Base</li>
+<BR><li>6&nbsp;&nbsp;&nbsp;&nbsp;1micro-SEC Time Base</li></ul></li>
+<BR><li>Select the external clock input
+<BR><ul><li>7&nbsp;&nbsp;&nbsp;&nbsp;external clock</li></ul></li></ul></li>
+<BR><li>NumberOfChannels<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1. t1 only</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 and 2. t1-t2</li><li>2&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 to 3. t1-t3</li><li>3&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 to 4. t1-t4</li><li>4&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 to 5. t1-t5</li><li>5&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 to 6. t1-t6</li><li>6&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 to 7. t1-t7</li><li>7&nbsp;&nbsp;&nbsp;&nbsp;Output Channel 1 to 8. t1-t8</li></ul></li>
+<BR><li>SingleCycleOrRecycle&nbsp;&nbsp;&nbsp;&nbsp;<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;Single Cycle</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Recycle</li></ul></li></ol>
+<BR>[Reply Message Format]<BR>@SetCycleControlRegister <I>TimingSource NumberOfChannels SingleCycleOrRecycle Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)
+<BR>@SetCycleControlRegister <I>TimingSource NumberOfChannels SingleCycleOrRecycle Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp(When any of specified parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 SetCycleControlRegister 0 1 0&nbsp;&nbsp;&nbsp;&nbsp(1-SEC Time Base, Output t1, Single Cycle)
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @SetCycleControlRegister 0 1 0 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetDelayMultiplier" HREF="#SECDSetDelayMultiplier">SetDelayMultiplier</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetDelayMultiplier</SAMP>
+</DT>
+<DD>
+Set the multiplier value for each channel which is used for calculating timing delay after t0. [F(16) A(0-7)]<BR>If 1-SEC Time Base selected (Show command '<A HREF="#SECSetCycleControlRegister">SetCycleControlRegister</A>'), and set the multiplier for Channel 1 is 20 (decimal), the Channel 1 pulse will occur 20 seconds after t0.<BR>If the Channel 2 set the multiplier is 30, it's pulse will occur 30 seconds after t0, and 10 seconds after t1.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 SetDelayMultiplier <I>ChannelNumber Multiplier</I>
+<BR><ol>
+<BR><li>ChannelNumber<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 1</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 2</li><li>2&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 3</li><li>3&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 4</li><li>4&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 5</li><li>5&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 6</li><li>6&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 7</li><li>7&nbsp;&nbsp;&nbsp;&nbsp;Set the multiplier for Channel 8</li></ul></li>
+<BR><li>Multiplier&nbsp;&nbsp;&nbsp;&nbsp;1 - 65535 (decimal)</li></ol>
+<BR>[Reply Message Format]<BR>@SetDelayMultiplier <I>ChannelNumber Multiplier</I> <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)
+<BR>@SetDelayMultiplier <I>ChannelNumber Multiplier Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp(When any of specified parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 SetDelayMultiplier 0 1
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @SetDelayMultiplier 0 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetInhibitEnable" HREF="#SECDSetInhibitEnable">SetInhibitEnable</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetInhibitEnable</SAMP>
+</DT>
+<DD>
+Enables or Disables of the ability of the module, that can be set to assert the Dataway Inhibit line coincident with any output pulse, release that line coincident with another output pulse. [F(24 or 26) A(9)]<BR>This command needs to be run after power-up or initialize.<BR>If the Dataway Inhibit line has been enabled, next run command '<A HREF="#SECSetInhibitRegister">SetInhibitRegister</A>' to set the channel number to set inhibit and to set the another number to clear inhibit.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 SetInhibitEnable 0 | 1<ul><li>0&nbsp;&nbsp;&nbsp;Set disable</li><li>1&nbsp;&nbsp;&nbsp;Set enable</li></ul>
+<BR>[Reply Message Format]<BR>@SetInhibitEnable 1 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(Enabled)
+<BR>@SetInhibitEnable 0 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(Disabled)
+<BR>@SetInhibitEnable <I>other Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 SetInhibitEnable 1
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @SetInhibitEnable 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetInhibitRegister" HREF="#SECDSetInhibitRegister">SetInhibitRegister</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetInhibitRegister</SAMP>
+</DT>
+<DD>
+Set the Inhibit Register value, the channel number to set inhibit and to set the another number to clear inhibit. [F(17) A(9)]<BR>This command needs to be run after the Dataway Inhibit line has been set by command '<A HREF="#SECSetInhibitEnable">SetInhibitEnable</A>' with parameter 1.
+<BR><BR>[Usage]<BR>caenc111c.ks3655 SetInhibitRegister <I>ChannelNumberToSetInhibit ChannelNumberToClearInhibit</I>
+<BR><ol>
+<BR><li>ChannelNumberToSetInhibit
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;the channel number to assert Dataway Inhibit line coincident with output pulse
+<BR><ul>
+<BR><li>0&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 1, t1</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 2, t2</li><li>2&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 3, t3</li><li>3&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 4, t4</li><li>4&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 5, t5</li><li>5&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 6, t6</li><li>6&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 7, t7</li><li>7&nbsp;&nbsp;&nbsp;&nbsp;Set inhibit coincident with output Channel 8, t8</li></ul></li>
+<BR><li>ChannelNumberToClearInhibit
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;the channel number to clear Dataway Inhibit line coincident with output pulse
+<BR><ul>
+<BR><li>0&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 1, t1</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 2, t2</li><li>2&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 3, t3</li><li>3&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 4, t4</li><li>4&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 5, t5</li><li>5&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 6, t6</li><li>6&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 7, t7</li><li>7&nbsp;&nbsp;&nbsp;&nbsp;Set clear inhibit coincident with output Channel 8, t8</li></ul></li></ol>
+<BR>[Reply Message Format]<BR>@SetInhibitRegister <I>ChannelNumberToSetInhibit ChannelNumberToClearInhibit Ok</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)
+<BR>@SetInhibitRegister <I>ChannelNumberToSetInhibit ChannelNumberToClearInhibit Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp(When any of specified parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 SetCycleControlRegister 2 1&nbsp;&nbsp;&nbsp;&nbsp(Dataway Inhibit line cleared at t2 and set at t3)
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest SetCycleControlRegister 2 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetLAMMaskRegister" HREF="#SECDSetLAMMaskRegister">SetLAMMaskRegister</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetLAMMaskRegister</SAMP>
+</DT>
+<DD>
+Set the LAM Mask Register value to assert a LAM when a particular channel is pulsed. [F(17) A(13)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 SetLAMMaskRegister <I>Value</I>
+<BR><ol>
+<BR><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 255 (decimal)
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;Value consists of 8-Bit. Bit position(1,2..8) is used to select the channel number, and bit value '1' is used to set LAM on.
+<BR><UL>
+<BR><LI>0 &nbsp;&nbsp;&nbsp;&nbsp;NO LAM</LI>
+<BR><LI>1 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 1 (t1) is pulsed.</LI>
+<BR><LI>2 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 2 (t2) is pulsed.</LI>
+<BR><LI>4 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 3 (t3) is pulsed.</LI>
+<BR><LI>8 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 4 (t4) is pulsed.</LI>
+<BR><LI>16 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 5 (t5) is pulsed.</LI>
+<BR><LI>32 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 6 (t6) is pulsed.</LI>
+<BR><LI>64 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 7 (t7) is pulsed.</LI>
+<BR><LI>128 &nbsp;&nbsp;&nbsp;&nbsp;LAM when output Channel 8 (t8) is pulsed.</LI>
+<BR></LI></UL></li>
+<BR></ol>
+<BR>[Reply Message Format]<BR>@SetLAMMaskRegister <I>Value Ok</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)
+<BR>@SetLAMMaskRegister <I>Value Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 SetLAMMaskRegister 2&nbsp;&nbsp;&nbsp;&nbsp(LAM when output Channel 2 (t2) is pulsed.)
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest SetLAMMaskRegister 2 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetDelayMultiplier" HREF="#SECDGetDelayMultiplier">GetDelayMultiplier</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetDelayMultiplier</SAMP>
+</DT>
+<DD>
+Returns the multiplier value for each channel, set by command '<A HREF="#SECSetDelayMultiplier">SetDelayMultiplier</A>', which is used for calculating timing delay after t0. [F(0) A(0-7)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 GetDelayMultiplier <I>ChannelNumber</I>&nbsp;&nbsp;&nbsp;&nbsp
+<BR><ol><li>ChannelNumber<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 1</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 2</li><li>2&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 3</li><li>3&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 4</li><li>4&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 5</li><li>5&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 6</li><li>6&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 7</li><li>7&nbsp;&nbsp;&nbsp;&nbsp;Get the multiplier for Channel 8</li></ul></li></ol>
+<BR>[Reply Message Format]<BR>@GetDelayMultiplier <I>ChannelNumber</I> <I>Ok: Multiplier</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol><li>Multiplier&nbsp;&nbsp;&nbsp;&nbsp;1 - 65535 (decimal)</li></ol>
+<BR>@GetDelayMultiplier <I>ChannelNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 GetDelayMultiplier 0
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @GetDelayMultiplier 0 Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECResetValueLAM" HREF="#SECDResetValueLAM">ResetValueLAM</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>ResetValueLAM</SAMP>
+</DT>
+<DD>
+Clears the LAM status bits. [F(11) A(12)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 ResetValueLAM
+<BR><BR>[Reply Message Format]<BR>@ResetValueLAM <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 ResetValueLAM
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @ResetValueLAM Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECRun" HREF="#SECDRun">Run</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Run</SAMP>
+</DT>
+<DD>
+Clears and enables the counter and clears the LAM status bits. [F(9) A(8)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 Run
+<BR><BR>[Reply Message Format]<BR>@Run <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 Run
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @Run Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECRun2" HREF="#SECDRun2">Run2</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Run2</SAMP>
+</DT>
+<DD>
+Clears and enables the counter. [F(25) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 Run2
+<BR><BR>[Reply Message Format]<BR>@Run2 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 Run2
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @Run2 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueLAMStatusBits" HREF="#SECDGetValueLAMStatusBits">GetValueLAMStatusBits</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueLAMStatusBits</SAMP>
+</DT>
+<DD>
+Returns a current decimal value of LAM status bits(8-bit). [F(1) A(12)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 GetValueLAMStatusBits
+<BR><BR>[Reply Message Format]<BR>@GetValueLAMStatusBits <I>Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol>
+<BR><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 255 (decimal)
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;Value consists of 8-Bit. Bit position(1,2..8) is used to show the channel number, and bit value '1' shows that a particular channel has been pulsed.
+<BR><UL>
+<BR><LI>0 &nbsp;&nbsp;&nbsp;&nbsp;When No output Channel has been pulsed.</LI>
+<BR><LI>1 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 (t1) has been pulsed.</LI>
+<BR><LI>3 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 and 2 (t1,t2) has been pulsed.</LI>
+<BR><LI>7 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 to 3 (t1-t3) has been pulsed.</LI>
+<BR><LI>15 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 to 4 (t1-t4) has been pulsed.</LI>
+<BR><LI>31 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 to 5 (t1-t5) has been pulsed.</LI>
+<BR><LI>63 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 to 6 (t1-t6) has been pulsed.</LI>
+<BR><LI>127 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 to 7 (t1-t7) has been pulsed.</LI>
+<BR><LI>255 &nbsp;&nbsp;&nbsp;&nbsp;When output Channel 1 to 8 (t1-t8) has been pulsed.</LI></LI></UL></li></ol>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 GetValueLAMStatusBits
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @GetValueLAMStatusBits Ok: 3&nbsp;&nbsp;&nbsp;&nbsp;(when output Channel 1(t1) and 2(t2) has been pulsed.)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetLAMIsBusy" HREF="#SECDGetLAMIsBusy">GetLAMIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetLAMIsBusy</SAMP>
+</DT>
+<DD>
+Returns whether a LAM request is on or not. [F(8) A(15)]
+<BR><BR>[Usage]<BR>caenc111c.ks3655 GetLAMIsBusy
+<BR><BR>[Reply Message Format]<BR>@GetLAMIsBusy <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is on)
+<BR>@GetLAMIsBusy <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is off)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.ks3655 GetLAMIsBusy
+<BR>(Receive messages)
+<BR>caenc111c.ks3655&gttest @GetLAMIsBusy Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECEvent Message List" HREF="#SECDEvent Message List">Event Message List</A></H2>
+<H3><A NAME="SEC_ChangedValueLAMStatusBits" HREF="#SECD_ChangedValueLAMStatusBits">_ChangedValueLAMStatusBits</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>_ChangedValueLAMStatusBits</SAMP>
+</DT>
+<DD>
+Send by KS3655L1A controller when LAM status bits has been changed, or '<A HREF="#SECflushdata">flushdata</A>','<A HREF="#SECflushdatatome">flushdatatome</A>' command executed.
+<BR><BR>[Event Message Format]<BR>_ChangedValueLAMStatusBits <I>Value</I>&nbsp;&nbsp;&nbsp;&nbsp;(Value is same to returned Value by command `<A HREF="#SECGetValueLAMStatusBits">GetValueLAMStatusBits</A>`)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEC_ChangedLAMIsBusy" HREF="#SECD_ChangedLAMIsBusy">_ChangedLAMIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>_ChangedLAMIsBusy</SAMP>
+</DT>
+<DD>
+Send by KS3655L1A controller when LAM busy status has been changed, or '<A HREF="#SECflushdata">flushdata</A>','<A HREF="#SECflushdatatome">flushdatatome</A>' command executed.
+<BR><BR>[Event Message Format]<BR>_ChangedLAMIsBusy <I>1</I>&nbsp;&nbsp;(when LAM status is on)
+<BR>_ChangedLAMIsBusy <I>0</I>&nbsp;&nbsp;(when LAM status is off)
+<BR></DL>
+
+</BODY></HTML>

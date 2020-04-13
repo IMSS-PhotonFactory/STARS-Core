@@ -1,0 +1,565 @@
+#! /usr/bin/perl
+#################################################################
+# ortec974 STARS client
+# 2006-03-20 Yasuko Nagatani
+#----------------------------------------------------------------
+# CVS $Date: 2010-01-19 02:55:17 $ $Revision: 1.1 $ $id$
+#################################################################
+use strict;
+use Getopt::Long;
+use stars;
+use Time::HiRes qw(gettimeofday tv_interval);
+
+use constant PGM_VERSION => 2.0;
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName    = 'ortec974';         # Default Node Name
+$::Server      = 'localhost';        # Default stars server.
+$::MASK        = '1111';             # Counter Use(1) Or No(0)
+$::Debug       = '';
+$::Information = '';
+
+#$::Ver         = 1.1;				 # Ok:
+$::Ver          = PGM_VERSION;		 # No Ok:
+$::CONFIG_ADDOK = '';
+#################################################################
+#use constant INTERVAL_REFRESH =>      3;  # sec
+use constant INTERVAL_REFRESH =>    0.5;   # sec
+
+use constant INTERVAL_IDLE      => 3000;   # msec
+@::SETMODECMD=('SET_MODE_SECONDS','SET_MODE_MINUTES','SET_MODE_EXTERNAL');
+
+#@::INTERVAL_RUN_MODE=(1000,5000,1000); # NOT EQUAL TO INTERVAL_IDLE
+@::INTERVAL_RUN_MODE=(500,1000,1000); # NOT EQUAL TO INTERVAL_IDLE
+
+$::Mode='';
+
+@::Val=(-1,-1,-1,-1);
+
+# ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'i'      => \$::Information,
+'h'      => \&usage,
+'ok'     => \$::CONFIG_ADDOK,
+'ver'    => \$::Ver
+) or die 'Bad switch.\n';
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+require 'config.pl';
+if($::CONFIG_ADDOK){
+	$::ADDOK       = '1';			 # Add OK : 1
+}elsif($::Ver>1.1){
+	$::ADDOK       = '';			 # Add OK : n/a
+}else{
+	$::ADDOK       = '1';			 # Add OK : 1
+}
+
+for($_=0; $_<4; $_++){$::CounterName{$::CounterName[$_]}=$_;}
+
+if($::Debug){print "Started with debug mode.\n";}
+################################################################
+# Interface library
+# Prease include your own interface library.
+# "device_read", "device_write" and "device_init" must be included
+# in the library.
+require 'ortecnportsvr.pl';    #For nport server
+################################################################
+
+$::Mode='';
+$::CounterTotal='00000000';
+$::RefreshTime=[gettimeofday];
+$::TotalTime=0;
+$::StartTime=0;
+$::CounterPrev='00000000';
+$::CounterPrevTime=[gettimeofday];
+
+#%::helpcntrl=();
+#$|=1;
+#set_help_list();
+
+## Open device.
+device_init();
+if($::Information){PrintInformation();}
+
+$::Interval_Time=INTERVAL_IDLE;
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die 'Could not connect Stars server';
+	
+ortec_SyncOrRun(1);
+ortec_flushdata('System',1,$::MASK);
+
+$::tak->addcallback(\&handler);
+stars->Mainloop(\&interval, \$::Interval_Time);
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for '-h' option.
+  print "Usage: $::NodeName [nodename] [-h] [-d] [-i]\n";
+  exit(0);
+}
+#############################################################
+## handler called by Stars Server
+#############################################################
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+	my ($from, $to, $mess) = @_;
+	my $rt;
+
+	if($::Debug){print "STARS RCV: $from>$to $mess\n";}
+	if($mess=~/^[\_\@\>]/){return;}
+## Counter Commands ##
+	if($to=~/^$::NodeName\.([^\.\s]+)$/){
+	 	$_=name2num($1);
+	 	if($_>=0){
+	 		$rt=Counter_handler($from, $to, $_, $mess);
+	 	}else{
+			$::tak->Send("\@$mess Er: $to is down.", $from);
+			return;
+	 	}
+## Controller Commands ##
+	}elsif($to=~/^$::NodeName$/){
+		$rt=Ctl_handler($from, $to, $mess);
+## Bad Device Name ##
+	}else{
+		$::tak->Send("\@$mess Er: $to is down.", $from);
+		return;
+	}
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){print "STARS SND: $to>$from \@$mess Er: $::Error\n";}
+	}else{
+		unless($::ADDOK){
+			$rt=~s/^Ok:\s(.+)/$1/;
+		}
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){print "STARS SND: $to>$from \@$mess $rt\n";}
+	}
+	return;
+}
+#############################################################
+## Ctl_handler called by handler
+#############################################################
+sub Ctl_handler{
+	my ($from, $to, $mess) = @_;
+	my $rt='';
+	my($target,$cmd);
+	my($m,$n);
+	
+	if($::Debug){print "Ctl_handler RCV: $from>$to $mess\n";}
+	
+	if($mess eq 'hello')			{$rt='nice to meet you.';
+	}elsif($mess eq 'help')			{$rt='Sorry.No Help.';
+	}elsif($mess=~/^help\s+(\S+)/)	{$rt='Sorry.No Help.';
+	}elsif($mess=~/^flushdata$/)	{$rt=ortec_flushdata('System',1,$::MASK);
+	}elsif($mess=~/^flushdatatome$/){$rt=ortec_flushdata($from,1,$::MASK);
+	}elsif($mess eq 'debuginfo') {$rt=PrintInformation(1);
+	}elsif($mess eq 'Reset')	{
+		if(readOnlyStatus('INIT')){
+			if(IsBusy()){
+				$::Interval_Time=INTERVAL_IDLE;
+	  			ortec_flushdata('System',1,$::MASK);
+	  		}else{
+	  			ortec_flushdata('System',0,$::MASK);
+	  		}
+			$rt='Ok:';
+		}
+	}elsif($mess eq 'Remote') {
+		if(readOnlyStatus('ENABLE_REMOTE')){$rt='Ok:';}
+	}elsif($mess eq 'Local') {
+		if(readOnlyStatus('ENABLE_LOCAL')){$rt='Ok:';}
+	}elsif($mess=~/^SetMask\s([01]{4})$/){
+		if(SetMask($1)){$rt='Ok:';}
+	}elsif($mess=~/^SetMode\s([012])$/){
+		unless(IsBusy()){
+			if(    ($1 eq '0') and readOnlyStatus('SET_MODE_SECONDS') ){$rt='Ok:';
+			}elsif(($1 eq '1') and readOnlyStatus('SET_MODE_MINUTES') ){$rt='Ok:';
+			}elsif(($1 eq '2') and readOnlyStatus('SET_MODE_EXTERNAL')){$rt='Ok:';
+			}
+		}else{$::Error="Busy.";}
+	}elsif($mess=~/^SetCountPreset\s([0-9])\,([0-7])$/){
+		unless(IsBusy()){
+			if(readOnlyStatus("SET_COUNT_PRESET $1,$2")){$rt='Ok:';}
+		}else{$::Error="Busy.";}
+	}elsif($mess eq 'CounterReset')	{
+		unless(IsBusy()){
+			if(ClearCounter($::MASK)){
+	  			ortec_flushdata('System',0,$::MASK);
+				$rt='Ok:';
+			}
+		}
+		else{$::Error="Busy.";}
+	}elsif($mess=~/^CounterReset\s([01]{4})$/)	{
+		unless(IsBusy()){
+			if(ClearCounter($1)){
+	  			ortec_flushdata('System',0,$::MASK);
+				$rt='Ok:';
+			}
+		}
+		else{$::Error="Busy.";}
+	}elsif($mess eq 'Run'){
+		unless(IsBusy()){
+			if(ortec_SyncOrRun()){$rt='Ok:';}
+		}else{$::Error="Busy.";}
+	}elsif($mess eq 'Stop'){
+		if(readOnlyStatus('STOP',1)){
+			if(IsBusy()){
+				$::Interval_Time=INTERVAL_IDLE;
+	  			ortec_flushdata('System',1,$::MASK);
+	  		}
+			$rt='Ok:';
+		}
+	}elsif($mess eq 'GetMask'){
+		$rt=$::MASK;unless($::Ver>=999){if($rt ne ''){$rt="Ok: $rt";}}
+	}elsif($mess eq 'GetCountPreset'){
+		$rt=ReadCountPreset();unless($::Ver>=999){if($rt ne ''){$rt="Ok: $rt";}}
+	}elsif($mess eq 'GetMode'){
+		$rt=ReadMode();unless($::Ver>=999){if($rt ne ''){$rt="Ok: $rt";}}
+	}elsif($mess eq 'GetValue'){
+		$rt=ReadCount($::MASK);unless($::Ver>=999){if($rt ne ''){$rt="Ok: $rt";}}
+	}elsif($mess=~/^GetValue\s([01]{4})$/)	{
+		$rt=ReadCount($1);unless($::Ver>=999){if($rt ne ''){$rt="Ok: $rt";}}
+	}elsif($mess=~ /^IsBusy/){
+		$rt=IsBusy();
+	}else{
+		$::Error='Bad command or parameter';
+	}
+	return($rt);
+}
+#############################################################
+## Counter_handler called by handler
+#############################################################
+sub Counter_handler{
+	my ($from, $to, $target, $cmd) = @_;
+	my $rt='';
+	my @mask=('1000','0100','0010','0001');
+	
+	if($::Debug){print "CounterHdlr RCV: $from>$to $target $cmd\n";}
+	
+	if($cmd eq 'hello')			{$rt='nice to meet you.';
+	}elsif($cmd eq 'help')			{$rt='Sorry.No Help.';
+	}elsif($cmd=~/^help\s+(\S+)/)	{$rt='Sorry.No Help.';
+	}elsif($cmd eq 'CounterReset')	{
+		unless(IsBusy()){
+			if(ClearCounter($mask[$target])){
+	  			ortec_flushdata('System',0,$mask[$target]);
+				$rt='Ok:';
+			}
+		}else{$::Error="Busy.";}
+	}elsif($cmd eq 'GetValue'){
+		$rt=ReadCount($mask[$target]);unless($::Ver>=999){if($rt ne ''){$rt="Ok: $rt";}}
+	}else{
+		$::Error='Bad command or parameter';
+		if($::Debug){print "Ctr $::Error:$from,$to,".num2name($target) .",#$cmd#,#$rt#\n";}
+	}
+	return($rt);
+}
+#############################################################
+## Interval_handler called by MainLoop
+#############################################################
+sub interval{
+	if(!IsBusy()){
+  		if(tv_interval($::RefreshTime)>INTERVAL_REFRESH){
+			ortec_SyncOrRun(1);
+			$::RefreshTime=[gettimeofday];
+		}
+		return;
+	}elsif(tv_interval($::RefreshTime)>INTERVAL_REFRESH){
+		my $elapsed=tv_interval($::StartTime);
+		if($::Debug){print "Elasped: $elapsed\n";}
+		my $count=ReadCount('1000');
+		if($count>=$::CounterTotal){
+  			$::Interval_Time=INTERVAL_IDLE;
+			readOnlyStatus('STOP');
+			ortec_flushdata('System',1,$::MASK);
+			return;
+		}elsif($::Mode=~/^2$/){ #Not Time Based.
+		#Above. Time Based.
+		}elsif($count>$::CounterPrev){
+			$::CounterPrevTime=[gettimeofday];
+			$::CounterPrev=$count;
+		}elsif(($::Mode=~/^1$/) and (tv_interval($::CounterPrevTime)>(60+10))){
+			print "Interrupted By Local Operation.\n";
+  			$::Interval_Time=INTERVAL_IDLE;
+			readOnlyStatus('STOP',1);
+			ortec_flushdata('System',1,$::MASK);
+			return;
+		}elsif(($::Mode=~/^0$/) and (tv_interval($::CounterPrevTime)>8)){
+			print "Interrupted By Local Operation.\n";
+  			$::Interval_Time=INTERVAL_IDLE;
+			readOnlyStatus('STOP',1);
+			ortec_flushdata('System',1,$::MASK);
+			return;
+		}elsif($elapsed>$::TotalTime){
+			print "Warning: Counter must be reached at $::CounterTotal.\n";
+		}
+		ortec_flushdata('System',0,$::MASK);
+		$::RefreshTime=[gettimeofday];
+		return;
+	}
+}
+#==============================================================
+sub ortec_SyncOrRun{
+	my($sync)=@_;
+	my($snaptime,$count,$elaspedcount);
+	my @modeunit=(0.1,1);
+	
+	my $mode=ReadMode();if($mode eq ''){return(0);}
+	$mode=scalar($mode);$::Mode=$mode;
+	$_=readOnlyStatus($::SETMODECMD[$mode]);
+	if($_){
+		if($sync){ # Sync To Not Busy
+			unless($::Interval_Time eq INTERVAL_IDLE){
+				$::tak->Send("$::NodeName>System _ChangedIsBusy 0");
+			}
+			$::Interval_Time=INTERVAL_IDLE; #Set2 Not Busy.
+			return(1);
+		}
+	}elsif(!$sync){
+		return(0);
+	}elsif($::Error!~/Busy/){
+		return(0);
+	}else{
+		$::Error='';
+	}
+	
+	my $preset=ReadCountPreset();if($preset eq ''){return(0);}
+	$preset=~/(\d)\,(\d)/;
+	if($1 eq 0){
+		$count=99999999;
+	}else{
+		$count=$1*(10**$2);
+	}
+	
+	if($sync){ #sync2 Busy
+		$_=ReadCount('1000');if($_ eq ''){return(0);}
+		$::StartTime=[gettimeofday];
+		$::CounterPrevTime=$::StartTime;
+		$::CounterPrev=$_;
+		s/^0+//;
+		$elaspedcount=scalar($_);
+		if($::Debug){print "#####\nTARGET#$count# CURRENT#".scalar($_)."#\n#####\n";}
+	}else{ #Run Start
+		unless(ClearCounter('1000') and readOnlyStatus('START')){return(0);}
+		$::StartTime=[gettimeofday];
+		$::CounterPrevTime=$::StartTime;
+		$::CounterPrev='00000000';
+		$elaspedcount=0;
+	}
+	if(!IsBusy()){
+		$::tak->Send("$::NodeName>System _ChangedIsBusy 1");
+	}
+	$::CounterTotal=sprintf("%08d",$count);
+	$::TotalTime=($count-$elaspedcount)*($modeunit[$mode]);
+	$::Interval_Time=$::INTERVAL_RUN_MODE[$mode];
+	$::Mode=$mode;
+	return(1);
+}
+#==============================================================
+sub IsBusy(){
+	if($::Interval_Time==INTERVAL_IDLE){return(0);}
+	return(1); #Busy
+}
+#==============================================================
+sub ortec_flushdata{
+	my($from,$showbusy,$mask)=@_;
+	my $busy=IsBusy();
+	if($showbusy and $busy){
+		if($::Debug){
+			print "$::NodeName>$from _ChangedIsBusy ".$busy."\n";
+		}
+		$::tak->Send("$::NodeName>$from _ChangedIsBusy ".$busy);
+	}
+	# Data Read
+	my $vals=ReadCount($mask);
+	my @val=split(/\,/,$vals);
+	my $dmask=maskbin2dec($mask)+0;
+	if($::Debug){print "Val:@val\n";print "MaskVal:$dmask\n";}
+	my $chgflg=0;
+	for(my $lp=0;$lp<4;$lp++){
+		if((($dmask<<$lp)>>3) & 1){
+			if(($::Val[$lp] ne $val[0]) or ($showbusy eq 1)){
+				$::Val[$lp]=$val[0];
+				$chgflg=1;
+				if($::Debug){
+					print "$::NodeName\.".num2name($lp).">$from _ChangedValue ".$val[0]."\n";
+				}
+				$::tak->Send("$::NodeName\.".num2name($lp).">$from _ChangedValue ".$val[0]);
+			}
+			shift @val;
+		}
+	}
+#	if(($mask eq $::MASK) and ($chgflg eq 1) or ($showbusy eq 1)){
+	if(($chgflg eq 1) or ($showbusy eq 1)){
+		if($::Debug){
+			print "$::NodeName>$from _ChangedValue ".$vals."\n";
+		}
+		$::tak->Send("$::NodeName>$from _ChangedValue ".$vals);
+	}
+	
+	if($showbusy and !$busy){
+		if($::Debug){
+			print "$::NodeName>$from _ChangedIsBusy ".$busy."\n";
+		}
+		$::tak->Send("$::NodeName>$from _ChangedIsBusy ".$busy);
+	}
+	return('Ok:');
+}
+#############################################################
+## Sub Functions
+#############################################################
+sub name2num{
+	my $mname=shift;
+	if(defined($::CounterName{$mname})){return($::CounterName{$mname});}
+	$::Error="Bad counter name.";return(-1);
+}
+#==============================================================
+sub num2name{
+	my $mnum=shift;
+	if($mnum >= 0 and $mnum <= 3){return($::CounterName[$mnum]);}
+	$::Error="Bad counter number.";return('');
+}
+#==============================================================
+sub maskbin2dec{
+	my $bin=shift;
+	if($bin=~s/^([01])([01])([01])([01])$/$4$3$2$1/){
+		$_=oct "0b".$bin;
+		return(sprintf("%d",$_));
+	}
+	$::Error="Bad mask number.";return('');
+}
+#==============================================================
+sub SetMask{
+	my $bin=shift;
+	my $dec=maskbin2dec($bin);
+	if($dec eq ''){return(0);
+	}elsif($dec eq 0){$::Error="Counter unselected.";return(0);}
+	$::MASK=$bin;
+	return(1);
+}
+#==============================================================
+sub ClearCounter{
+	my $bin=shift;
+	my $dec=maskbin2dec($bin);
+	if($dec=~/^$/){return(0);}
+	elsif($dec eq 0){
+		$::Error="Counter unselected.";return(0);
+	}
+	unless(readOnlyStatus("CLEAR_COUNTERS $dec")){
+		return(0);
+	}
+	s/\;/\,/g;
+	return(1);
+}
+#==============================================================
+sub ReadMode{
+	$_=readDataAndStatus('SHOW_MODE');
+	unless(/^\$A00(0|1|2)\d\d\d$/) {
+		$::Error="Status Error. COMMAND[SHOW_MODE] STATUS[$_]\n";
+		return('');
+	}
+	$::Mode=$_;
+	return($1);
+}
+#==============================================================
+sub ReadCountPreset{
+	$_=readDataAndStatus('SHOW_COUNT_PRESET');
+	unless(/^\$D\d\d(\d)\d\d(\d)\d\d\d/) {
+		$::Error="Status Error. COMMAND[SHOW_COUNT_PRESET] STATUS[$_]\n";
+		return('');
+	}
+	return("$1,$2");
+}
+#==============================================================
+sub ReadCount{
+	my $bin=shift;
+	my $dec=maskbin2dec($bin);
+	if($dec=~/^$/){return('');
+	}elsif($dec eq 0){$::Error="Counter unselected.";return('');}
+	$_=readDataAndStatus("SHOW_COUNTS $dec");
+	if($_ eq ''){
+		$::Error="Status Error. COMMAND[SHOW_COUNTS $dec] STATUS[$_]\n";
+		return('');
+	}
+	~s/\;/\,/g;
+	~s/\,$//;
+	return($_);
+}
+#############################################################
+## Debug
+#############################################################
+sub PrintInformation {
+	$_=readDataAndStatus('SHOW_VERSION');
+	if($_ eq ''){
+		print "Status Error. COMMAND[SHOW_VERSION] STATUS[$_]\n";
+		return(0);
+	}
+	print "VERSION ->$_\n";
+	
+	$_=ReadMode();
+	if($_ eq '0')    {print "MODE ->SECONDS\n";
+	}elsif($_ eq '1'){print "MODE ->MINIUTES\n";
+	}elsif($_ eq '2'){print "MODE ->EXTERNAL\n";
+	}else{print $::Error;return(0);}
+	
+	$_=ReadCountPreset();
+	if($_ eq ''){print $::Error;return(0);}
+	print "COUNT_PRESET ->$_\n";
+	print "MASK ->$::MASK\n";
+	$_=ReadCount($::MASK);
+	if($_ eq ''){print $::Error;return(0);}
+	print "COUNT ->$_\n";
+	return(1);
+}
+#############################################################
+## Device Access
+#############################################################
+sub readOnlyStatus{
+	my($func,$ignorebusy)=@_;
+	unless($func=~/^\s*$/){
+		if($::Debug){print "NPORT SEND#$func#\n";}
+		device_write($func);
+	}
+	$_=device_read("\\S+\\r");
+	s/\r/\\r/g;	if($::Debug){print "NPORT REPLY#$_#\n";}
+	if(    /^\%000000\d\d\d\\r$/){
+		return(1);
+	}elsif(/^\%131135\d\d\d\\r$/){
+		if($ignorebusy){return(1);}
+		$::Error= "Busy";
+	}elsif($ignorebusy and /^\%000001\d\d\d\\r$/){
+		if($ignorebusy){return(1);}
+		$::Error= "Busy";
+	}else{
+		$::Error= "Status Error. COMMAND[$func] STATUS[$_]\n";
+	}
+	return(0);
+}
+#==============================================================
+sub readDataAndStatus{
+	my($func)=@_;
+	my($ret,$data);
+	unless($func=~/^\s*$/){
+		if($::Debug){print "NPORT SEND#$func#\n";}
+		device_write($func);
+	}
+	$_=device_read("\\S+\\r\\S+\\r");
+	$_=~s/\r/\\r/g;	if($::Debug){print "NPORT REPLY#$_#\n";}
+	if(/^(\S+)\\r\%000000\d\d\d\\r$/){
+		$_=$1;
+		return($1);
+	}elsif(    /^(\S+)\\r\%131135\d\d\d\\r$/){
+		$::Error= "Busy.";
+	}elsif(/^(\S+)\\r\%000001\d\d\d\\r$/){
+		$::Error= "Busy.";
+	}else{
+		$::Error= "Status Error. COMMAND[$func] STATUS[$_]\n";
+	}
+	return('');
+}

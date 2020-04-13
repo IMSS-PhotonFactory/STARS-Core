@@ -1,0 +1,184 @@
+#! /usr/bin/perl
+
+####################################################################
+#Command terminal for takaserv.
+#2001-05-03 Takashi Kosuge
+$::Version = '1.2';
+#
+use constant SERVER    => (shift(@ARGV) or 'localhost');
+use constant PORT      => (shift(@ARGV) or 6057);
+use constant NODENAME  => (shift(@ARGV) or 'CmdTerm');
+use constant KEYFILE   => $0.'-lib/'.NODENAME.'.key'; 
+use constant LIBDIR    => $0.'-lib/';
+use constant SCRIPTDIR => $0.'-lib/';
+###################################################################
+
+sub isBreak;
+sub Yesno;
+sub yseNo;
+sub sSleep;
+
+#use Term::ReadKey;
+use Symbol;
+use strict;
+use stars;
+
+if(SERVER =~ /^-(h|help)$/){
+	print "Usage: $0 ".'[hostname [portnumber [nodename]]]'."\n";
+	exit(1);
+}
+
+$SIG{'INT'} = \&sig_int_handler;
+$::Break=0;
+$::promptorg = NODENAME."> ";
+$::prompt = $::promptorg;
+$::Error='';
+
+
+$|=1;
+
+$::BufKey='';
+
+my($c,$rt);
+my $LastCommand='';
+
+$::TakaServ = stars->new(NODENAME,SERVER,PORT,KEYFILE)
+or die;
+
+
+
+#-----------------main----------------------------
+while(1){
+	isBreak();
+	print "$::prompt";
+	$c=<STDIN>;chomp($c);$c=~s/\r//;
+	if($c eq 'quit'){last;}
+	if($c eq ''){next;}
+	if( (($c eq '!!')||($c eq ' ')) && ($LastCommand ne '') ){
+		$c=$LastCommand;
+		print "$::prompt$c\n";
+	}else{
+		$LastCommand=$c;
+	}
+
+	$rt=script(split(/\s/,$c));
+
+	if($rt ne ''){
+		if($rt ne 'DEFAULT'){print "$rt\n";}
+	}else{
+		print "Er: $::Error\n";
+	}
+	isBreak();
+}
+#-------------------------------------------------
+
+undef $::TakaServ;
+
+exit(0);
+
+
+#-----------------------------------------------------------------------------
+sub sSleep{
+	select(undef,undef,undef,$_[0]);
+}
+
+sub isBreak{
+	if($::Break){
+		$::Break=0;
+		$SIG{'INT'} = \&sig_int_handler;
+		return(1);
+	}
+	return(0);
+}
+
+sub sig_int_handler{
+	$::Break=1;
+}
+
+sub Yesno{
+    my $buff=shift;
+    my $b;
+    print "$buff [Y]/N: ";
+    $b=<STDIN>;chomp($b);
+    if($b eq 'N' or $b eq 'n'){return(0);}else{return(1);}
+}
+
+sub yesNo{
+    my $buff=shift;
+    my $b;
+    print "$buff Y/[N]: ";
+    $b=<STDIN>;chomp($b);
+    if($b eq 'Y' or $b eq 'y'){return(1);}else{return(0);}
+}
+
+sub isno{
+    my $buff=shift;
+    my $b;
+    print "$buff Y/[N]: ";
+    $b=<STDIN>;chomp($b);
+    if($b eq 'Y' or $b eq 'y'){return(1);}else{return(0);}
+}
+
+sub isyes{
+    my $buff=shift;
+    my $b;
+    print "$buff [Y]/N: ";
+    $b=<STDIN>;chomp($b);
+    if($b eq 'N' or $b eq 'n'){return(0);}else{return(1);}
+}
+
+sub act{
+	my $buff=shift;
+	my $rt;
+	$rt=$::TakaServ->act("$buff");
+	return($rt);
+}
+
+#sub inkey{
+#	my $key;
+#	my $buff;
+#	ReadMode 4; # Turn off controls keys
+#	while (defined ($key = ReadKey(-1))) {
+#		if($key eq "\r" or $key eq "\n"){
+#			$buff = $::BufKey . "\n";
+#			$::BufKey = '';
+#			ReadMode 0; # Reset tty mode before exiting
+#			return($buff);
+#		}
+#		$::BufKey .= $key;
+#	}
+#	ReadMode 0; # Reset tty mode before exiting
+#	return('');
+#}
+
+
+sub script{
+	my $ScriptName = shift;
+	my $rt;
+
+	$::Error='DEFAULT';
+	my($Scripts)='';
+	unless(open(BUFF_FOR_SCRIPT, SCRIPTDIR."$ScriptName.scr")){
+		$::Error="Command \"$ScriptName\" is not found";
+		return('');
+	}
+
+	while(<BUFF_FOR_SCRIPT>){
+		if(/^#/){next;}
+		chomp;
+		s/\r//;
+
+		$Scripts .= $_."\n";
+	}
+	close(BUFF_FOR_SCRIPT);
+
+	$rt = eval "{$Scripts}";
+
+	if($@){
+		$::Error=$@;
+		return('');
+	}
+
+	return($rt);
+}
+

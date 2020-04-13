@@ -1,0 +1,153 @@
+<HTML>
+<HEAD>
+<TITLE>STARS interface module</TITLE>
+<STYLE>
+<!--
+P.usage{font-style:italic;}
+ADDRESS{text-align:right}
+-->
+</STYLE>
+</HEAD>
+
+<BODY>
+<H1>STARS interface module</H1>
+<ADDRESS>2001-10-03 Takashi Kosuge</ADDRESS>
+
+<H2>SYNOPSIS</H2>
+<P>
+
+</P>
+
+<H2>DESCRIPTION</H2>
+<P>
+STARSインターフェースモジュールを使用すると、簡単にTAKサーバへの接続が可能となります。
+
+<H2>METHODS</H2>
+<H3>new</H3>
+<P CLASS="usage">
+Usage: $object = stars-&gt;new(nodename, [serverhost], [serverport], [keyfile]);
+</P>
+<P>
+新たにSTARSオブジェクトを作成し、TAKサーバとのコネクションを確立します。
+成功するとオブジェクトのリファレンスを返します。
+</P>
+
+<DL>
+<DT>nodename</DT>
+<DD>STARSで使用する自ノード名を指定します。</DD>
+<DT>serverhost</DT>
+<DD>TAKサーバが動作しているホスト名を指定します。省略すると'localhost'が使用されます。</DD>
+<DT>serverport</DT>
+<DD>使用するTCP/IPソケットのPort番号を指定します。省略すると6057が使用されます。</DD>
+<DT>keyfile</DT>
+<DD>認証に使用するキーワードリストのファイル名を指定します。省略するとnodename+'.key'がファイル名として使用されます。</DD>
+</DL>
+
+<H3>act</H3>
+<P CLASS="usage">
+Usage: val/list = $object-&gt;act(message);
+</P>
+<P>
+メッセージを送信し、その後自ノードへのメッセージを受け取ります。スカラーコンテキストではTAKサーバからのメッセージがデリミタ(LF)を取り除いたそのままの文字列として返されます。リストコンテキストでは(TermFrom, TermTo, Message)のように分割されて返されます。また、タイムアウト(10s)時には '' または('', '', '')が、
+エラー時にはundefまたは空のリストが返されます。
+</P>
+
+<DL>
+<DT>message</DT>
+<DD>STARS規定のメッセージ(TermFrom&gt;TermTo Message または TermTo Message)を指定します。なおデリミタ(LF)は必要ありません。</DD>
+</DL>
+
+<H3>gethandle</H3>
+<P CLASS="usage">
+Usage: $fh = $object-&gt;gethandle();
+</P>
+<P>
+STARSインターフェースオブジェクトの利用しているファイルハンドルを返します。
+</P>
+
+<H3>Send</H3>
+<P CLASS="usage">
+Usage: $object-&gt;Send(message [, termto]);
+</P>
+<P>
+メッセージの送信行います。
+</P>
+
+<DL>
+<DT>message</DT>
+<DD>送信するメッセージを指定します。デリミタ(LF)はstars.pmが自動的に付加します。</DD>
+<DT>termto</DT>
+<DD>termtoを指定すると送信メッセージの先頭にtermtoとスペースが付加されます。
+</DD>
+</DL>
+
+<H3>Read</H3>
+<P CLASS="usage">
+Usage: val/list = $object-&gt;read();
+</P>
+<P>
+メッセージの受信を行います。スカラーコンテキストではTAKサーバからのメッセージがデリミタ(LF)を取り除いたそのままの文字列として返されます。リストコンテキストでは(TermFrom, TermTo, Message)のように分割されて返されます。受信メッセージがない場合は''または('', '', '')が、接続が切れてしまったようなエラー時には
+undefまたは空のリストが返されます。
+</P>
+
+<H3>addcallback</H3>
+<P CLASS="usage">
+Usage: $object-&gt;addcallback(subroutine, [filehandle], [mode]);
+</P>
+<P>
+STARSインターフェースをCallbackモードで利用するときに使います。addcallbackメソッドを使ってファイルハンドルを設定したあとMainloopを実行すると、入力が発生するたびにsubroutineで設定したサブルーチンが自動的に呼び出されます。
+</P>
+
+<DL>
+<DT>subroutine</DT>
+<DD>入力が発生したときに呼び出されるサブルーチンへのリファレンスを指定します。
+</DD>
+<DT>filehandle</DT>
+<DD>call backへ登録するファイルハンドルを指定します。省略するとobjectのファイルハンドルが使用されます。</DD>
+<DT>mode</DT>
+<DD>call backを呼び出す際に渡すメッセージ解析のモードを設定します。モードには'Stars', 'Lf', 'Direct', 'Detect'の4つのモードがあり省略すると'Stars'が使用されます。'Stars'モードの場合、callbackへのメッセージは(TermFrom, TermTo, Message)のようなリストを引数として渡されます。'Lf'モードの場合はデリミタが削除された状態のメッセージが引数として渡されます。'Direct'モードではデリミタは一切関係なく受け取ったデータがそのまま引数として渡されます。また、'Detect'モードでは読み込みは行われず、call backのみが行われます。</DD>
+</DL>
+
+<H3>removecallback</H3>
+<P CLASS="usage">
+Usage: $object-&gt;removecallback(filehandle);
+</P>
+<P>
+addcallbackで設定したファイルファンドルをCallbackから削除します。
+</P>
+
+<DL>
+<DT>filehandle</DT>
+<DD>Callbackから削除するファイルハンドルを指定します。</DD>
+</DL>
+
+<H3>Mainloop</H3>
+<P CLASS="usage">
+Usage: stars-&gt;Mainloop( [ subroutine, timeout ] );
+</P>
+<P>
+callbackモードを実行します。またtimeoutを設定することで、一定時間後に処理を戻すことが出来ます。入力ハンドルに接続が切れた場合などのエラーが発生するとMainloopから処理が戻されます。
+</P>
+<DL>
+<DT>subroutine</DT>
+<DD>timeout及びsubroutineを設定すると一定間隔でsubroutineを実行できます。
+subroutineには一定時間間隔で呼び出すサブルーチンへのリファレンスを指定します。</DD>
+<DT>timeout</DT>
+<DD>subroutineを呼び出す間隔を指定します。単位はm secondです。また、変数へのレファレンスを指定する事により、プログラム実行中ダイナミックにtimeout値を変更することが可能となります。なお、timeout値に負の値を設定するとタイムアウトは発生しなくなります。</DD>
+</DL>
+
+<H3>Sleep</H3>
+<P CLASS="usage">
+Usage: $object-&gt;sleep(mSec);
+</P>
+<P>
+処理をmSecだけ中断します。
+</P>
+<DL>
+<DT>mSec</DT>
+<DD>mSecで指定した時間だけ処理を停止することが出来ます。単位はm secondです。
+</DD>
+</DL>
+
+</BODY>
+</HTML>

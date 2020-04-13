@@ -1,0 +1,50 @@
+#! /usr/bin/perl
+
+use IO::Socket;
+
+use constant HOST     => 'localhost';
+use constant PORT     => 6057;
+use constant DCCTHOST => 'pfrpc1.kek.jp';
+use constant DCCTPORT => 5501;
+
+my $dcct;
+my $fromdev;
+my $todev;
+my $buf;
+
+my $server =
+new IO::Socket::INET(PeerAddr=>HOST, PeerPort=>PORT, Proto=>'tcp')
+||die "Socket: $!\n";
+
+select($server);$|=1;select(STDOUT);
+$buf=<$server>;
+
+print $server "term1 takashi\n";
+$buf=<$server>;chop($buf);s/\r//;
+unless($buf =~ /Ok:$/){
+	close($server);
+	die "$buf\n";
+}
+
+while(<$server>){
+	chop;s/\r//;
+	if(/^([a-zA-Z_0-9.]+)>[a-zA-Z_0-9.]+/){
+		$fromdev=$1;
+		if($fromdev eq 'System'){next;}
+		$buf=get_dcct();
+		print $server "$fromdev @ $buf\n";
+	}
+}
+
+close($server);
+exit(0);
+
+sub get_dcct{
+	my $s = new IO::Socket::INET(PeerAddr=>DCCTHOST,
+								 PeerPort=>DCCTPORT,
+								 Proto=>'tcp')
+		or return('@ Er: DCCT Host is down.');
+	$_=<$s>;chop;s/\r//;
+	close($s);
+	return("$_");
+}

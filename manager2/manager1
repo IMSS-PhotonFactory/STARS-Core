@@ -1,0 +1,250 @@
+#! /usr/bin/perl
+package PerlSvc;
+
+use strict;
+use Symbol;
+use Cwd qw(chdir abs_path);
+use stars;
+require Getopt::Long;
+#use IPC::Open2;
+
+################################################################
+# STARS manager
+################################################################
+$PerlSvc::Version  = '$Revision: 1.1 $';
+$PerlSvc::Version .= '$Date: 2010-01-19 02:43:50 $';
+################################################################
+$PerlSvc::Version =~ s/\$//g;
+
+%PerlSvc::Config = (ServiceName => "stcmanager");
+$PerlSvc::ManConfig =  'manager.cfg';
+$PerlSvc::Port                =  6057;
+
+
+%PerlSvc::VAR=();      #Setting variables
+%PerlSvc::RHANDLE=();  #Running list
+%PerlSvc::RPID=();     #Running pid
+
+unless (defined &ContinueRun) {
+	*ContinueRun      = sub { return 1 };
+	*RunningAsService = sub { return 0 };
+	Interactive();
+}
+
+exit(0);
+
+sub Interactive{
+	Install();
+	Startup();
+}
+
+sub Install{
+	Getopt::Long::GetOptions(
+	'service=s'  => \$PerlSvc::Config{ServiceName},
+	'port=i'     => \$PerlSvc::Port,
+	'config=s'   => \$PerlSvc::ManConfig,
+	'h'          => \&usage
+	);
+
+    $PerlSvc::Config{DisplayName} = "$PerlSvc::Config{ServiceName} STARS Client Manager Service";
+    $PerlSvc::Config{Parameters}  = "--p $PerlSvc::Port --config $PerlSvc::ManConfig";
+}
+
+sub Startup{
+	$PerlSvc::StartDir = abs_path($ENV{'PWD'});
+
+	Getopt::Long::GetOptions(
+	'port=i'     => \$PerlSvc::Port,
+	'config=s'   => \$PerlSvc::ManConfig
+	);
+
+	defVAR();
+
+	$PerlSvc::sv = stars->new($PerlSvc::VAR{NodeName}, $PerlSvc::VAR{StarsServer},
+			$PerlSvc::VAR{StarsPort}, $PerlSvc::VAR{StarsKey}) or die "$!";
+	$PerlSvc::sv->addcallback(\&handler);
+
+## Auto run programs
+	my @autorun = split(/\s+/, $PerlSvc::VAR{AutoRun});
+	for (@autorun){
+		cmd_execute($_);
+	}
+
+#stars->Mainloop(\&autoclose, 1000);
+	if(ContinueRun()){
+		stars->Mainloop(sub{unless(ContinueRun()){exit;}}, 5000);
+	}
+	return;
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+	print <<__USAGE__;
+STARS client manager $PerlSvc::Version
+Usage: $0 [-config ConfigFile] [-service ServiceName] [-port PortNumber]
+    -config ConfigFile
+                Set config file.
+
+    -service ServiceName
+                Set service name of Windows. (only for windows service)
+
+    -port PortNumber
+                Set port number of STARS.
+
+Your are able to run STARS client manager as service with Windows.
+Install and run as service:
+    $0 --install auto -config ConfigFile
+Remove service:
+    $0 --remove
+
+If your OS is FreeBSD, Linux etc., you are able to run STARS client manager
+with background.
+    ./$0 &
+
+__USAGE__
+
+ 	exit(0);
+}
+
+#------------------------------------------------------------------
+sub handler{
+	my($from, $to, $mess) = @_;
+	my $cmd;
+	my @par;
+	my $rt;
+
+	if($mess =~ /^[_@]/){return;}
+
+	($cmd, @par) = split(/\s+/, $mess);
+	unless($PerlSvc::VAR{'MasterNode'} =~ /(^| )$from( |$)/){
+		$rt='';
+		$PerlSvc::Error='You do not have a permission.';
+	}elsif($cmd eq 'hello'){
+		$rt='Nice to meet you.';
+	}elsif($cmd eq 'help'){
+		$rt='execute getpid getversion help hello listnodes reloadsetting'
+			.' terminate';
+	}elsif($cmd eq 'getversion'){
+		$rt=$PerlSvc::Version;
+	}elsif($cmd eq 'reloadsetting'){
+		$rt=defVAR();
+	}elsif($cmd eq 'listnodes'){
+		$rt=cmd_listnodes();
+	}elsif($cmd eq 'execute'){
+		$rt=cmd_execute(@par);
+	}elsif($cmd eq 'terminate'){
+		$rt=cmd_terminate(@par);
+	}elsif($cmd eq 'getpid'){
+		$rt=cmd_getpid(@par);
+	}else{
+		$rt='';
+		$PerlSvc::Error="Bad command";
+	}
+	if($rt eq ''){
+		$PerlSvc::sv->Send("$from \@$cmd Er: $PerlSvc::Error");
+	}else{
+		$PerlSvc::sv->Send("$from \@$cmd $rt");
+	}
+}
+#-------------
+sub cmd_getpid{
+	my $drv = shift;
+	if($PerlSvc::RPID{"$drv"}){
+		return($PerlSvc::RPID{"$drv"});
+	}else{
+		return(0);
+	}
+}
+
+sub cmd_terminate{
+	my $drv = shift;
+	unless($PerlSvc::RHANDLE{"$drv"}){
+		$PerlSvc::Error = "$drv is not running.";
+		return('');
+	}
+	my $hd = $PerlSvc::RHANDLE{"$drv"};
+
+if(lc($PerlSvc::VAR{'UseKill'}) eq 'yes'){
+	my $pid = $PerlSvc::RPID{"$drv"};
+	kill('KILL', $pid);
+	undef($PerlSvc::RPID{"$drv"});
+}
+
+	close($hd);
+	undef($PerlSvc::RHANDLE{"$drv"});
+	return('Ok:');
+}
+
+sub cmd_execute{
+	my $drv = shift;
+	my $pid;
+
+	my $cmd;
+
+	if($drv =~ /^(\d+)$/){
+		sleep($1);
+		return('Ok:');
+	}
+
+	unless($cmd = $PerlSvc::VAR{"Dev:$drv"}){$PerlSvc::Error="Bad drivername";return('');}
+	my $dir = $PerlSvc::VAR{"Dev:$drv".":Dir"};
+
+	if($PerlSvc::RHANDLE{"$drv"}){
+		$PerlSvc::Error = "$drv is already running.";
+		return('');
+	}
+	chdir "$dir";
+	my $fh=gensym;
+	unless($pid=open($fh, "|$cmd")){
+		chdir $PerlSvc::StartDir;
+		$PerlSvc::Error="Could not open $cmd";
+		return('');
+	}
+
+	$PerlSvc::RPID{"$drv"}=$pid;
+	$PerlSvc::RHANDLE{"$drv"}=$fh;
+	chdir "$PerlSvc::StartDir";
+	return('Ok:');
+}
+
+sub cmd_listnodes{
+	my $buf = join(" ", grep(/^Dev:[^:]+$/, keys(%PerlSvc::VAR)) );
+	$buf =~ s/Dev://g;
+	return($buf);
+}
+
+#------------------------------------------------------------
+sub defVAR{
+	my @buf;
+	unless(open(BUF,$PerlSvc::ManConfig)){
+		$PerlSvc::Error='Could not open Def file.';
+		return('');
+	}
+
+	%PerlSvc::VAR=();
+	while(<BUF>){
+		chomp;s/\r//;
+		if(/^#/){next;}
+		unless($_){next;}
+		@buf=split(/\s*=\s*/,$_);
+		$PerlSvc::VAR{"$buf[0]"} = $buf[1];
+	}
+	close(BUF);
+	return('Ok:');
+}
+
+#-----------------------------------------------------------
+#sub autoclose{
+#		my $lp;
+#		my $fh;
+#
+#	foreach $lp (keys(%PerlSvc::RHANDLE)){
+#		$fh = $PerlSvc::RHANDLE{"$lp"};
+#		if(eof($fh)){
+#			close($fh);
+#			undef($PerlSvc::RHANDLE{"$lp"});
+#			undef($PerlSvc::RPID{"$lp"});
+#		}
+#	}
+#}

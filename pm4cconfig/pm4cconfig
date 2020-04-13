@@ -1,0 +1,205 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use Tk;
+
+#################################################################
+## config pm4c05a
+##-------------------------------------------------------
+## CVS $Revision: 1.1 $ $Date: 2010-01-19 02:56:33 $ $Author: yasukon $
+##-------------------------------------------------------
+## Updated
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'pm4cconfig';      #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::mt         = 0;                  #Default motor number
+$::Cntl       = 'pm4c05a';          #Default controller.
+#################################################################
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'node=s' => \$::NodeName,
+'c=s'    => \$::Cntl,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+$::entrynum=8;
+@::cmd   = qw(DigitalCwLs DigitalCcwLs HighSpeed MiddleSpeed LowSpeed AccRate JogPulse CancelBacklash HpScanDir HoldOff PbStop LsStop);
+my @title = ('Cw Limit','Ccw Limit','High Speed','Middle Speed','Low Speed','Acc Rate','Jog Pulse','Cancel Backlash','H.P Scan Dir','Hold Off','Pb Stop','Ls Stop');
+%::checkboxCaption = (
+ $::cmd[$::entrynum+0].'0'=>'CCW',      $::cmd[$::entrynum+0].'1'=>'CW',
+ $::cmd[$::entrynum+1].'0'=>'Disabled',  $::cmd[$::entrynum+1].'1'=>'Enabled',
+ $::cmd[$::entrynum+2].'0'=>'Fast Stop',$::cmd[$::entrynum+2].'1'=>'Slow Stop',
+ $::cmd[$::entrynum+3].'0'=>'Slow Stop',$::cmd[$::entrynum+3].'1'=>'Fast Stop',
+);
+
+if($_ = shift(@ARGV)){$::mt     = $_;}
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+my $root = MainWindow->new();
+	# widget creation 
+	$root->title("Setting of $::Cntl");
+
+	
+	my($frame_0) = $root->Frame ();
+	my($frame_1) = $root->Frame ();
+	
+	@::test=qw(0 1 2 3);
+	my $option_1 = $root->Optionmenu(
+#		-options => [0,1,2,3],
+        -options => [@::test],
+		-textvariable => \$::mt,
+		-command => sub{pread();}
+	);
+
+	my $label_0 = $root->Label (-text => 'Motor No./Name',);
+	$::label_01 = $root->Label (-text => 'Name',);
+
+	my @label=();
+	for($_=0;$_<$::entrynum;$_++){
+		$label[$_]   = $root->Label ( -text => $title[$_],);
+		$::entry[$_] = $root->Entry (-justify => 'right',);
+	}
+	for(;$_<@title;$_++){
+		$label[$_]   = $root->Label ( -text => $title[$_],);
+		$::entry[$_] = $root->Checkbutton( -text =>'reading...'
+		,-variable=>\$::entryBit{$::cmd[$_]},-justify => 'right',-anchor=>'w',
+		,-command=> sub{checkBoxClicked();}
+		);
+	}
+	my($button_1) = $root->Button (	-text => 'Apply',);
+	my($button_2) = $root->Button (	-text => 'Reset',);
+
+	# widget commands
+	$button_1->configure(-command => \&ApplyButton);
+	$button_2->configure(-command => \&ResetButton);
+
+	# Geometry management
+
+	$label_0->grid(-in => $root,-column => '1',-row => '1');
+	
+	$frame_0->grid(-in => $root,-column => '2',-row => '1');
+	$option_1->grid(-in => $frame_0,-column => '1',-row => '1');
+	$::label_01->grid(-in => $frame_0,-column => '2',-row => '1');
+
+	for($_=0;$_<@::cmd;$_++){
+		$label[$_]->grid(  -in => $root,-column => 1,-row => $_+2);
+		$::entry[$_]->grid(-in => $root,-column => 2,-row => $_+2, -sticky=>'w');
+	}
+
+	$frame_1->grid(-in => $root,-column => '2',-row => '14');
+	$button_1->grid(
+		-in => $frame_1,
+		-column => '1',
+		-row => '1'
+	);
+	$button_2->grid(
+		-in => $frame_1,
+		-column => '2',
+		-row => '1'
+	);
+
+	# Resize behavior management
+
+	# container $root (rows)
+	$root->gridRowconfigure(1, -weight  => 0, -minsize  => 18);
+	$root->gridRowconfigure(2, -weight  => 0, -minsize  => 15);
+	$root->gridRowconfigure(3, -weight  => 0, -minsize  => 5);
+	$root->gridRowconfigure(4, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(5, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(6, -weight  => 0, -minsize  => 6);
+	$root->gridRowconfigure(7, -weight  => 0, -minsize  => 7);
+	$root->gridRowconfigure(8, -weight  => 0, -minsize  => 8);
+	$root->gridRowconfigure(9, -weight  => 0, -minsize  => 8);
+	$root->gridRowconfigure(10, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(11, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(12, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(13, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(14, -weight  => 0, -minsize  => 30);
+
+	# container $root (columns)
+	$root->gridColumnconfigure(1, -weight => 0, -minsize => 2);
+	$root->gridColumnconfigure(2, -weight => 0, -minsize => 2);
+
+	# container $frame_1 (rows)
+	$frame_1->gridRowconfigure(1, -weight  => 0, -minsize  => 20);
+
+	# container $frame_1 (columns)
+	$frame_1->gridColumnconfigure(1, -weight => 0, -minsize => 79);
+	$frame_1->gridColumnconfigure(2, -weight => 0, -minsize => 65);
+
+	# additional interface code
+	# end additional interface code
+
+pread();
+
+MainLoop();
+
+exit(1);
+
+sub ApplyButton{
+pwrite();
+pread();
+}
+
+sub ResetButton{
+pread();
+}
+
+sub pread{
+	my $i;
+	my $buf;
+	$buf = $::tak->act("$::Cntl GetMotorName $::mt");
+	(undef,undef,undef,$buf) = split(/\s+/, $buf);
+	$::label_01->configure('-text' => $buf);
+	for($i=0;$i<$::entrynum;$i++){
+		$buf = $::tak->act("$::Cntl Get$::cmd[$i] $::mt");
+		(undef,undef,undef,$buf) = split(/\s+/, $buf);
+		$::entry[$i]->delete(0,"end");
+		$::entry[$i]->insert(0, $buf);
+	}
+	$buf = $::tak->act("$::Cntl GetMDST $::mt");
+	(undef,undef,undef,$buf) = split(/\s+/, $buf);
+	$_=unpack("B4",  pack("H1", sprintf("%x",scalar($buf))));
+	~/^(\S)(\S)(\S)(\S)$/;
+	$::entryBit{$::cmd[$i]}=$1;
+	$::entryBit{$::cmd[$i+1]}=$2;
+	$::entryBit{$::cmd[$i+2]}=$3;
+	$::entryBit{$::cmd[$i+3]}=$4;
+	checkBoxClicked();
+}
+
+sub pwrite{
+	my $i;
+	my $buf;
+	for($i=0;$i<$::entrynum;$i++){
+		$buf= $::entry[$i]->get();
+		$buf= $::tak->act("$::Cntl Set$::cmd[$i] $::mt $buf");
+	}
+	for(;$i<@::cmd;$i++){
+		$buf= $::tak->act("$::Cntl Set$::cmd[$i] $::mt ".$::entryBit{$::cmd[$i]});
+	}
+}
+
+# CheckButton Text Change ----------------------------------
+sub checkBoxClicked{
+   my $i=$::entrynum;
+   for(;$i<@::cmd;$i++){
+		unless($::checkboxCaption{$::cmd[$i].$::entryBit{$::cmd[$i]}} eq ''){
+		$::entry[$i]->configure(-text=>$::checkboxCaption{$::cmd[$i].$::entryBit{$::cmd[$i]}});
+	   }
+   }
+}
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: $::NodeName [-h] [-node MyNodeName] [-c Controller] MotorNumber [StarsServer]\n";
+  exit(0);
+}

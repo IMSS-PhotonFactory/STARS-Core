@@ -1,0 +1,6 @@
+#Send and receive Hello to TakaServ
+#? Send "hello" command to takaserv
+#? usege: hello
+
+return(act("System hello"));
+

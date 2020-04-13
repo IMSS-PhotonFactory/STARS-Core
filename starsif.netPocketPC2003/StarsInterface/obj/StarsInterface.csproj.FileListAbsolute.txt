@@ -1,0 +1,15 @@
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\bin\Debug\StarsInterface.dll
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\bin\Debug\StarsInterface.pdb
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\obj\Debug\ResolveAssemblyReference.cache
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\obj\Debug\StarsInterface.dll
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\obj\Debug\StarsInterface.pdb
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\bin\Release\StarsInterface.dll
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\bin\Release\StarsInterface.pdb
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\obj\Release\ResolveAssemblyReference.cache
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\obj\Release\StarsInterface.dll
+C:\Users\kosuge\work\stars\starsif.netPocketPC2003\StarsInterface\obj\Release\StarsInterface.pdb
+C:\Users\kosuge\cvs-wb\stars\starsif.netPocketPC2003\StarsInterface\bin\Release\StarsInterface.dll
+C:\Users\kosuge\cvs-wb\stars\starsif.netPocketPC2003\StarsInterface\bin\Release\StarsInterface.pdb
+C:\Users\kosuge\cvs-wb\stars\starsif.netPocketPC2003\StarsInterface\obj\Release\ResolveAssemblyReference.cache
+C:\Users\kosuge\cvs-wb\stars\starsif.netPocketPC2003\StarsInterface\obj\Release\StarsInterface.dll
+C:\Users\kosuge\cvs-wb\stars\starsif.netPocketPC2003\StarsInterface\obj\Release\StarsInterface.pdb

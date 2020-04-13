@@ -1,0 +1,1011 @@
+#################################################################
+# Proguram Name	:mcdirec										#
+# 																#
+#===============================================================#
+# Proguram Title:												#
+#	Measurement and Control DIRECtor proguram					#
+#																#
+#							Create by	Yuji.Miyama (ICube)		#
+#===============================================================#
+# Command														#
+#	set [param]	:SG-4311 Data Rcive	[param:PFG Command]			#
+#	delay [nnn]	:Delay Time Set [nnn:msec]						#
+#===============================================================#
+# History														#
+#	2004/06/01:	Ver.0.1	New Release								#
+#	2004/06/17:	Ver.0.2	Script Execute Function Add				#
+#	2004/07/13:	Ver.0.4	Script Convert & Insert Function Add	#
+#	0000/00/00:													#
+#################################################################
+
+#! /usr/bin/perl
+
+use strict;									#Standard Module
+use Getopt::Long;							#Standard Module
+use stars;									#Stars Module
+#use Time::HiRes qw( usleep ualarm gettimeofday tv_interval );
+use Time::HiRes qw( usleep gettimeofday tv_interval );
+											#High level Time Module
+use Math::Trig;
+
+#################################################################
+# mcdirec
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'mcdrBL20A';			#Default node name.
+#$::Server     = 'localhost';		#Default stars server.
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+%::BGFromNode=();      #node name and file handle, name is key, handle is value
+%::BGCommand=();       #file handle and node name, handle is key, name is value
+%::BGReply=();         #node input buffer
+%::BreakFlg=();
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+# Read Configuration of mcdirec client.
+require 'config.pl';		
+
+debug_print("Debug[$::Debug]\n");	## (DEBUG)
+
+if ($_ = shift(@ARGV)) { $::Server = $_; }	
+
+## Read Mcdirec System Command List
+unless(syscmd_cre()) {	die "Can't Create System Command !!"; }
+
+## Open Stars server. $::tak is a Stars object.
+debug_print("[Main] NodeName[$::NodeName] Server[$::Server]\n");	## (DEBUG)
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+$::tak->addcallback(\&handler);
+
+#$_ = $::tak->act("$::NodeName hello"); ##Send Test Command
+#debug_print("[main] mess[$_]\n");	## (DEBUG)
+#if(/^(\S+)>(\S+) /) {
+#	$::SelfNodeName = $1;
+#} else {
+#	exit(0);
+#}
+#debug_print("[main] SelfNodeName[$::SelfNodeName]\n");	## (DEBUG)
+stars->Mainloop();
+
+exit(1);
+
+#-------------------------------------------------------------
+# usage: Print usage.
+#-------------------------------------------------------------
+# Argument In: None
+# Argument Out: None
+#-------------------------------------------------------------
+# History: 0000/00/00:
+#-------------------------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: $::NodeName [-h] [-d] [-node MyNodeName] [StarsServer]\n";
+  print "       -h   Show this help.\n";
+  print "       -d   Run with debug mode.\n";
+  exit(0);
+}
+
+#-------------------------------------------------------------
+# handler: Command handler from Stars server.
+#-------------------------------------------------------------
+# Argument In
+#	$from	:Command send client name
+#	$to		:Command receive client nme (mcdirec)
+#	$mess	:Command massage
+# Argument Out
+#	$rt		:Execute result
+#	$::Error:Error Message
+#-------------------------------------------------------------
+# History:
+#	2004/06/17: Ver.1.0 Script Execute Function Add
+#   2004/06/01: Ver.0.1 New Release
+#-------------------------------------------------------------
+
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;			# File data & Command data
+	my $rt = '';							# Return code	'' Means Error Return
+	my %script;								# Script read data
+	my $perldt;								# Perl convert data
+	my $ctime;								# Local time data
+	my $fname;								# File name
+	my $list;								# Directory file list
+	my $fbuf;								# File name buffer
+	my @list;								# List data buffer
+	my $mess_org;							# Message Recieved
+	my $usage;
+
+	debug_print("[handler] Message Arrived. [$from]>[$to] [$mess]\n");	## (DEBUG)
+	$mess_org = $mess;	## Save Original Message
+
+	if ($mess =~ /^[\s]*$/ ) { 				## No Command
+		debug_print("[handler] Error Command[$mess]\n"); ## (DEBUG)
+		$::Error = "Bad command or parameter.";
+	} elsif ($mess =~ /^[\s]*hello[\s]*$/ ) { ## Hello
+		$rt="nice to meet you. This is $::NodeName.";
+	} elsif ($mess =~ /^[\s]*help[\s]*$/) { ## Help
+		$rt="\@Imod_sel no.99=> [load ScriptFileName] [save ScriptFileName] [list ClassName] [fexist ScriptFileName] [break] [hello] [help] [ScriptFileName]";
+		$rt="Ok";
+	} elsif ($mess =~ /^[\s]*break[\s]*$/) { ## Command 'break'
+		debug_print("\n[handler] break $from\n");	## (DEBUG)
+		$::BreakFlg{$from} = 1;
+		$rt="Ok";
+	} elsif ($mess =~ /^[\s]*break[\s]*(\S+)[\s]*$/){ ## Command 'break'
+		debug_print("\n[handler] break2 $1\n");	## (DEBUG)
+		if($1 eq 'all') {
+			$::BreakFlg{all} = 1;	# Run Break Flag Reset
+		} else {
+			$::BreakFlg{$1} = 1;
+		}
+		$rt="Ok";
+	} elsif ($mess =~ /^[_@]/) { ## Event Or Reply Ignore
+		debug_print("\n[handler] Reply or Event Arrived. Ignored.[$from]>[$to] [$mess]\n");	## (DEBUG)
+
+		## BackGround Exec Reply
+		debug_print("\n[handler] $::NodeName. Ignored.to[$to]\n");	## (DEBUG)
+		if($to =~ /$::NodeName\.BG\.(\S+)/ ) {
+			$::BGReply{$1} = "$mess";
+		}
+		return;
+
+	} elsif($mess =~ /^> [@]/) { ## Event Or Reply Ignore
+		debug_print("\n[handler] Reply or Event Arrived2. Ignored.[$from]>[$to] [$mess]\n");	## (DEBUG)
+		return;
+#####	Command 'fexist' 	#####
+	} elsif ($mess =~ /^[\s]*fexist[\s]+(\S+)[\s]*$/ ) {
+		debug_print("[fexist] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		### Get File Name
+		$fbuf = $1;
+
+		### Directory Information Get
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### File Name Get
+		$fname .= '.'. $fbuf;
+
+		### Directory Pause Change (. => /)
+		$fname =~ s/\./\//g;
+
+		debug_print("[fexist] PathName[$::PathName] fname[$fname]\n");	## (DEBUG)
+
+		## Check Script File For Exist
+		if (-e $::PathName."$fname.scd") {
+			$rt = "exist";
+		} elsif (-d $::PathName) {
+			$rt = "none";
+		} else {
+			$::Error = "Directory Invalid.[$::PathName]";
+		}
+
+#####	Command 'load' 	#####
+	} elsif ($mess =~ /^[\s]*load[\s]+(\S+)[\s]*$/ ) {
+		debug_print("[load] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		### Get File Name
+		$fbuf = $1;
+
+		### Directory Information Get
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### File Name Get
+		$fname .= '.'. $fbuf;
+
+		### Directory Pause Change (. => /)
+		$fname =~ s/\./\//g;
+
+		debug_print("[load] PathName[$::PathName] fname[$fname]\n");	## (DEBUG)
+
+		%script = scdfile_read($::PathName, "$fname.scd");
+		unless (%script) {	##Read Error ===> Error Message Settled At [scdfile_read]
+			debug_print("[load]script error[$::Error]\n");	## (DEBUG)
+		} else { ##Ok. ===> Return Code <= Read File Script Data Set
+			### '#' Charactor delete & \n -> \t Change
+			$script{code} =~ s/^#//;
+			$script{code} =~ s/\n#/\t/g;
+			$script{code} =~ s/\n/\t/g;
+			### \r Charactor delete
+			$script{code} =~ s/\r//g;
+			$rt = $script{usage}."\t".$script{update_time}."\t".$script{code};
+		}
+		debug_print("[load]compile[$script{compile}]\n");	## (DEBUG)
+		debug_print("[load]rt[$rt]\n");	## (DEBUG)
+
+		#####	Command 'recompile' 	#####
+	} elsif ($mess =~ /^[\s]*recompile[\s]+(\S+)[\s]*$/ ) {
+		debug_print("[recompile] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		### Get File Name
+		$fbuf = $1;
+
+		### Directory Information Get
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### File Name Get
+		$fname .= '.'. $fbuf;
+
+		### Directory Pause Change (. => /)
+		$fname =~ s/\./\//g;
+
+		debug_print("[recompile] PathName[$::PathName] fname[$fname]\n");	## (DEBUG)
+
+		%script = scdfile_read($::PathName, "$fname.scd");
+		unless (%script) {	##Read Error ===> Error Message Settled At [scdfile_read]
+			debug_print("[load]script error[$::Error]\n");	## (DEBUG)
+		} else { ##
+			### '#' Charactor delete & \n -> \t Change
+			$script{code} =~ s/^#//;
+			$script{code} =~ s/\n#/\n/g;
+			### \r Charactor delete
+			$script{code} =~ s/\r//g;
+			
+			$perldt = $script{perldt} = script_conv($script{code});
+			unless ($perldt) {	##Convert Error ===> Error Message Settled At [script_conv]
+			} else { ##Ok. ===> Write Perl Data
+				$::Error = '';
+				my $from_rt;
+				my $from_flg = 0;
+				$perldt = "goto EVAL_END;\n".$perldt."EVAL_END:\n";
+				eval "{$perldt}";						# Perl data excute
+				unless ($@) {
+					$script{comment}  = "##========================================================\n";
+					$script{comment} .= "## Script data file [$fbuf.scd]\n";
+					$script{comment} .= "##   usage: $script{usage}\n";
+					$script{comment} .= "##   update time: 0000/00/00 00:00:00\n";
+					$script{comment} .= "##   compile: done\n";
+					$script{comment} .= "##========================================================\n";
+				} else {
+					$script{comment}  = "##========================================================\n";
+					$script{comment} .= "## Script data file [$fbuf.scd]\n";
+					$script{comment} .= "##   usage: $script{usage}\n";
+					$script{comment} .= "##   update time: 0000/00/00 00:00:00\n";
+					$script{comment} .= "##   compile: not finished\n";
+					$script{comment} .= "##========================================================\n";
+					$::Error = "Resaved But Syntax Error Included.";
+				}
+
+				unless (scdfile_write($::PathName, "$fname.scd", $script{comment}, $script{code}, $script{perldt})) {
+					##Write Error ===> Error Message Settled At [scdfile_write]
+				} else { ##Ok. ===> Return Reply Message Ok
+					unless($::Error ne '') {
+						$rt = 'Ok';
+					}
+				}
+			}
+		}
+#####	Command 'save' 	#####
+	} elsif ($mess =~ /^[\s]*save[\s]+(\S+)[ ]+(.+)[\s]*$/ ) {
+		debug_print("[save] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		$fbuf = $1;
+		$mess = $2;
+
+		### Get Directory Information
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### Get File Name
+		$fname .= '.'. $fbuf;
+
+		### Directory pause change (. => /)
+		$fname =~ s/\./\//g;
+
+		### Make Directory
+		{
+			my @folders;
+			my $folder_num;
+			my $folder = $fname;
+
+			$folder =~ s/^[\s ]*//;	## First Space Cut
+			$folder =~ s/[\s ]*$//;	## Last Space Cut
+			$folder =~ s/^[\/ ]*//;	## First / Cut
+			$folder =~ s/[\/ ]*$//;	## Last / Cut
+
+			@folders = split(/\//, $folder);
+			$folder_num = scalar(@folders);
+			
+			debug_print("[save] folders[@folders] num[$folder_num]\n");	## (DEBUG)
+			
+			$folder = $::PathName;
+			foreach (@folders) {
+				if( $folder_num > 1 ) {
+					$folder = "$folder/$_";
+					if (-d "$folder") {  # Folder Exists Ok.
+					} elsif (-e "$folder") { # Folder Name Exists As File Error.
+###						$::Error = "Class Name Already Exists As File";
+						last;
+					} else { # Make Folder
+						mkdir( "$folder", "664" );
+					}
+					$folder_num = $folder_num - 1;
+				} else { last; }
+			}
+
+		}
+		
+		debug_print("[save] fname[$fname] mess[$mess]\n");	## (DEBUG)
+
+		#####	Script data file read 	#####
+		{
+			debug_print("[save] script[$fbuf]\n");	## (DEBUG)
+
+			$fbuf =~ s/\./\//g;
+			
+			($script{usage}, $script{code}) = split (/\t/, $mess, 2);
+
+			### Comment mark ('#') & Add Return code ('\n')
+			$script{code} = '#'.$script{code};
+			$script{code} =~ s/\t/\n#/g;
+#			$script{code} =~ s/#\n//g;
+			### \r Charactor delete
+			$script{code} =~ s/\r//;
+
+			$perldt = $script{perldt} = script_conv($script{code});
+			unless ($perldt) {	##Convert Error ===> Error Message Settled At [script_conv]
+			} else { ##Ok. ===> Write Perl Data
+			
+				my $from_rt;
+				my $from_flg = 0;
+				$perldt = "goto EVAL_END;\n".$perldt."EVAL_END:\n";
+				eval "{$perldt}";						# Perl data excute
+				unless ($@) {
+					$script{comment}  = "##========================================================\n";
+					$script{comment} .= "## Script data file [$fbuf.scd]\n";
+					$script{comment} .= "##   usage: $script{usage}\n";
+					$script{comment} .= "##   update time: 0000/00/00 00:00:00\n";
+					$script{comment} .= "##   compile: done\n";
+					$script{comment} .= "##========================================================\n";
+				} else {
+					$script{comment}  = "##========================================================\n";
+					$script{comment} .= "## Script data file [$fbuf.scd]\n";
+					$script{comment} .= "##   usage: $script{usage}\n";
+					$script{comment} .= "##   update time: 0000/00/00 00:00:00\n";
+					$script{comment} .= "##   compile: not finished\n";
+					$script{comment} .= "##========================================================\n";
+				}
+
+				unless (scdfile_write($::PathName, "$fname.scd", $script{comment}, $script{code}, $script{perldt})) {
+					##Write Error ===> Error Message Settled At [scdfile_write]
+				} else { ##Ok. ===> Return Reply Message Ok
+					$rt = 'Ok';
+				}
+
+			}
+		}
+		debug_print("[save] End\n");	## (DEBUG)
+
+#####	Command 'compile' 	#####
+	} elsif ($mess =~ /^[\s]*compile[\s]+(\S+)[ ]+(.+)[\s]*$/ ) {
+		debug_print("[compile] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		### Get File Name
+		$fbuf = $1;
+		$mess = $2;
+
+		#####	Script data file read 	#####
+		{
+			($script{usage}, $script{code}) = split (/\t/, $mess, 2);
+			debug_print("[compile] usage[$script{usage}]code[$script{code}]\n");	## (DEBUG)
+
+			### Comment mark ('#') & Add Return code ('\n')
+			$script{code} = '#'.$script{code};
+			$script{code} =~ s/\t/\n#/g;
+			$script{code} =~ s/#\n//g;
+			### \r Charactor delete
+			$script{code} =~ s/\r//;
+
+			debug_print("[compile] code[$script{code}]\n");	## (DEBUG)
+			$perldt = script_conv($script{code});
+			debug_print("[compile] code[$script{code}]\n");	## (DEBUG)
+			
+			unless ($perldt) {	##Convert Error ===> Error Message Settled At [script_conv]
+			} else { ##Ok. ===> Write Perl Data
+				my $from_rt;
+				my $from_flg = 0;
+				
+				$perldt = "goto EVAL_END;\n".$perldt."EVAL_END:\n";
+				debug_print("[compile] eval[$perldt]\n");	## (DEBUG)
+				eval "{$perldt}";						# Perl data excute
+				unless ($@) {
+					$rt = 'Ok';
+				} else {
+					$::Error = $@;
+					$::Error =~ s/line (\d+)/sprintf("line %d",${1}-1)/e;
+				}
+			}
+		}
+		debug_print("[compile] End\n");	## (DEBUG)
+
+#####	Command 'find' 	#####
+	} elsif ($mess =~ /^[\s]*list[\s]*(\S*)[\s]*$/ ) {
+		debug_print("[list:$1] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		### Get Directory Name
+		$fbuf = $1;
+
+		### Directory Information Get
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### File Name Get
+		$fname .= '.'. $fbuf;
+
+		### Directory Pause Change (. => /)
+		$fname =~ s/\./\//g;
+
+		debug_print("[list] PathName[$::PathName] fname[$fname]\n");	## (DEBUG)
+
+		### Directory File List Get
+		$list = dir_list($::PathName.$fname);
+		unless ($list) {	##Data None ===> Error Message Settled At [dir_list]
+		} else {	##Ok. ===> Return Code <= Read File List Set
+			$rt = $list;
+
+			### '#' Charactor Delete & \n -> \t Change
+			$rt =~ s/\n/\t/g;
+
+			### \r Charactor Delete
+			$rt =~ s/\r//g;
+		}
+
+		debug_print("[list] End\n");	## (DEBUG)
+
+#####	Command 'getbgstatus' 	#####
+	} elsif ($mess =~ /^[\s]*getbgstatus[\s]*$/ ) {
+		debug_print("[getbgstatus] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+		if(not defined $::BGCommand{$from}) {
+			$::tak->Send("$to>$from \@$mess Er: No Process");
+		} elsif( not defined $::BGReply{$from} ) {
+			$::tak->Send("$to>$from \@$mess Process Running");
+		} else {
+			$::tak->Send("$to>$from \@$mess $::BGCommand{$from} $::BGReply{$from}");
+			delete $::BGFromNode{"$::NodeName.BG.$from"};
+			delete $::BGCommand{$from};
+			delete $::BGReply{$from};
+		}
+		return;
+	} elsif ($mess =~ /^[\s]*bgexec[\s]+(.+)[\s]*$/ ) {
+		debug_print("[bgexec:$1] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		if(defined $::BGCommand{$from} and not defined $::BGReply{$from}) {
+			return;
+		}
+
+		$mess = $1;
+
+		### Directory Information Get
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### File Name Get
+		($fbuf, $mess) = split(/ /, $mess, 2);
+		$fname .= '.'. $fbuf;
+
+		### Directory Pause Change (. => /)
+		$fname =~ s/\./\//g;
+
+		debug_print("[Script] PathName[$::NodeName\.BG\.$from] fname[$fname] $mess\n");	## (DEBUG)
+
+        $::BGFromNode{"$::NodeName.BG.$from"} = $from;
+		$::BGCommand{$from}="$mess_org"; #command
+
+		$::BreakFlg{$from} = 0;
+		
+		$rt = run_script($::NodeName."\.BG\."."$from", $fname, $mess);
+
+		## Response for Script Run ##
+		if($rt eq '') { ## run_script Error perldt Not Executed.
+			$::tak->Send("$to>$from \@$mess Er: $::Error");
+			debug_print("[handler] Send[$to>$from \@$mess Er: $::Error]\n");	## (DEBUG)
+		} else {
+#			$::tak->Send("$to>$from \@$mess $rt"); 
+#			debug_print("[handler] Send[$to>$from \@$mess $rt]\n");	## (DEBUG)
+		}
+
+		if( not defined $::BGReply{$from}) {
+			if ($::BreakFlg{all} eq 1 or $::BreakFlg{$from} eq 1) {
+				$::BGReply{$from} = "@ Execution Terminated By User Operation.";
+			} else {
+				$::BGReply{$from} = "@ Executed. But No Reply or Reply Not Arrived.";
+			}
+		}
+		delete $::BreakFlg{$from};
+		return;
+
+#####	Command Script File Name 	#####
+	} else {
+		debug_print("[Script] mess[$mess] from[$from] to[$to]\n");	## (DEBUG)
+
+		$mess =~ s/^[\s ]*//;	## First Space Cut
+		$mess =~ s/[\s ]*$//;	## Last Space Cut
+
+		### Directory Information Get
+		$fname = $to;
+		$fname =~ s/$::NodeName.//g;
+		$fname =~ s/$::NodeName//g;
+
+		### File Name Get
+		($fbuf, $mess) = split(/ /, $mess, 2);
+		$fname .= '.'. $fbuf;
+
+		### Directory Pause Change (. => /)
+		$fname =~ s/\./\//g;
+
+		debug_print("[Script] PathName[$::PathName] fname[$fname] $mess\n");	## (DEBUG)
+		$::BreakFlg{$from} = 0;
+		$rt = run_script($from, $fname, $mess);
+#		debug_print("mess[$rt] from:[$from] to:[$to]End\n");	## (DEBUG)
+
+		## Response for Script Run ##
+		if($rt eq '') { ## run_script Error perldt Not Executed.
+			$::tak->Send("$to>$from \@$mess Er: $::Error");
+			debug_print("[handler] Send[$to>$from \@$mess Er: $::Error]\n");	## (DEBUG)
+		} elsif ($::BreakFlg{all} eq 1 or $::BreakFlg{$from} eq 1) {
+			$::tak->Send("$to>$from \@$mess Execution Terminated By User Operation.");
+			debug_print("[handler] Send[$to>$from \@$mess Er: $::Error]\n");	## (DEBUG)
+		} else {
+#			$::tak->Send("$to>$from \@$mess $rt"); 
+#			debug_print("[handler] Send[$to>$from \@$mess $rt]\n");	## (DEBUG)
+		}
+		delete $::BreakFlg{$from};
+		return;
+	}
+
+	$mess = $mess_org;
+
+## Response ##
+	debug_print("[handler]last rt[$rt]\n");	## (DEBUG)
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		debug_print("[handler] Send[$to>$from \@$mess Er: $::Error]\n");	## (DEBUG)
+	} else {
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		debug_print("[handler] Send[$to>$from \@$mess $rt]\n");	## (DEBUG)
+	}
+	return;
+}
+
+#-------------------------------------------------------------
+# syscmd_cre: Macro System Command Create
+#-------------------------------------------------------------
+# Argument In: None
+# Argument Out:
+#	[Normal End] return : 1
+#	[Abend] return : 0
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub syscmd_cre {
+	my $key = '';			# Macro Table System Data
+	my $buf = '';			# Macro Table System Buffer Data
+	my %MctSys_Buf = '';	# System Command Buffer Data
+
+	## Open Macro Table System File
+	unless (open(FILE, $::MctSysFile)) {
+		### Filename not found Error
+		$::Error = "System File Open Error[$::MctSysFile]"; ## Error Message
+		return(0); ## Return Error
+	}
+	binmode FILE;
+
+	## Read Macro Table System File Data
+	while (<FILE>) {
+		### Line First Charactor is '#' (Comment data) ===> Skip
+		if (/^#/) { next; }
+		
+		### \n & \r Charactor delet
+		chomp;s/\r//;
+
+		### Value Data Set
+		if ($key) {
+			if (/^\[(.+)]/) {				# Key data exists
+				$MctSys_Buf{$key} = $buf;
+				$key = $1;
+				$buf = '';
+			} elsif ($_ eq '') {			# Key data none
+				$MctSys_Buf{$key} = $buf;
+				$key = '';
+				$buf = '';
+			} else {						# Don't Key data
+				$buf .= "$_";
+			}
+		
+		### Set Key Data
+		} else {
+			if (/^\[(.+)]/) {
+				$key = $1;
+			}
+		}
+		
+		### Set File Last Line Data
+		if ($buf) {
+				$MctSys_Buf{$key} = $buf;
+		}
+	}
+
+	close(FILE);
+
+	## Set Macro Table System Data
+	if (%MctSys_Buf) {
+		%::System_Cmd = %MctSys_Buf; # Set Read Data
+	} else {
+		$::Error = "  Macro Table Data Not Found[ $::MctSysFile]"; ## Error Message
+		return(0); ## Return Error
+	}		
+
+	return(1); ## Return Normal
+}
+
+#-------------------------------------------------------------
+# dir_list: Read Script Data Path List
+#-------------------------------------------------------------
+# Argument In:
+#	$path		: Script File Path
+#	$fname		: Script File Name
+# Argument Out:
+#	[Normal End] return : Script File List
+#	[Abend] return : None
+#	        $::Error : Error Message
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub dir_list {
+	my $path = shift;	# Script File Path
+	my $name = shift;	# Script File Name
+	my $list = '';		# Script File List = Default NULL
+
+	## Open Script File Path For Read
+	unless (opendir(FILE, $path)) {	## OpenDir Error
+		$::Error = "Directory Not Found[$path]"; ## Error Message
+		return;	## Return Error
+	}
+
+	##	Read File List
+	foreach $name (sort readdir(FILE)) {
+		$list .= $name."\n";	## Add File List
+	}
+
+	close(FILE);
+
+	return($list);	# Return List
+}
+
+#-------------------------------------------------------------
+# scdfile_read: Read Script Data From File
+#-------------------------------------------------------------
+# Argument In:
+#	$path		: Script File Path
+#	$fname		: Script File Name
+# Argument Out:
+#	[Normal End] return : Script Data
+#	[Abend] return : 0
+#	        $::Error : Error Message
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub scdfile_read {
+	my $path = shift;	# Script File Path
+	my $fname = shift;	# Script File Name
+	my %script = '';	# Script Data = Default NULL
+	my $flg = 'perldt';
+
+	## Open Script File For Read
+	unless (-e $path.$fname) {	## Script File Not Found
+		$::Error = "File Not Found[.$path.$fname]"; ## Error Message
+		return;	### Return Error
+	}
+
+	unless (open(FILE, $path.$fname)) {	## Open Error
+		$::Error = "File Open Error[.$path.$fname]"; ## Error Message
+		return;	### Return Error
+	}
+	binmode FILE;
+
+	##	Read Data From Script File
+	while (<FILE>) {
+		s/\r\n/\n/;
+		if (/^##========================================================/) {
+			$script{comment} .= $_;	
+			if($flg eq 'perldt') {
+				$flg = 'comment';
+			} elsif($flg eq 'comment') {
+				$flg = 'code';
+				next;
+			}
+		} 
+
+		if($flg eq 'comment') {
+			$script{comment} .= $_;	
+		} elsif($flg eq 'perldt') {
+			$script{perldt} .= $_;
+		} else {
+			$flg = 'code';
+			$script{code} .= $_;
+		}
+
+	}
+	close(FILE);
+
+	# Set Parameter name usage update_time
+	if($script{comment} =~ /## Script data file \[(\S+)\]/) {$script{name} = $1;}
+	if($script{comment} =~ /##   usage: (.+)/) {$script{usage} = $1;}
+	if($script{comment} =~ /##   update time: (\S+) (\S+)/) {$script{update_time} = $1.' '.$2;}
+	if($script{comment} =~ /##   compile: (.+)/) {$script{compile} = $1;}
+
+	return(%script);	# Return Script Data
+}
+
+#-------------------------------------------------------------
+# scdfile_write: Write Scipt Data File
+#-------------------------------------------------------------
+# Argument In:
+#	$path		: Script File Path
+#	$fname		: Script File Name
+#	$comment	: Comment Data
+#	$script		: Script Data
+#	$perldt		: Perl Data
+# Argument Out:
+#	[Normal End] return : 1
+#	[Abend] return : 0
+#	        $::Error : Error Message
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub scdfile_write {
+	my $path = shift;				# Script File Path
+	my $fname = shift;				# Script File Name
+	my $comment = shift;			# Comment Data
+	my $script = shift;				# Script Data
+	my $perldt = shift;				# Perl Data
+	my $ctime = ksg_localtime2();	# Local time
+
+	## Set Comment Data To Local Time
+	$comment =~ s/(\d+)\/(\d+)\/(\d+) (\d+):(\d+):(\d+)/$ctime/;
+
+	## Open Script File For Write
+	unless (open(FILE, '>'.$path.$fname)) { ## Open Error
+		$::Error = "File Open Error[.$path.$fname]"; ## Error Message
+		return; ## Return Error
+	}
+	binmode FILE;
+
+	##	Write Data To Script File
+	print FILE $perldt;	## Perl Data
+	print FILE "\n";	## Space Line
+	print FILE $comment;## Comment
+	print FILE $script;	## Script
+
+	close(FILE);
+
+	return(1);	## Return Normal
+}
+
+#-------------------------------------------------------------
+# script_conv: Return Perl Data
+#-------------------------------------------------------------
+# Argument In:
+#	$script	:Script Data
+# Argument Out:
+#	[Normal End] return : Perl Data
+#	[Abend] return : 0
+#	        $::Error : Error Message
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub script_conv {
+	my $code = shift;	# Script Data
+	my %script = '';	# Child Script Data
+	my $convdata;		# Convert Data
+	my $i;				# Loop counter
+	my $sname;
+	my $fbuf;
+
+	##### Script Data Work Convert [Loop (System Macro data key)] #####
+	$code =~ s/\./!!!/g;
+	for $i (keys(%::System_Cmd)) {
+		### Script Data Convert => Perl Data
+		$convdata = "\$code =~ s/$i/$::System_Cmd{$i}/g";
+		eval ($convdata); ## Script Convert Execute
+		if ($@) { ## Convert Error
+			$::Error = $@;					# Error Message
+			return;						# Return Error
+		}
+	}
+	### Script Data Work '#' Delete
+	$code =~ s/^#/\n/;
+	$code =~ s/\n#/\n/g;
+	$code =~ s/!!!/\./g;
+	$code .= "\n";
+
+	##### Script Insert #####
+	while($code =~ /\n_SCRIPT_(\S+)/) {
+		### Directory pause change (. => /)
+		$fbuf = $sname = $1;
+		$fbuf =~ s/\./\//g;
+
+		debug_print("[script_conv]_SCRIPT_[$fbuf]\n"); ## Script Convert Execute
+		%script = scdfile_read($::PathName, "$fbuf.scd");
+		unless (%script) {	##Read Error ===> Error Message Settled At [scdfile_read]
+			return;
+		}
+		$script{perldt} =~ s/[ \t\r\f]or[ \t\r\f]return\s*\((.+)\)\s*\;/ or_return\($1\)\;/img;
+		$script{perldt} =~ s/[ \t\r\f]or[ \t\r\f]return\s*\;/ or_return\;/img;
+		
+		$script{perldt} =~ s/([; \t\r\f])return\s*\((.+)\)\s*\;/$1\{if\(\$from_rt eq \'err\'\)\{return\($2\)\;\}\}/img;
+		$script{perldt} =~ s/([; \t\r\f])return\s*\;/$1\{if\(\$from_rt eq \'err\'\)\{return\;\}\}/img;
+		$script{perldt} =~ s/^return\s*\((.+)\)\s*\;/\{if\(\$from_rt eq \'err\'\)\{return\($1\)\;\}\}/img;
+		$script{perldt} =~ s/^return\s*\;/\{if\(\$from_rt eq \'err\'\)\{return\;\}\}/mg;
+
+		$script{perldt} =~ s/ or_return([\(;])/ or return$1/img;
+
+		$code =~ s/\n_SCRIPT_($sname)\s*\n/\n#STARTSCRIPT_$sname:$script{update_time}\n\{\nmy \$from_flg=0\;\n$script{perldt}\}\n#ENDSCRIPT_$sname\n/g;
+	}
+	return($code);	# Return Perl Data
+}
+
+#-------------------------------------------------------------
+# script_: Return Perl Data(Function_Like)
+#-------------------------------------------------------------
+# Argument In:
+#	$fname	:Script File Name
+#	@list	:Script Parameters
+# Argument Out:
+#	[Normal End] return : $rt
+#	[Abend] return : ''
+#	        $::Error : Error Message
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub run_script {
+	my $from = shift;	# From Node
+	my $fname = shift;	# Script File Name
+	my $mess = shift;	# List data buffer
+	my %script;			# Script read data
+	my $perldt;			# Perl convert data
+	my $buf;			# Convert Data Buffer
+	my $i = 1;				# Loop counter
+	my $rt = '';
+	my $from_rt;
+	my $from_flg = 1;
+	my @list;
+
+	@ARGV = split(/ /,$mess);
+	
+	%script = scdfile_read($::PathName, "$fname.scd");
+	unless (%script) {	##Read Error ===> Error Message Settled At [scdfile_read]
+		return $rt;
+	} else { ##Ok. ===> Return Code <= Read File Script Data Set
+#		$perldt = script_conv($script{code});
+		$perldt = $script{perldt};
+		unless ($perldt) {	##Convert Error ===> Error Message Settled At [script_conv]
+			return $rt;
+		} else { ##Ok. ===> Write Perl Data
+			debug_print("[Script] perldtlist[@list]\n");	## (DEBUG)
+#			foreach(@list) {
+#				push(@ARGV,$_);
+#				$buf = '\$'."$i";
+#				debug_print("[Script] perldt[$perldt] =~ [$buf]/[$_]\n");	## (DEBUG)
+#				$perldt =~ s/$buf/\'$_\'/g;
+#				$i = $i + 1;
+#			}
+			debug_print("[Script] perldt[$perldt] argv[@ARGV]\n");	## (DEBUG)
+
+			$::BreakFlg{all} = 0;	# Run Break Flag Reset
+
+			#####	Script data (perl) excute 	#####
+			debug_print("eval[$perldt]\n");	## (DEBUG)
+			
+			eval "{$perldt}";						# Perl data excute
+			
+			debug_print("[run_script]$fname returned.\n");	## (DEBUG)
+			### Excute Error ===> Return Code 1 set & Return
+			if ($@) {
+				$::Error = $@;						# Error massage set
+				return '';
+			} elsif($rt eq '') {
+				return 'Return Message Undefined';
+#				return ' ';
+			} else {
+				return $rt;
+			}
+		}
+	}
+}
+
+#-------------------------------------------------------------
+# ksg_localtime: Return Local Time(Format For Log Data)
+#-------------------------------------------------------------
+# Argument In: None
+# Argument Out:
+#	return: Local Time(Format For Log Data)
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub ksg_localtime {
+	my ($sec, $mcsec) = gettimeofday;	# High level time set
+	my @tt = localtime($sec);			# Localtime set
+	my $year = $tt[5]+1900;				# Year data calc
+
+	$year =~ s/^\d\d//;
+ 	return(sprintf("%02d%02d%02d%02d%02d%02d", $year,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+
+#-------------------------------------------------------------
+# ksg_localtime2: Return Local Time(Format For Script File)
+#-------------------------------------------------------------
+# Argument In: None
+# Argument Out:
+#	return: Local Time(Format For Script File)
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub ksg_localtime2 {
+	my ($sec, $mcsec) = gettimeofday;	# High level time set
+	my @tt = localtime($sec);			# Localtime set
+	my $year = $tt[5]+1900;				# Year data calc
+
+ 	return(sprintf("%02d/%02d/%02d %02d:%02d:%02d", $year,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+
+#-------------------------------------------------------------
+# send_reply_message:
+#-------------------------------------------------------------
+# Argument In:
+#	$fname	:Script File Name
+#	@list	:Script Parameters
+# Argument Out:
+#	[Normal End] return : $rt
+#	[Abend] return : ''
+#	        $::Error : Error Message
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub send_return_msg {
+	my $to = shift;	# From Node
+	my $mess = shift;	# Script File Name
+	my $rt = shift;		# Return
+	
+	$::tak->Send("$to $mess");
+	return($rt);
+}
+
+#-------------------------------------------------------------
+# debug_print: Print Debug Message
+#-------------------------------------------------------------
+# Argument In
+#	$msg_txt: Message
+# Argument Out: None
+#-------------------------------------------------------------
+# History:
+#-------------------------------------------------------------
+sub debug_print {
+	my $msg_txt = shift;	#Debug Message
+	if ($::Debug) { print "[$::NodeName]$msg_txt\n\n"; }
+	return;
+}

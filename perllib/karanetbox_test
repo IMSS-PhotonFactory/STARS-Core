@@ -1,0 +1,98 @@
+#! /usr/bin/perl
+
+use strict;
+use karanetbox;
+################################################################
+# KARACRIX/NetBox-E100-BK1682A  Test program                   #
+#                                        Takashi Kosuge        #
+#    2009-07-08                                                #
+################################################################
+
+my $kara = karanetbox->new('192.168.0.200', 20000, 20000, 20001) or die $!;
+
+my $rt;
+my @rt;
+my $buf;
+
+#Send a command directly.
+$rt = $kara->SendCommand("hello");
+print "SendCommand: $rt\n";
+
+#Send Hello command.
+$rt = $kara->Hello();
+print "Hello: $rt\n";
+
+#Get status from switch input.
+$rt = $kara->GetSw();
+print "GetSw with scaler:$rt\n";
+@rt = $kara->GetSw();
+print "GetSw with list: ".join(", ", @rt). "\n";
+
+#Set relay output and get status.
+$buf = '10101010';
+$rt = $kara->SetRy($buf);
+print "SetRy: $buf -> Rcv: $rt\n";
+
+$rt = $kara->GetRy();
+print "GetRy with scaler:$rt\n";
+
+select(undef,undef,undef,0.5);
+
+$buf = '01010101';
+$rt = $kara->SetRy($buf);
+print "SetRy: $buf -> Rcv: $rt\n";
+
+@rt = $kara->GetRy();
+print "GetRy with list: ".join(", ", @rt). "\n";
+
+select(undef,undef,undef, 0.5);
+
+$buf = '00000000';
+$rt = $kara->SetRy($buf);
+print "SetRy: $buf -> Rcv: $rt\n";
+
+#Set transistor output and get status.
+$buf = '11';
+$rt = $kara->SetTr($buf);
+print "SetTr: $buf -> Rcv: $rt\n";
+
+$rt = $kara->GetTr();
+print "GetTr with scaler:$rt\n";
+
+select(undef,undef,undef,0.5);
+
+$buf = '00';
+$rt = $kara->SetTr($buf);
+print "SetTr: $buf -> Rcv: $rt\n";
+
+@rt = $kara->GetTr();
+print "GetTr with list: ".join(", ", @rt). "\n";
+
+#Get counter values and preset values on switch inputs.
+@rt = $kara->GetCnt();
+print "GetCnt: ".join(", ", @rt). "\n";
+
+for($buf = 1; $buf <= 16; $buf++){
+	$rt = $kara->PresetCnt($buf, $buf);
+	print "PresetCnt: ch=$buf, value=$buf -> Rcv: $rt\n";
+}
+
+@rt = $kara->GetCnt();
+print "GetCnt: ".join(", ", @rt). "\n";
+
+$rt = $kara->ResetAllCnt();
+print "ResetAllCnt: $rt\n";
+
+@rt = $kara->GetCnt();
+print "GetCnt: ".join(", ", @rt). "\n";
+
+#Get "Di On Time Hold".
+@rt = $kara->GetTim();
+print "GetTim: ".join(", ", @rt). "\n";
+
+#Waiting event and read.
+print "Waiting event:\n";
+while(1){
+	unless(@rt = $kara->ReceiveEvent()){next;}
+	print "evt: $rt[0] $rt[1]\n";
+}

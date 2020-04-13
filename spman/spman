@@ -1,0 +1,508 @@
+#################################################################
+# Proguram Name	:spman											#
+# 																#
+#===============================================================#
+# Proguram Title:												#
+#	Stars Plus MANager controller								#
+#																#
+#							Create by	Yuji.Miyama (ICube)		#
+#===============================================================#
+# Command														#
+#	set [param]	:SG-4311 Data Rcive	[param:PFG Command]			#
+#	delay [nnn]	:Delay Time Set [nnn:msec]						#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+
+#! /usr/bin/perl
+
+#########################
+#		Declaration		#
+#########################
+#####	Module Read		#####
+use Getopt::Long;							#Standard Module
+use stars;									#Stars Module
+use Tk;
+#use Time::HiRes qw( usleep ualarm gettimeofday tv_interval );
+
+################################################################
+# STARS manager
+use constant CONFIG => 'spman.cfg';
+use constant VERSION => '1.1';
+defVAR();
+################################################################
+
+#####	ToDo: parameter set	#####
+$ManagerName='';
+$DeviceName='';
+
+#####	Area Data parameter set	#####
+###	Information area
+$inf1 = '                  ';
+$inf2 = '                  ';
+$inf3 = '                  ';
+
+###	Time area
+$tim1 = ' 9999/ 12/ 31 12:59:59 ';
+
+###	Status area
+$sts1 = '';
+
+###	Information area
+$emode = 'Button';
+
+#########################
+#		Initialize		#
+#########################
+#####	Open Stars server	#####
+if($_ = shift(@ARGV)){$StarsServer = $_;}
+
+#####	$::tak is a Stars object	#####
+#print "spman:NodeName[$::VAR{NodeName}], StarsServer[$::VAR{StarsServer}]\n";
+$sv = stars->new($::VAR{NodeName}, $::VAR{StarsServer}) or die;
+
+#####	Mai window create 	#####
+$mwin = MainWindow->new();
+
+#####	Timer event	#####
+$id = $mwin->repeat( 1000, \&ev_timer );
+
+#########################
+#		Proguram Main	#
+#########################
+#####	Winjet create 	#####
+###	Title area create
+$mwin->title("<$::VAR{NodeName}> Ver.0.1");
+$mwin->geometry("320x360+200+200");
+
+###	Title area create
+$ttl = $mwin->Frame(-borderwidth => 1, -relief => 'flat')->pack(-side => 'top', -fill => 'x');
+$ttl->Label(-text => "$::VAR{NodeName}", -relief => 'ridge',
+	-borderwidth => 5, -width => 10, -font => "Century 12 bold")->pack(-side => 'left');
+$ttl->Button(-text => "Exit", -font => "Century 11 bold", -takefocus => 0,
+	-borderwidth => 3, -width => 3, -command => sub { exit })->pack(-side => 'right');
+$ttl ->Label(-textvariable => \$tim1, -relief => 'groove', -borderwidth => 3,
+	-font => "Century 10 bold", -foreground => 'white', -background => 'black')->pack(-side => 'bottom');
+
+$ttl = $mwin->Frame(-borderwidth => 2, -relief => 'ridge')->pack(-side => 'top', -fill => 'x');
+$ttl ->Label(-text => "Stars Plus Manager Controller  ", -relief => 'flat',
+	-borderwidth => 1, -font => "Century 10 bold")->pack(-side => 'left');
+
+###	Information area create
+$inf = $mwin->Frame(-borderwidth => 1, -relief => 'flat')->pack(-side => 'top', -fill => 'x');
+$inf ->Label(-text => ' Manager  ', -relief => 'flat', -borderwidth => 1,
+	-font => "Century 10")->pack(-side => 'left');
+$inf ->Label(-textvariable => \$inf1, -relief => 'groove', -borderwidth => 1,
+	-font => "Century 11", -foreground => 'blue')->pack(-side => 'left');
+
+$inf = $mwin->Frame(-borderwidth => 1, -relief => 'flat')->pack(-side => 'top', -fill => 'x');
+$inf ->Label(-text => ' Device     ', -relief => 'flat', -borderwidth => 1,
+	-font => "Century 10")->pack(-side => 'left');
+$inf ->Label(-textvariable => \$inf2, -relief => 'groove', -borderwidth => 1,
+	-font => "Century 11", -foreground => 'blue')->pack(-side => 'left');
+
+$inf = $mwin->Frame(-borderwidth => 1, -relief => 'flat')->pack(-side => 'top', -fill => 'x');
+$inf ->Label(-text => ' Status      ', -relief => 'flat', -borderwidth => 1,
+	-font => "Century 10")->pack(-side => 'left');
+$inf ->Label(-textvariable => \$inf3, -relief => 'groove', -borderwidth => 1,
+	-font => "Century 11", -foreground => 'blue')->pack(-side => 'left');
+
+###	Listbox area create
+$lst = $mwin->Frame(-borderwidth => 2, -relief => 'sunken')->pack(-side => 'top', -fill => 'x');
+$lwin = $lst->Scrolled("Listbox", -scrollbars => "oe", -selectmode => "browse", 
+	-font => "Century 11 normal", -foreground => 'black', -relief => 'sunken')->
+	pack(-side => 'left', -fill => 'x');
+
+###	Radiobutton area create
+$lst->Radiobutton(-text => "Direct Exec/Term", -value => "Direct", -variable => \$emode,
+	-font => "Century 10")->pack(-side => 'top');
+$lst->Radiobutton(-text => "Button Exec/Term", -value => "Button", -variable => \$emode,
+	-font => "Century 10")->pack(-side => 'top');
+$lst->Label(-text => "",  -width => 1, -height => 1, -font => "Century 12")->
+	pack(-side => 'top');
+
+###	Button area create
+$lst->Button(-text => "Execute", -font => "Century 11 bold", -takefocus => 0,
+	-borderwidth => 3, -width => 10, -command => \&h_execute)->pack(-side => 'top');
+$lst->Label(-text => "",  -width => 1, -height => 1, -font => "Century 5")->
+	pack(-side => 'top');
+$lst->Button(-text => "Terminate", -font => "Century 11 bold", -takefocus => 0,
+	-borderwidth => 3, -width => 10, -command => \&h_terminate)->pack(-side => 'top');
+
+###	Status area create
+$sts = $mwin->Frame(-borderwidth => 2, -relief => 'sunken')->pack(-side => 'top', -fill => 'x');
+$sts ->Label(-textvariable => \$sts1, -relief => 'flat', -borderwidth => 1,
+	-font => "Century 11", -foreground => 'red')->pack(-side => 'left');
+
+#####	Command get 	#####
+###	List file get
+($from,$to,$mess) = $sv->act("System listnodes");
+@managers = grep(/^manager-(?!sp$)/, split(" ", $mess));
+
+###	List data read
+foreach $manager (@managers){
+	unless($manager =~ /^manager-([a-zA-z0-9\-]+)/){next;}
+	$mname=$1;
+	($from,$to,$mess) = $sv->act("$manager listnodes");
+	if($mess =~ /Er:/){next;}
+	$mess =~ s/ / $mname:/g;
+	$mess =~ s/\@\w+ //;
+	$lwin->insert('end', split(" ", $mess));
+}
+
+#####	Listbox select 	#####
+$lwin->bind("<Button-1>", \&h_selected );
+$lwin->bind("<Double-Button-1>", \&d_selected );
+
+#####	MainLoop 	#####
+MainLoop;
+
+#########################
+#	Proguram End		#
+#########################
+exit;
+
+
+#################################################################
+# Function Name	:h_execute										#
+#===============================================================#
+# Function Title:												#
+#	Command Execute.											#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub h_execute{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my ($from, $to, $mess);
+
+#########################
+#	Function Main		#
+#########################
+#	if(($emode eq 'Button') && ($ManagerName and $DeviceName)){
+	if($emode eq 'Direct'){
+		$sts1 = "It is among the Direct Execute mode now!";
+		return();
+	}
+	
+	if($ManagerName and $DeviceName){
+		($from, $to, $mess) = $sv->act("$ManagerName execute $DeviceName");
+		$sts1 = "  $mess";
+		GetPIDStatus();
+	}else{
+		$sts1 = "";
+	}
+
+#########################
+#	Function End		#
+#########################
+}
+
+#################################################################
+# Function Name	:d_execute										#
+#===============================================================#
+# Function Title:												#
+#	Command Direct Execute.										#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub d_execute{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my ($from, $to, $mess);
+
+#########################
+#	Function Main		#
+#########################
+	if($ManagerName and $DeviceName){
+		($from, $to, $mess) = $sv->act("$ManagerName execute $DeviceName");
+		if ($mess =~ s/already running.//){
+			($from, $to, $mess) = $sv->act("$ManagerName terminate $DeviceName");
+			}
+		$sts1 = "  $mess";
+		GetPIDStatus();
+	}else{
+		$sts1 = "";
+	}
+
+#########################
+#	Function End		#
+#########################
+}
+
+#################################################################
+# Function Name	:h_terminate									#
+#===============================================================#
+# Function Title:												#
+#	Command Terminate.											#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub h_terminate{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my ($from, $to, $mess);
+
+#########################
+#	Function Main		#
+#########################
+	if($emode eq 'Direct'){
+		$sts1 = "It is among the Direct Terminate mode now!";
+		return();
+	}
+
+	if($ManagerName and $DeviceName){
+		($from, $to, $mess) = $sv->act("$ManagerName terminate $DeviceName");
+		$sts1 = "  $mess";
+		GetPIDStatus();
+	}else{
+		$sts1 = "";
+	}
+
+#########################
+#	Function End		#
+#########################
+}
+
+#################################################################
+# Function Name	:h_selected										#
+#===============================================================#
+# Function Title:												#
+#	Command Selected.											#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub h_selected{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my ($sl) = $lwin->curselection();
+	my ($from,$to,$mess);
+
+	my $buf = $lwin->get($sl);
+	my ($manager, $device) = split(":", $buf);
+
+#########################
+#	Function Main		#
+#########################
+	$manager = "manager-".$manager;
+
+	$inf1 = " $manager ";
+	$ManagerName=$manager;
+	
+	$inf2 = " $device ";
+	$DeviceName=$device;
+
+	GetPIDStatus();
+	$sts1 = "";
+
+#########################
+#	Function End		#
+#########################
+}
+
+#################################################################
+# Function Name	:d_selected										#
+#===============================================================#
+# Function Title:												#
+#	Command Selected (Mouse Double Click).						#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub d_selected{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my ($sl) = $lwin->curselection();
+	my ($from,$to,$mess);
+
+	my $buf = $lwin->get($sl);
+	my ($manager, $device) = split(":", $buf);
+
+#########################
+#	Function Main		#
+#########################
+	$manager = "manager-".$manager;
+
+	$inf1 = " $manager ";
+	$ManagerName=$manager;
+	
+	$inf2 = " $device ";
+	$DeviceName=$device;
+
+	GetPIDStatus();
+	$sts1 = "";
+
+	###	Direct Mode -> Execute
+	if ($emode eq 'Direct'){
+		d_execute();
+	}
+
+#########################
+#	Function End		#
+#########################
+}
+
+#################################################################
+# Function Name	:GetPIDStatus									#
+#===============================================================#
+# Function Title:												#
+#	Get PID Status.												#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub GetPIDStatus{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+my ($from, $to, $mess);
+	my $buf;
+	my @buf;
+
+#########################
+#	Function Main		#
+#########################
+	unless($ManagerName and $DeviceName){return;}
+	($from,$to,$mess) = $sv->act("$ManagerName getpid $DeviceName");
+#print "$mess\n";
+	if($mess =~ /Er:/){
+		$sts1 = "  $mess";
+		return;
+	}
+	@buf = split(" ", $mess);
+	if($buf[1]){
+		$buf = "Running PID=$buf[1]";
+	}else{
+		$buf = "Terminated";
+	}
+	$inf3 = " $buf ";
+
+#########################
+#	Function End		#
+#########################
+}
+
+#################################################################
+# Function Name	:defVAR											#
+#===============================================================#
+# Function Title:												#
+#	Def VAR.													#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/27:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub defVAR{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	my @buf;
+
+#########################
+#	Function Main		#
+#########################
+	unless(open(BUF,CONFIG)){
+		$::Error='Could not open Def file.';
+		return('');
+	}
+	while(<BUF>){
+		chomp;s/\r//;
+		if(/^#/){next;}
+		unless($_){next;}
+		@buf=split(/\s*=\s*/,$_);
+		$::VAR{"$buf[0]"} = $buf[1];
+	}
+	close(BUF);
+
+#########################
+#	Function End		#
+#########################
+	return('Ok:');
+}
+
+#################################################################
+# Function Name	:ev_timer										#
+#===============================================================#
+# Function Title:												#
+#	Event timer.												#
+#===============================================================#
+# Argument In	:None											#
+# Argument Out	:None											#
+#===============================================================#
+# History														#
+#	2004/09/29:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+sub ev_timer{
+
+#########################
+#		Declaration		#
+#########################
+#####	Private variable 	#####
+	###	localtime set
+	my @tt = localtime(time());
+
+#########################
+#	Function Main		#
+#########################
+	###	System time set
+	$tim1 = sprintf(" %04d/ %02d/ %02d %02d:%02d:%02d ",
+			$tt[5]+1900, $tt[4]+1, $tt[3], $tt[2], $tt[1], $tt[0]);
+
+#########################
+#	Function End		#
+#########################
+	return('Ok:');
+}

@@ -1,0 +1,667 @@
+%\documentclass{JAC2001}
+%\documentclass[a4j]{jarticle}
+\documentclass[a4paper,twocolumn,10pt]{jarticle}
+
+%%
+%%  Use \documentclass[boxit]{JAC2001}
+%%  to draw a frame with the correct margins on the output.
+%%
+%%  Use \documentclass[acus]{JAC2001}
+%%  for US letter paper layout
+%%
+
+\usepackage{graphicx}
+\usepackage{times}
+
+%%
+%%   VARIABLE HEIGHT FOR THE TITLE BOX (default 35mm)
+%%
+
+\newcounter{linenumber}
+
+\newenvironment{programlist}{\scriptsize%
+ \begin{list}{%
+   \scriptsize\arabic{linenumber}}{%
+     \usecounter{linenumber}%
+     \setlength{\baselineskip}{13pt}%
+     \setlength{\itemsep}{0pt}%
+     \setlength{\parsep}{0pt}}}%
+   {\end{list}}
+
+%\setlength{\titleblockheight}{25mm}
+
+%\textheight=257mm
+\textheight=247mm
+\textwidth=170mm
+%\topmargin=0mm
+\topmargin=15mm
+\oddsidemargin=20mm
+\evensidemargin=20mm
+\columnsep=5mm
+\hoffset -25.4mm
+\voffset -25.4mm
+
+
+\pagestyle{empty} 
+
+\begin{document}
+\title{STARSユーザーズマニュアル}
+\date{}
+\author{高エネルギー加速器研究機構 小菅 隆}
+
+\maketitle
+\thispagestyle{empty}
+
+\section{はじめに}
+大規模な計測・制御システムの世界では、オブジェクト分散の技術を利用したシステム構築が日常のように行われていますが、ネットワークを利用したシステム構築に際しては、小規模システムにおいてもプログラムの分散化は有益です。
+たとえば、実際の機器を制御するドライバー部、GUI(Graphical User Interface)部やメイン制御部などのように分散して開発を行う事ができれば、各部分のプログラムのサイズを縮小でき、保守時の見通しも良くなります。また、そうする事でプログラム開発を複数のスタッフにより共同で行ったり、プログラムの再利用が可能となります。
+
+CORBAやDCOMによるオブジェクト分散の機能を利用する事は、小規模なシステムにおいても有効ですが、様々なオペレーティングシステム（以下OS）や開発言語を利用する場合には、システム構築作業の大部分がCORBA、DCOM導入のための作業となる事が予想されます。これらの要求や問題点を考慮した結果、我々は簡単にアプリケーション間のメッセージ配信を行える小規模システム向けの通信機構が必要であるという結論に達し、STARS(Simple Transmission and Retrieval System)の開発に至りました。
+
+STARSにおけるアプリケーション間通信は、全てTCP/IP Socketを利用したテキストベースのコマンドの送受により行われます。この事でシステムの扱いが非常に容易となり、それと同時に、開発言語やOS選択の幅が広がります。また、デバッグを行う場合にもTELNETなどのツールを利用する事が可能です。さらに、コアの部分となるプログラムはPerlを使って開発されており、STARSは様々なプラットフォーム上で動作可能です。
+
+\section{STARSの開発に至るまで}
+STARSの開発に着手する前、我々は様々な形態の制御プログラムを作成してきました。ここではSTARSの概念をより深く説明するために、STARS開発に至るまでの経緯を示します。
+
+\subsection{ネットワーク対応型アプリケーション}
+開発の出発点はネットワーク対応型のアプリケーション作成でした。計算機ネットワークの普及に伴い、比較的容易にネットワーク対応型のプログラムを作成する事ができるようになり、リモートからの管理が可能となりました。また、ネットワーク機器の低価格化やFreeのUNIX系OSが利用しやすくなった事は、ここでのネットワーク対応型アプリケーション\cite{Control:MiconandFreeBSD}開発を進める大きな力となりました。しかし、この段階ではアプリケーションプログラムの再利用や複数のスタッフでのアプリケーション開発に関する概念はまだありませんでした。
+
+\subsection{複数クライアントへの対応}
+ネットワーク対応型のプログラムが完成し、リモートでの管理が出来るようになると、「複数の場所から、機器の状態を監視したい」等の要求が発生してきました。ネットワーク対応型アプリケーションの第二段階として、我々は複数のクライアントプログラムに対応可能なシステム\cite{Control:LowCostControl}を開発しました。
+このシステムにおいてプログラムは、機器の制御を行うサーバプログラムとユーザインターフェースであるクライアントプログラムに分割されていて、それぞれはTCP/IP Socketによって接続されます。サーバープログラムは複数のクライアントプログラムに対応可能であり、ユーザは複数の場所からシステムの監視が可能です。
+また、汎用的なユーザインターフェースプログラムを作成すれば、ある程度のアプリケーションプログラムの再利用が可能です。しかし、このタイプのシステムには、新しいハードウエアに対応するためには結局サーバプログラム自体を改造しなければならない事や、機能を増強してゆくとサーバープログラム自体が肥大化してしまうなどの問題がありました。
+
+\subsection{プログラムの分散化}
+これまでの問題点を解決するために開発を開始したのがSTARSです。プログラムを分散化するための手法としてオブジェクト分散を用いたプログラム開発もひとつの手ですが、STARSでは機能ごとにアプリケーションプログラムを作成する事でプログラムの分散化を行っています。また、各クライアントプログラム間の通信をTCP/IP Sockeを用いたテキストベースのコマンド送受により行うなど、可能な限り単純化する事で汎用化を実現しています。
+
+また、STARSの開発が進行中であった頃、比較的大規模なシステム向けの制御カーネルであるCOACK(Component Oriented Advanced Control Kernel)\cite{COACK:Recent, COACK:BLIS}の開発も進行していました。COACKはもともとWindowsベースのシステムですが、COACKが持つTCP/IP SocketインターフェースとSTARSを利用してNon-Windowsシステムへのインターフェースの一つとして使おうとするアイデアが生まれ、COACKのNon-Windowsシステム用インターフェースとしてのSTARS開発が進みました。このためSTARS自体、COACKと連携して動作する事が可能です。
+
+\section{STARSの構成}
+STARSはユーザが作成するクライアントプログラム、システムの中心的存在となりメッセージの配信を行うTAK（Transferring Agent Kernel）サーバおよび他のシステムとの接続を行う場合や、複数のTAKサーバを接続する場合に使用するBridgeから構成されます。(図\ref{Layout}参照)TAKサーバはPerlによって記述されています。
+
+各クライアントプログラムはTCP/IP SocketによりTAKサーバに接続され、各クライアントプログラム及びTAKサーバ間の通信はテキストベースのメッセージの授受により行われます。
+各クライアントはユニークなターミナル名を持ち、それぞれのメッセージの送り先を指定する際に使用されます。
+また、それぞれは同一コンピュータ上にあってもネットワークを介したコンピュータ上に分散してもかまいません。各クライアントプログラムの起動、停止はSTARSのシステム自体に特に影響を与えないので、システムの運転中に機能の追加や保守などを任意に行う事ができます。
+
+\begin{figure}[htb]
+\centering
+\rotatebox{270}{
+\includegraphics*[width=68mm]{layout.ps}
+}
+\caption{STARSの構成}
+\label{Layout}
+\end{figure}
+
+\subsection{TAKサーバ}
+STARSの中心的役割を果たすのがTAKサーバです。TAKサーバは接続されたクライアントプログラムから送られてくるメッセージを目的のクライアントプログラムへ配信します。また、イベント配信の機能等も有しています。
+実質的にSTARSの機能そのものを実現するのがTAKサーバであるため、STARSサーバと呼ぶ事もあります。
+
+TAKサーバはPerlによって記述されている為、あらかじめサーバが動作するPCにはPerl（Version 5）がインストールされている必要があります。PerlはLinux、FreeBSD、Windowsのような様々なOSで利用可能であり、TAKサーバも様々なOS上で動作可能です。
+なお、TAKサーバ自体は一つのプログラムですが、後述するaliaseの設定ファイル、セキュリティーチェック用のhost名一覧ファイル、キーワードファイル、ターミナル名+ホスト名チェック用ファイル等のファイルを使用します。これらのファイルはTAKサーバのライブラリ用のディレクトリにまとめて収納されます。
+
+\subsection{STARSクライアント}
+各クライアントプログラムはTCP/IP Socketを使用してTAKサーバに接続します。クライアントプログラムに関してはTCP/IP Socketを利用できればOSや開発言語に特別な制限はありません。
+
+各クライアントプログラムはSTARSのシステムにおいてユニークなターミナル名を持たなければなりません。STARSクライアントはTAKサーバに接続する際、はじめに自分のターミナル名を自ら名乗る必要があり、接続が確立した後、メッセージの授受はこのターミナル名をもとに行われます。また、STARSには特別なターミナル名、``System''と``Debugger''が存在するので、クライアントプログラム作成においては注意が必要です。
+
+\subsection{Bridge}
+STARSでは他のシステムへのインターフェース、或いはTAKサーバ同士を接続するクライアントプログラムを``Bridge''と呼んでいます。STARSでは各クライアントへ宛先を指定してメッセージを送信しますが(詳細は\ref{Function:Message}で述べます)、宛先において``.''(ピリオド)は特別な意味を持ち、宛先に``.''を使用すると、以降の文字列に関係なく常に``.''より前の文字列で示されるクライアントにメーッセージが送出されます。STARSではこの事を利用し``Bridge''の機能を実現しています。
+
+\section{STARSの機能}
+STARSは基本的にメッセージの配信を行う非常にシンプルなシステムですが、いくつかの機能の追加及びメッセージ配信に対して幾つかの決まりを設けて、様々なシステムにも対応可能にしています。ここではSTARSの持つ機能について紹介します。
+
+\subsection{メッセージの配信}
+\label{Function:Message}
+TAKサーバに接続された全てのSTARSクライアントプログラムは、データ転送に関して同等な権利を有します。もしアクセス制限などの機能が必要な場合は、各クライアントで独自に用意する必要があります。
+\begin{figure}[hbt]
+\centering
+\rotatebox{270}{
+\includegraphics*[width=68mm]{message.ps}
+}
+\caption{メッセージ配信}
+\label{SendMessage}
+\end{figure}
+
+授受されるデータは全てキャラクターベースでデリミタはLF（0x0A）です。実際のデータ転送の方法としては、たとえばTerm1と名づけられたクライアントプログラムからDev1と言う名のクライアントプログラムにデータを転送する場合を例にすると図\ref{SendMessage}に示す通りになります。はじめにTerm1は``Dev1 setdata 123''のようなコマンドをTAKサーバに送出します。ここで``Dev1''は宛先であり、``setdata 123''はメッセージです。その後、Term1よりメッセージを受け取ったTAKサーバはDev1に対して``Term1$>$Dev1 setdata 123''のような送り主を示す文字列を行頭に付加したメッセージを送信します。
+
+\subsection{メッセージに関する取り決め}
+TAKサーバは、受け取ったメッセージを単に指定された宛て先に送信します。STARSではこれらのメッセージに、ある程度取り決めを設けて効率的な動作を行うようにしています。実際には ``@''（アットマーク）で始まるメッセージは何かのコマンドに対する回答(Reply message)である事を示し、``\_''（アンダースコア）で始まるメッセージは何かのイベント(Event message)が発生した事を示します。それ以外のメッセージはコマンド(Command message)です。
+
+STARSクライアントを作成する際は、作成するクライアントプログラムが他のクライアントに通常のCommand messageを送出した場合、必ず``@''で始まるReply messageを受け取る事を期待するようにします。また、逆に作成したクライアントプロがラムが通常のCommand messageを受け取った場合は必ず``@''から始まるReply messageをCommand messageの送り主に返送します。この際、たとえばCommand messageが``hello''であったとするとReply messageは``@hello Nice to meet you.''のように``@''+``受け取ったCommand message''から始まるようにする事が推奨されます。
+なお、クライアントプログラムは``@''から始まるメッセージを受け取った場合、そのメッセージに対する返事を返してはなりません。もし、知らないReply messageを受け取った場合は単に無視するようにします。
+
+``\_''で始まるEvent messageについてもReply message同様、決して返事を返してはなりません。そして、理解可能なEvent messageについてはそれなりに処理を行い、それ以外のEvent messageに関しては無視をするようにします。
+
+TAKサーバは、受け取ったCommand messageの宛先が存在しない場合、エラーを示すReply messageを返しますが、Event message及び Reply messageの場合エラーメッセージは返しません。現在のバージョンのTAKサーバにおける、宛先不明のReply messageとEvent messageに対する扱いは同じで単に破棄されるだけです。
+
+\subsection{イベント配信機能}
+前述の通りSTARSにおいて``\_''から始まるメッセージはイベントメッセージですが、TAKサーバはイベント配信先が不確定の場合や配信先が複数の場合に有用なイベント配信機能を有しています。
+まず、イベントを発信するクライアントは宛先をSystemにしてイベントメッセージを送出します。その後TAKサーバは、あらかじめflgonコマンドにより配信の依頼を行っているクライアントに対してイベントメッセージを送出します。
+
+\subsection{alias機能}
+STARSのクライアントはそれぞれユニークなターミナル名を有しますが、TAKサーバに別名を登録する事ができます。この機能を利用すると、クライアントの構成が変わった場合などのプログラムの書き換えを最小限に抑える事ができます。なお、別名の情報はTAKサーバのライブラリ用ディレクトリ内の``aliases.cfg''ファイルに記録されています。別名の登録等はこのファイルをテキストエディタ等で編集する事により行います。ファイル書き換え後はSTARSクライアントからTAKサーバに対して``loadaliases''コマンドを送出する必要があります。
+
+\subsection{システムコマンド}
+TAKサーバはイベント配信要求のためのコマンドを含め幾つかのコマンドを有しています。
+TAKサーバは``System''という名前を有しているので、クライアントプログラムからは宛先を``System''にしてCommand messageを送出すればOKです。以下はシステムコマンドの一覧です。
+
+\begin{itemize}
+
+\item flgon:
+TAKサーバにイベント配信の要求を行います。以下はクライアント``term2''のイベント受取を要求した場合の例です。
+{\footnotesize
+\begin{verbatim}
+System flgon term2
+System>term1 @flgon Node term2 has
+ been registered.
+\end{verbatim}
+}
+
+\item flgoff:
+TAKサーバに要求したイベント配信を解除します。以下はクライアント``term2''のイベント受取を取り消した場合の例です。
+{\footnotesize
+\begin{verbatim}
+System flgoff term2
+System>term1 @flgoff Node term2 has
+ been removed.
+\end{verbatim}
+}
+
+\item help:
+システムコマンドの一覧をスペース区切りで返します。
+
+\item hello:
+STARSの動作をチェックするために``hello''コマンドが用意されています。単純に以下のような答えを返してくるだけです。
+
+{\footnotesize
+\begin{verbatim}
+System hello
+System>term1 @hello Nice to meet you.
+\end{verbatim}
+}
+
+\item loadaliases:
+TAKサーバはターミナル名のエイリアシング機能を備えていて、システム構成が変わった場合にも対応できるよう考慮されています。また、エイリアスの変更時にシステムを停止する必要はありません。loadaliasesコマンドは変更されたエイリアスファイルをシステムに再び読み込みます。
+
+\item listaliases:
+エイリアシングの状況をスペース区切りで返します。
+
+\item listnodes:
+TAKサーバに接続されている全てのノード名をスペース区切りで返します。
+
+\item gettime:
+TAKサーバが動作しているコンピュータの現在の時刻を返します。
+
+\item getversion:
+TAKサーバのバージョンを返します。
+
+\item quit:
+TAKサーバとの接続を解除します。
+
+\item disconnect:
+指定したクライアントとTAKサーバとの接続を解除します。
+
+\end{itemize}
+
+\subsection{Debugger}
+TAKサーバはデバッグの為の機能を有していて、``Debugger''という特別なターミナル名で接続すると、TAKサーバが各クライアントに送出するメッセージを全て受け取る事ができます。なお詳細については\ref{LibUtl:Debugger}で述べます。
+
+\section{接続時のセキュリティ機能}
+STARSはクライアントの接続に対して簡単なセキュリティー機能を有しています。実際には、ホスト名によるチェック、キーワードによるチェック、ターミナル名及びホスト名によるチェックです。
+
+\subsection{ホスト名によるチェック}
+TAKサーバはSTARSクライアントから接続の要求があると、はじめにそのクライアントプログラムが動作するコンピュータが、接続可能ホストのリスト内に存在するかどうかをチェックします。接続可能ホストのリストはTAKサーバライブラリ用ディレクトリ内の``allow.cfg''ファイルです。ホスト名の登録はこのファイルをテキストエディタなどで編集する事により行います。なお、各ホスト名は改行で区切られます。
+書き換えを行った場合、TAKサーバの再起動などの必要はなく、書き換え後はその設定がすぐに反映されるようになります。
+
+ホスト名が接続可能ホストのリスト内に存在しない場合、TAKサーバへの接続は拒否されます。
+以下はテスト的にtelnetを使用してclient-hostから、server-host上で動作するTAKサーバに接続を試みた場合で、client-hostは接続可能リストに登録されていない為に接続が拒否された例です。
+
+{\footnotesize
+\begin{verbatim}
+% telnet server-host 6057
+Trying 192.168.0.10...
+Connected to server-host.
+Escape character is '^]'.
+Bad host. client-host
+Connection closed by foreign host.
+\end{verbatim}
+}
+
+上記の例で``Bad host. ''に続く部分がTAKサーバが認識しているクライアントのホスト名(場合によってはIPアドレス)です。システムの環境等により、認識するクライアントのホスト名が変化する場合があるので、クライアントプログラムがうまく接続できない場合は、telnet等を使用してTAKサーバの認識している実際のホスト名を確認します。そして、この時表示されるホスト名を``allow.cfg''ファイルに登録すればOKです。
+
+\subsection{キーワードによるチェック}
+STARSの接続時における第二段階のセキュリティーチェックはキーワードによるチェックであり、TAKサーバには予めSTARSクライアント毎にキーワードのリストが登録されている必要があります。キーワードのリストは実際にはテキストファイルで``1番目のキーワード''[改行]``2番目のキーワード''・・・のように改行文字(Unixの場合はLF、Windowsの場合はCR+LF)で区切られています。以下は4つのキーワードが登録されているファイルの例です。
+
+{\footnotesize
+\begin{verbatim}
+Keyword1
+Keyword2
+Keyword3
+Keyword4
+\end{verbatim}
+}
+
+このキーワードリストのファイルはクライアントプログラムごとに``ターミナル名''+.key(例: term1.key)のような名前でTAKサーバのライブラリ用ディレクトリに保存されます。なお、各クライアント毎に設定可能なキーワードの数は10,000個です。また、ファイル登録の際、TAKサーバの再起動は必要ありません。
+
+\begin{figure}[htb]
+\centering
+\rotatebox{270}{
+\includegraphics*[width=68mm]{checkkey.ps}
+}
+\caption{キーワードチェックの手順}
+\label{CheckKeyword}
+\end{figure}
+
+実際のキーワードチェック(図\ref{CheckKeyword}参照)は次の手順で行われます。まずはじめにホスト名によるチェックが成功すると、TAKサーバは0から9,999までの数をランダムに発生し、接続を試みるSTARSクライアントに送出します。次にクライアントはこの数をもとに``自分のターミナル名 要求るキーワード''のメッセージをTAKサーバに送信します。この時の要求されるキーワードは、
+
+(TAKサーバからの数をキーワードの数で割った余り+1)番目のキーワード
+
+です。上記のキーワードリストを例にすると、TAKサーバからの数が``0''の場合は``Keyword1''を``10''の場合は``Keyword3''を自分のターミナル名と共にTAKサーバに送信すればOKです。以下はtelnetを使用してテスト的に接続を試みた例です。この場合TAKサーバはクライアントと同一のコンピュータ上で動作しています。
+
+{\footnotesize
+\begin{verbatim}
+[接続に成功した例]
+%telnet localhost 6057
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+3392
+term1 Keyword1
+System>term1 Ok:
+
+[不正なキーワードで接続に失敗]
+%telnet localhost 6057
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+4767
+term1 Keyword1
+System> Er: Bad node name or key
+Connection closed by foreign host.
+\end{verbatim}
+}
+
+通常クライアントプログラムを作成する場合、これらのキーワードリストはソースファイルに埋め込まれたり、別途キーワードファイルとして登録する事が予想されますが、複数のユーザが使用するコンピュータではキーワードの漏洩に対して注意が必要です。そのようなシステムではTAKサーバのライブラリ用ディレクトリに保存されているキーワードリストファイルも含め、漏洩の危険が無いようにパーミッションの管理を正しく行う事が重要です。
+
+\subsection{ターミナル名+ホスト名によるチェック}
+\label{Security:TerminalnameHostname}
+STARSの接続に関する第三段階のセキュリティーチェックはターミナル名とクライアントの動作するコンピュータのホスト名(場合によってはIPアドレス)のマッチングによるチェックです。
+前述のホスト名によるチェックとキーワードによるチェックは必須ですが、ターミナル名及びホスト名によるチェックの導入はシステムの運用方針により決定する事ができます。
+
+TAKサーバはライブラリ用ディレクトリ内に``接続を要求してきたクライアントのターミナル名''+.allow (例、ターミナル名term1の場合: term1.allow)というマッチングチェック用ファイルがあった場合、ターミナル名とホスト名のマッチングのチェックを行います。たとえばホスト名が``client-host''というコンピュータ上で動作する``term1''というターミナル名のクライアントプログラムが接続を試みてきた場合で、TAKサーバのライブラリ用ディレクトリ内に``term1.allow''というファイルがあった場合は、このファイルの中に``client-host''という名前があるかどうかのチェックが行われます。
+なお、マッチングチェック用ファイルは接続可能ホストのリストファイルと同様、改行で区切られたテキストファイルで、テキストエディタ等で編集や登録を行う事が出来ます。
+
+\subsection{小規模クライアントプログラムへの配慮}
+これまで述べたように、キーワードによるチェックを設ける事で、STARSでは接続に関してある程度のセキュリティーを確保しています。しかし、これらの手順は、クライアントプログラムがシングルユーザ環境でのみ動作する場合や、小規模な機器上で動作する場合には不必要である事があります。\ref{Security:TerminalnameHostname}の``ターミナル名及びホスト名によるチェック''は、これらのようなクライアントプログラムに対して大変有効です。
+
+たとえば、組み込み用の機器で動作する非常に簡単なクライアントプログラムを例に取ります。ここではクライアントのターミナル名が``simpleclient''、ホスト名が``client-host''でシングルユーザのシステムであると仮定します。
+そして、ここで接続の手順を最も簡単にする方法は、TAKサーバのライブラリ用ディレクトリに置かれている``simpleclient.key''の中に含まれているキーワードを``Keyword1''のように1つだけにしてしまう事です。この事により``simpleclient''が接続の際にTAKサーバへ送信するキーワードは、TAKサーバが送信して来るランダムな数に関係なく常に``Keyword1''で良くなります。
+つまり、ここでは``simpleclient''は
+TAKサーバにからのランダムな数字を単に空読みして、常に``simpleclient Keyword1''の文字列をTAKサーバに送れば良い事になります。
+
+この方法によりクライアントプログラムの接続に関する部分が非常に簡単になりますが、たった一つのキーワードが漏洩した時点で、誰でもSTARSに接続できてしまうので大変危険です。
+ここで、大きな役割を果たすのが``ターミナル名及びホスト名によるチェック''機構です。この例の場合はTAKサーバのライブラリ用ディレクトリに``simpleclient.allow''ファイルを作成し、その中に``client-host''のエントリーを作っておけばOKです。その事で``simplecliet''というターミナル名をもつクライアントプログラムは``client-host''以外からは接続不可能となり、たとえキーワードが一つだけであっても、この例の``client-host''はシングルユーザのシステムであるため、接続に対するセキュリティ確保が可能となります。
+
+\section{システムを起動するまで}
+STARSにおいてクライアントプログラムに対する開発言語の制約はありませんが、サーバを動かす場合には必ずPerl(Perl5)が必要です。
+最近ではUNIX系のOSの場合、元々Perlがインストールされている場合が多いので、ターミナル上で``\%perl -v''と入力してみるのも一つの手です。もし、Perlがインストールされていれば以下の様に表示される筈です。
+{\footnotesize
+\begin{verbatim}
+%perl -v
+
+This is perl, version 5.005_03
+ built for i386-freebsd
+
+Copyright 1987-1999, Larry Wall
+
+Perl may be copied only under the terms
+ of either the Artistic License or the
+GNU General Public License, which may be
+ found in the Perl 5.0 source kit.
+
+\end{verbatim}
+}
+なお、WindowsにおいてはActive Perl\footnote{http://www.activestate.com}において動作の確認を行っています。
+
+\subsection{サーバのインストール}
+サーバのインストールは配布パッケージ内の``takaserv''をSTARSサーバ用のディレクトリにコピーし、TAKサーバのライブラリ用ディレクトリ``takaserv-lib''を作成、必要な設定ファイルを作成する事により完了します。なお、詳細はSTARSのパッケージ内に含まれるドキュメントファイルに記されています。
+
+\subsection{設定ファイルの準備}
+\label{StartSystem:ConfigFiles}
+TAKサーバのライブラリ用ディレクトリ``takaserv-lib''配下には、別名情報ファイル、接続可能ホストのリスト、クライアント毎のキーワードリスト、マッチングチェック用ファイルなどのファイルを用意する必要があります。
+
+\subsubsection{別名情報ファイル}
+別名情報ファイルは必要に応じて作成します。ファイル名は``aliases.cfg''であり、テキストエディタ等で作成可能です。
+別名情報ファイルの内容を表示すると以下の様になります。(1行目は表示の為のコマンド)
+
+{\footnotesize
+\begin{verbatim}
+%cat aliases.cfg
+Device1 Alias1
+\end{verbatim}
+}
+これは``Device1''の別名を``Alias1''と設定した例です。実際の名前と別名はスペースで区切って記述します。
+
+\subsubsection{接続可能ホストのリスト}
+接続可能ホストのリストは必須です。ファイル名は``allow.cfg''であり、接続可能なホスト名を改行で区切って列挙しておきます。以下は同一コンピュータ内からのアクセスを許可した場合の例です。(1行目は表示の為のコマンド)
+{\footnotesize
+\begin{verbatim}
+%cat allow.cfg
+localhost
+127.0.0.1
+\end{verbatim}
+}
+\subsubsection{クライアント毎のキーワードリスト}
+クライアント毎のキーワードリストファイルは、接続するクライアント毎のものを必ず用意しなければなりません。ファイル名は``クライアントのターミナル名''+``.key''となります。以下はターミナル名``term1''を持ったクライアントのキーワードファイルの例で、``hello''というたった一つだけのキーワードを設定しています。(1行目は表示の為のコマンド)
+{\footnotesize
+\begin{verbatim}
+%cat term1.key
+kek
+\end{verbatim}
+}
+
+\subsubsection{マッチングチェック用ファイル}
+マッチングチェック用ファイルは必要に応じてクライアント毎のものを用意します。
+以下はターミナル名``term1''を持ったクライアントのマッチングチェック用ファイルで同一コンピュータ内からのアクセスだけを許可した場合の例です。(1行目は表示の為のコマンド)
+{\footnotesize
+\begin{verbatim}
+%cat term1.allow
+localhost
+127.0.0.1
+\end{verbatim}
+}
+
+\subsection{TAKサーバの起動}
+サーバのインストールが完了し設定ファイル等の準備が出来れば、STARSの起動が可能です。起動に際してはTAKサーバのあるディレクトリに移動し、ターミナルから(Windows 2000、XPの場合はコマンドプロンプト)``perl stars''と入力すればOKです。
+なお、UNIX系のOSでは環境によって、``./stars''と入力する事で起動可能(実行のパーミッションが必要)です。
+更にUNIX系のOSでは、
+{\footnotesize
+\begin{verbatim}
+%perl stars &
+\end{verbatim}
+あるいは、
+\begin{verbatim}
+%./stars &
+\end{verbatim}
+}
+と入力する事で、バックグラウンドでの実行が可能となります。
+
+\subsection{クライアントの接続テスト}
+ここではサーバの起動が成功した後のクライアント接続テストについて紹介します。はじめにTAKサーバのライブラリ用ディレクトリには\ref{StartSystem:ConfigFiles}での例題ファイルと同じ物を用意します。次にtelnetを使用して接続のテストを行います。
+以下はUNIX系OSでの例です。
+{\footnotesize
+\begin{verbatim}
+%telnet localhost 6057
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+7592
+term1 kek
+System>term1 Ok:
+System hello
+System>term1 @hello Nice to meet you.
+quit
+System>term1 @quit
+Connection closed by foreign host.
+\end{verbatim}
+}
+
+この例では接続に成功した後、``hello''コマンドをTAKサーバに送りその後``quit''コマンドで接続を切断しています。
+
+\section{クライアントプログラムの例}
+ここでは実際のクライアントプログラムの例を示します。以下は\ref{StartSystem:ConfigFiles}での設定ファイルが用意されてた環境に対応したクライアントプログラムの抜粋で、他のクライアントにメッセージを送るところまでを示しています。
+
+\begin{programlist}
+\item \verb|#! /usr/bin/perl|
+\item \verb|use IO::Socket;|
+\item \verb|$host='localhost';|
+\item \verb|$port=6057;|
+\item \verb?$|=1;?
+\item \verb|## Open TCP/IP socket|
+\item \verb|my $server =|
+\item \verb|  new IO::Socket::INET(PeerAddr=>$host,|
+\item \verb|        PeerPort=>$port, Proto=>'tcp')|
+\item \verb|or die "Socket: $!\n";|
+\item \verb?select($server);$|=1;select(STDOUT);?
+\item \verb|## Get random number from TAK server.|
+\item \verb|$buf=<$server>;|
+\item \verb|## Send terminal name and keyword.|
+\item \verb|print $server "term1 kek\n";|
+\item \verb|## Expect connection will be accepted.|
+\item \verb|$buf=<$server>;chop($buf);s/\r//;|
+\item \verb|unless($buf =~ /Ok:$/){|
+\item \verb|  close($server);|
+\item \verb|  die "$buf\n";|
+\item \verb|}|
+\item \verb|print "$buf\n";|
+\item \verb|print "Please enter destination: ";|
+\item \verb|$ds=<STDIN>;|
+\item \verb|chomp($ds);|
+\item \verb|print "Please enter commands: ";|
+\item \verb|$cm=<STDIN>;|
+\item \verb|chomp($cm);|
+\item \verb|## Send message|
+\item \verb|print $server "$ds $cm $lp\n";|
+\end{programlist}
+
+また、以下は\ref{LibUtl:PerlModule}の``STARS Perlモジュール''を使用したクライアントの例です。このクライアントは他のクライアントプログラムからの``hello''コマンド及び``help''コマンドに反応します。
+
+\begin{programlist}
+\item \verb|#! /usr/bin/perl|
+\item \verb|use strict;|
+\item \verb|use Getopt::Long;|
+\item \verb|use stars;|
+\item \verb|## ToDo: Set parameters here.|
+\item \verb|$::NodeName   = 'testhello';|
+\item \verb|$::Server     = 'localhost';|
+\item \verb|## ToDo: You can set option switchs.|
+\item \verb|## See help 'Getopt::Long'.|
+\item \verb|GetOptions(|
+\item \verb|'node=s' => \$::NodeName,|
+\item \verb|'h'      => \&usage,|
+\item \verb|) or die "Bad switch.\n";|
+\item \verb|if($_ = shift(@ARGV)){$::Server = $_;}|
+\item \verb|## Open Stars server.|
+\item \verb|## $::tak is a Stars object.|
+\item \verb|$::tak=stars->new($::NodeName,$::Server)|
+\item \verb|or die "Could not connect Stars server";|
+\item \verb|$::tak->addcallback(\&handler);|
+\item \verb|stars->Mainloop();|
+\item \verb|exit(1);|
+\item \verb|# Print usage. -------------------------|
+\item \verb|sub usage{|
+\item \verb|## Todo: Please modify help message|
+\item \verb|##   for "-h" option.|
+\item \verb| print "Usage: testhello [-h]".|
+\item \verb|  " [-node MyNodeName] [StarsServer]\n";|
+\item \verb|  exit(0);|
+\item \verb|}|
+\item \verb|# Command handler from Stars server ----|
+\item \verb|sub handler{|
+\item \verb|##ToDo:Please modify handler sub routine.|
+\item \verb|## (The handler sub routine will be|
+\item \verb|## called when client receives a message |
+\item \verb|##from a Stars server.)|
+\item \verb|  my ($from, $to, $mess) = @_;|
+\item \verb|  if($mess eq 'hello'){|
+\item \verb|    $::tak->Send|
+\item \verb|     ("\@hello nice to meet you.",$from);|
+\item \verb|  }elsif($mess eq 'help'){|
+\item \verb|    $::tak->Send("\@help hello", $from);|
+\item \verb|  }elsif($mess =~ /^[_@]/){|
+\item \verb|    return;|
+\item \verb|  }else{|
+\item \verb|    $::tak->Send|
+\item \verb| ("\@$mess Er: Bad command or parameter",|
+\item \verb|     "$from");|
+\item \verb|  }|
+\item \verb|}|
+\end{programlist}
+
+%\section{実際の動作例}
+%STARSは実際に放射光研究施設のビームラインインターロック集中管理システムや放射光%ビームラインの一部などに導入され、安定に動作しています。ここではSTARSの実際の導入%例を示し、システム立ち上げ時のデバッグ方法などについて説明します。
+%\subsection{入退出管理システムでの例}
+
+\section{ライブラリ及びユーティリティ}
+STARSをより使いやすくするために、現在様々な機能やライブラリ、ユーティリティが開発されています。ここではこれらの内、一般的に利用可能であると思われる機能について紹介します。
+
+\subsection{Debuggerの利用}
+\label{LibUtl:Debugger}
+クライアントプログラムを新しく作成した場合や、STARSの動作テストを行う場合、Debugger機能は非常に有効です。STARSにおいて``Debugger''というターミナル名を持つクライアントは特別です。クライアントが``Debugger''と言う名前でTAKサーバに接続すると、TAKサーバはDebuggerに対し、各クライアントに送信するすべてのメッセージのコピーを送出してきます。この機能を使えば各クライアントプログラム間の通信をモニターする事が可能となり、クライアントプログラムのデバッグなどに大いに役立てる事ができます。
+以下はtelnetを用いて``Debugger''機能を使い、モニタリングを行っている例です。
+
+{\footnotesize
+\begin{verbatim}
+%telnet localhost 6057
+Trying 127.0.0.1...
+Connected to localhost.kek.jp.
+Escape character is '^]'.
+6296
+Debugger KEK
+System>Debugger Ok:
+System>Debugger Ok:
+watcher>keyterm07 gettemp
+keyterm07>watcher @gettemp 32.5
+watcher>gatekeeper01 isClose
+gatekeeper01>watcher @isClose 1
+watcher>gatekeeper02 isClose
+gatekeeper02>watcher @isClose 1
+\end{verbatim}
+}
+
+\subsection{STARS Perlモジュール}
+\label{LibUtl:PerlModule}
+STARS Perlモジュールを利用するとPerlでのSTARSクライアントの開発効率が向上します。STARS Perlモジュールを使用するためには、はじめに``stars.pm''をモジュールのサーチパスにコピーするか、クライアントプログラムのカレントディレクトリのコピーします。あるいは、``stars.pm''を適当なディレクトリにコピーした上でクライアントプログラム起動の際に``-I {\it directory}''オプションを指定したり、プログラム内で``use lib;''を使用してもかまいません。
+
+次にクライアントプログラムと同一のディレクトリにキーワードファイル(TAKサーバのライブラリ用ディレクトリ内と同じもの)をコピー、クライアントプログラム内に``use stars;''の一文を付け加える事でSTARS Perlモジュールが利用可能となります。
+
+以下は実際にSTARS Perlモジュールを使用したクライアントプログラムの抜粋です。
+
+\begin{programlist}
+\item \verb|use stars;|
+\item \verb|$svr = stars->new('term1') or die;|
+\item \verb|print $svr->act('System hello')."\n";|
+\end{programlist}
+
+1行目ではSTARS Perlモジュールの利用を宣言、2行目でSTARSオブジェクトを作成、TAKサーバに接続を行っています。この時、2つめ及び3つめの引数は省略可能で、それぞれ``localhost''、``ターミナル名''+``.key''がデフォルトとなります。ここでキーワードチェックに関する手順はSTARS Perlモジュールが自動的に行ってくれます。
+3行目ではTAKサーバにhelloコマンドを送出した後、Reply messageを受信、表示を行っています。
+なお、STARS Perlモジュール使用法の詳細については、付属のドキュメントファイルに記されています。
+
+\subsection{STARS ActiveX Control}
+Windows用のSTARS ActiveX ControlをVisual Basic等で利用するとWindowsでのSTARSクライアントプログラムの作成が容易になります。STARS ActiveX Controlのインストールは単にインストーラ(パッケージ内のsetup.exe)を起動するだけでOKです。
+インストールが終了した後はVisual Basicなら、プログラム作成の際に[プロジェクト]→[コンポーネント]で``StarsInterface''にチェックをした後、Form上にStarsInterfaceのアイコンを配置します。STARS Perlモジュール同様キーワードファイルをクライアントプログラムと同じディレクトリ内に用意(デリミタに注意: CR+LF)し、プログラム内で``StarsControl1.Connect''のようにConnectメソッドを呼び出すだけで利用可能です。
+
+\subsection{キーワード発生プログラム}
+STARSにおいてクライアント毎のキーワードファイルは単純なテキストファイルです。そのためキーワードファイルは適当なテキストエディタで編集を行う事が出来ますが、数十や数百のキーワードを作るとなると容易な事ではありません。STARSに付属のキーワード発生プログラム(createkey)を使用すると、ランダムなキーワードを任意の数含んだキーワードファイルを作成する事ができます。但し、本プログラムはPerlで記述されているため、予めPerlが実行可能でなければなりません。
+
+以下はキーワード発生プログラム``createkey''をカレントディレクトリにコピーして``perl createkey キーワードの数''とした場合の例です。
+
+{\footnotesize
+\begin{verbatim}
+%perl createkey 5
+Wyghv'U2GZ
+Et3|aXo;crAv
+2-NJ6EVs>UnUx44-i
+:&nPjW2D%~ja=\}M
+W;ln?h/gJfn
+\end{verbatim}
+}
+
+そしてここで実際のキーワードファイルに出力するには、
+{\footnotesize
+\begin{verbatim}
+%perl createkey 100 > term1.key
+\end{verbatim}
+}
+のようにファイルにリダイレクトすればOKです。
+
+\subsection{Perlクライアント作成ウィザード}
+Perlでクライアントプログラムを作成する場合用にPerlクライアント作成ウィザードが用意されています。利用にあたっては予めPerlが実行可能となっていなければなりません。
+実際の利用は、Perlクライアント作成ウィザードのディレクトリに移動してから``perl newclient.pl''と入力します。以下はFreeBSDにおいてterm1というターミナル名のクライアントプログラムを作成する場合の例です。
+
+{\footnotesize
+\begin{verbatim}
+%perl newclient.pl
+Make a new Stars client program in Perl.
+Please enter client name.
+    (null = cancel) >term1
+Please enter stars server.
+    (null = cancel) >localhost
+Please enter directory for term1.
+    (null = cancel) >/home/kosuge/term1
+Create /home/kosuge/term1/stars.pm.
+Create /home/kosuge/term1/term1.
+Create key > /home/kosuge/term1/term1.key.
+Done.
+Please send "/home/kosuge/term1/term1.key"
+ to localhost
+ with ftp (asc mode).
+Hit Enter key.
+\end{verbatim}
+}
+
+この時キーワードファイル(この場合はterm1.key)が同時に作成されますので、このファイルをTAKサーバのライブラリ用ディレクトリにftp等を使って転送します。WindowsとUNIX系のシステムではテキストファイルのデリミタが違います、ftp使用時にはasciiモードを使用するとよいでしょう。
+
+以上のようにPerl用クライアント作成ウィザードを使用すると``hello''及び``help''コマンドのみを備えたクライアントプログラムが作成されますので、後は適宜ソースファイル内の指示に従ってプログラムを書き換えればOKです。
+
+\subsection{Visual Basicクライアント作成ウィザード}
+Visual Basicによりクライアントプログラムを作成するために、Visual Basicクライアント作成ウィザードが用意されています。利用にあたっては予めPerlが実行可能となっていなければなりません。また、予めSTARS ActiveX Controlもインストールされていなければなりません。
+実際の利用はVisual Basicクライアント作成ウィザードのディレクトリに移動してから``perl newclient.pl''と入力します。以下はWindows2000においてterm1というターミナル名のクライアントプログラムを作成する場合の例です。
+
+{\footnotesize
+\begin{verbatim}
+Make a new Stars client program in VB.
+Please enter ClientName.
+     (null = cancel) >term1
+Please enter StarsServer.
+     (null = cancel) >localhost
+Please enter directory for term1.
+     (null = cancel) >d:\term1
+Create d:\term1/Form1.frm.
+Create d:\term1/term1.vbp.
+Create d:\term1/term1.vbw.
+Create key > d:\term1/term1.key.
+Done.
+Please send "d:\term1/term1.key"
+ to localhost
+ with ftp (asc mode).
+Hit Enter key.
+\end{verbatim}
+}
+
+この時キーワードファイル(この場合はterm1.key)が同時に作成されますので、Perl用クライアント作成ウィザードと同様に、このファイルをTAKサーバのライブラリ用ディレクトリにftp等を使って転送します。また、TAKサーバがUNIX系のシステムで動作している場合はテキストファイルのデリミタが違います、ftp使用時にはasciiモードを使用するとよいでしょう。
+
+\section{STARSの今後}
+これまで述べた通りSTARSは小規模なシステム向けに設計された非常に単純なシステムです。また、様々なプラットフォーム上で動作するなど、便利な点が多いのも特徴です。
+現在STARSは放射光研究施設のビームラインインターロック集中管理システム、実験ホール入退室管理システム、ビームライン制御の一部等に導入され、安定に動作しています。
+
+STARSは現在も開発が進行しており、様々な開発項目の検討がなされています。以下は現在進行中の開発項目です。
+
+\begin{itemize}
+\item タイムアウト処理: 現在、Command messageを送出しReply messageが届かなかった場合のタイムアウト処理は特に行っていないため、クライアントプログラム側で処理するようになっています。しかし、このCommand messageの処理がCommand messageを送出したクライアントプログラムの予想していたものより長い場合には、タイムアウト処理を行った後にReply messageが帰ってきてしまうという不具合が発生します。STARSの次期バージョンではサーバ自体にタイムアウト処理の機能をインプリメントします。
+
+\item マルチスレッド化: 今のところTAKサーバはシングルスレッドで動作しており、接続するクライアントプログラムが増加しメッセージ転送が増えると、そのまま処理速度に影響を受けてしまう。この対策としてマルチスレッド化などの検討を行っています。
+
+\item バイナリー転送: STARSの大きな特徴としてテキストーベースでのメッセージの送受により、通信が簡単である事が挙げられますが、バイナリーデータの授受に関する要求も多いのも現実です。今後この要求を満たすためにバイナリーデータの転送に関する機能を設ける予定です。
+
+\item XMLメッセージ転送: XMLの普及に伴いSTARSでXMLメッセージを扱う事が検討されています。そのため現在``XML''、``@XML''、``\_XML''のCommand message、Reply message、Event messageは予約語となっています。
+\end{itemize}
+
+\begin{thebibliography}{9}   % Use for  1-9  references
+%\begin{thebibliography}{99} % Use for 10-99 references
+
+\bibitem{Control:MiconandFreeBSD}
+小菅隆, 久積啓一, ワンボードマイコン及びFreeBSDマシンを使用した遠隔電圧測定システム, 平成9年度核融合科学研究所技術研究会, 1997
+
+\bibitem{Control:LowCostControl}
+Takashi Kosuge, and Yoshinori Uchida, Low-Cost Beamline Control System, PCaPAC'99, KEK, 1999
+
+\bibitem{COACK:Recent}
+I.ABE, et al., RECENT STATUS OF COACK AND IT'S FUNCTIONS,  PCaPAC2000 DESY, 2000
+
+\bibitem{COACK:BLIS}
+Takashi Kosuge, et al., COACK Application for the Beamline Interlock System at the Photon Factory, PCaPAC 2000, DESY, 2000
+
+\end{thebibliography}
+
+\end{document}

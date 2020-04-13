@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<Message Mtype="Execute" IOC="#IOCNAME#">
+   <Command TimeStamp="#TIME#" StopAnswerBack="False" EventID="0" IsCallback="True">
+      <FromDevice>
+         <NodeDefinition ID="#TERMFROM#" ClientWinNo="#TERMFROM#-W1"/>
+      </FromDevice>
+      <ToDevice DeviceID="#DEVICETO#.#NODETO#">
+         <NodeDefinition ID="*"/>
+         <DeviceMethod MethodID="FlgOff"/>
+      </ToDevice>
+   </Command>
+</Message>

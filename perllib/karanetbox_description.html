@@ -1,0 +1,312 @@
+<html>
+<head>
+<meta HTTP-EQUIV="Content-Type" content="text/html; charset=shift_jis">
+<title>KARACRIX NetBox Perl module</title>
+<style>
+<!--
+p.usage{font-style:italic;}
+address{text-align:right}
+-->
+</style>
+</head>
+
+<body>
+<h1>KARACRIX NetBox Perl module</h1>
+<address>2009-07-08 Takashi Kosuge</address>
+
+<hr></hr>
+<h2>概要</h2>
+<p>
+KARACRIX/NetBox-E100-BK1682Aはシリアルポートあるいはネットワークを使用して16のパラレル入力、8つのリレー出力、2つのトランジスタ出力をコントロールできる機器です。KARACRIX NetBox Perl moduleはこのKARACRIX/NetBox-E100-BK1682AをPerlからネットワークを使用し簡単に利用出来るようにするためのPerlモジュールです。なお、MD5チェックサム及びシリアルポートからの制御には対応しておりません。
+</p>
+<p>※このソフトウエアはFreeかつ無保証です。</p>
+
+<hr></hr>
+<h2>インストール及び使用</h2>
+<p>
+karanetbox.pmを作成するアプリケーションのあるディレクトリまたは@INCのパスの通ったディレクトリにコピーします。
+その後アプリケーションプログラムの頭のほうで<br>
+use karanetbox;<br>
+とすれば利用が可能となります。
+</p>
+
+<h4>オブジェクトの作成と接続</h4>
+use karanetbox;<br>
+$kara = karanetbox-&gt;new('192.168.0.200', 20000, 20000, 20001) or die $!;<br>
+$kara = karanetbox-&gt;new('192.168.0.200', 20000, 'Auto', 20001) or die $!;<br>
+<br>
+
+<h4>コマンドの直接出力</h4>
+#Send a command directly.<br>
+$rt = $kara-&gt;SendCommand(&quot;hello&quot;);<br>
+print &quot;SendCommand: $rt\n&quot;;<br>
+<br>
+
+<h4>helloコマンドの実行</h4>
+#Send Hello command.<br>
+$rt = $kara-&gt;Hello();<br>
+print &quot;Hello: $rt\n&quot;;<br>
+<br>
+
+<h4>接点入力状態読み出し</h4>
+#Get status from switch input.<br>
+$rt = $kara-&gt;GetSw();<br>
+print &quot;GetSw with scaler:$rt\n&quot;;<br>
+@rt = $kara-&gt;GetSw();<br>
+print &quot;GetSw with list: &quot;.join(&quot;, &quot;, @rt). &quot;\n&quot;;<br>
+<br>
+
+<h4>リレー出力のセットと状態の取得</h4>
+#Set relay output and get status.<br>
+$buf = '10101010';<br>
+$rt = $kara-&gt;SetRy($buf);<br>
+print &quot;SetRy: $buf -&gt; Rcv: $rt\n&quot;;<br>
+<br>
+$rt = $kara-&gt;GetRy();<br>
+print &quot;GetRy with scaler:$rt\n&quot;;<br>
+<br>
+
+<h4>トランジスタ出力のセットと状態の取得</h4>
+#Set transistor output and get status.<br>
+$buf = '11';<br>
+$rt = $kara-&gt;SetTr($buf);<br>
+print &quot;SetTr: $buf -&gt; Rcv: $rt\n&quot;;<br>
+<br>
+$rt = $kara-&gt;GetTr();<br>
+print &quot;GetTr with scaler:$rt\n&quot;;<br>
+<br>
+
+<h4>カウンター(接点入力)値の取得とプリセット</h4>
+#Get counter values and preset values on switch inputs.<br>
+@rt = $kara-&gt;GetCnt();<br>
+print &quot;GetCnt: &quot;.join(&quot;, &quot;, @rt). &quot;\n&quot;;<br>
+<br>
+for($buf = 1; $buf &lt;= 16; $buf++){<br>
+	$rt = $kara-&gt;PresetCnt($buf, $buf);<br>
+	print &quot;PresetCnt: ch=$buf, value=$buf -&gt; Rcv: $rt\n&quot;;<br>
+}<br>
+<br>
+
+<h4>カウンター(接点入力)値の全クリア</h4>
+$rt = $kara-&gt;ResetAllCnt();<br>
+print &quot;ResetAllCnt: $rt\n&quot;;<br>
+<br>
+
+<h4>Di On Time Holdの取得</h4>
+#Get &quot;Di On Time Hold&quot;.<br>
+@rt = $kara-&gt;GetTim();<br>
+print &quot;GetTim: &quot;.join(&quot;, &quot;, @rt). &quot;\n&quot;;<br>
+<br>
+
+<h4>Eventの処理</h4>
+#Waiting event and read.<br>
+print &quot;Waiting event:\n&quot;;<br>
+while(1){<br>
+	unless(@rt = $kara-&gt;ReceiveEvent()){next;}<br>
+	print &quot;evt: $rt[0] $rt[1]\n&quot;;<br>
+}<br>
+
+
+<hr></hr>
+<h2>Methods</h2>
+<br>
+<h3>new</h3>
+<p class="usage">
+Usage: $kara = karanetbox-&gt;new('Host' [[[, CmdPort], LocalCmdPort], LocalEventPort]);
+</p>
+
+<p>
+オブジェクトのリファレンスが返されます。また、失敗するとundefが返されます。
+</p>
+<dl>
+<dt>Host</dd>
+<dd>KARACRIXのホスト名あるいはIPアドレスを指定します。省略すると192.168.0.200が使用されます。</dd>
+
+<dt>CmdPort</dt>
+<dd>KARACRIXのコマンド用UDPポート番号を設定します。省略すると20000が使用されます。</dd>
+
+<dt>LocalCmdPort</dt>
+<dd>ローカル側(パソコン側)で使用するUDPポートの番号を指定します。省略するとCmdPortと同じ番号が使用されます。また、'Auto'と指定すると、自動で割り振られます。</dd>
+
+<dt>LocalEventPort</dt>
+<dd>Eventを受信する際のローカル側のUDPポートの番号を指定します。省略するとEventを受信は無効になります。</dd>
+</dl>
+<br>
+
+<h3>SendCommand</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;SendCommand(Command);
+</p>
+<p>
+KARACRIXに直接コマンドを送信します。KARACRIXからのコマンドレスポンスがそのまま(但しデリミタは削除)返されます。
+</p>
+
+<dl>
+<dt>Command</dt>
+<dd>
+KARACRIXに送信するコマンドをセットします。
+</dd>
+</dl>
+<br>
+
+<h3>Hello</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;Hello();
+</p>
+<p>
+KARACRIXにHELLOコマンドを送出します。KARACRIXのシステム情報が返されます。通信エラー時はundefが返されます。
+</p>
+
+<dl>
+<dt>システム情報</dt>
+<dd>
+以下のようなシステム情報が返されます。詳細についてはKARACRIXのコマンドリファレンスのHELLOコマンドを参照してください。<br>
+HELLO BK1682A v1.01 MyCpuName 192.168.11.155 0004b901034e H 410911.353
+</dd>
+</dl>
+<br>
+<h3>GetSw</h3>
+<p class="usage">
+Usage: $rt | @rt = $kara-&gt;GetSw();
+</p>
+<p>
+接点入力の状態を取得します。スカラーコンテキストではそれぞれの状態を示す文字列(例: 1010111101010000)が、リストコンテキストではそれぞれの状態を示す文字列のリストが返されます。1は接点がショートしている事を、0は接点がオープンであることを示します。
+</p>
+<br>
+
+<h3>GetRy</h3>
+<p class="usage">
+Usage: $rt | @rt = $kara-&gt;GetRy();
+</p>
+<p>
+リレー出力の出力情報を取得します。スカラーコンテキストではそれぞれの状態を示す文字列(例: 10101111)が、リストコンテキストではそれぞれの状態を示す文字列のリストが返されます。1は接点がショートしている事を、0は接点がオープンであることを示します。 
+</p>
+<br>
+
+<h3>SetRy</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;SetRy(OutData);
+</p>
+<p>
+リレー出力の状態をセットします。成功した場合には文字列&quot;DOUT&quot;を返します。 
+</p>
+
+<dl>
+<dt>OutData</dt>
+<dd>
+出力するデータを&quot;0&quot;, &quot;1&quot;, &quot;-&quot;で指定します。 &quot;0&quot;はOFF(リレーオープン)を&quot;1&quot;はON(リレーショート)、&quot;-&quot;は変更しないことを示します。 (例: 10101010 -&gt; on,off,on,off,on,off,on,off)<br>
+</dd>
+</dl>
+<br>
+
+<h3>GetTr</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;GetTr();
+</p>
+<p>
+トランジスタ出力の出力情報を取得します。スカラーコンテキストではそれぞれの状態を示す文字列(例: 10)が、リストコンテキストではそれぞれの状態を示す文字列のリストが返されます。1は接点がショートしている事を、0は接点がオープンであることを示します。 
+</p>
+<br>
+
+<h3>SetTr</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;SetTr(OutData);
+</p>
+<p>
+トランジスタ出力の状態をセットします。成功した場合には文字列&quot;DOUT2&quot;を返します。 
+</p>
+
+<dl>
+<dt>OutData</dt>
+<dd>
+出力するデータを&quot;0&quot;, &quot;1&quot;, &quot;-&quot;で指定します。 &quot;0&quot;はOFF(トランジスタオープン)を&quot;1&quot;はON(トランジスタショート)、&quot;-&quot;は変更しないことを示します。 (例: 10 -&gt; on,off)<br>
+</dd>
+</dl>
+<br>
+
+<h3>GetCnt</h3>
+<p class="usage">
+Usage: @rt  = $kara-&gt;GetCnt();
+</p>
+<p>
+接点入力 1ch～16ch のカウンタ値のリストを取得します。
+</p>
+<br>
+
+<h3>PresetCnt</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;PresetCnt(Channel, Value);
+</p>
+<p>
+カウンター値をチャンネル毎にセットします。成功した場合には文字列&quot;DI-CNT-SET&quot;を返します。
+</p>
+
+<dl>
+<dt>Channel</dt>
+<dd>
+接点入力のチャンネル(1～16)を指定します。
+</dd>
+<dt>Value</dt>
+<dd>
+プリセットする値を指定します。
+</dd>
+</dl>
+<br>
+
+<h3>ResetAllCnt</h3>
+<p class="usage">
+Usage: $rt  = $kara-&gt;ResetAllCnt();
+</p>
+<p>
+接点入力のカウンター値をすべて&quot;0&quot;にリセットします。成功した場合には文字列&quot;DI-CNT-ALL0-RESET&quot;を返します。
+</p>
+
+<h3>GetTim</h3>
+<p class="usage">
+Usage: @rt  = $kara-&gt;GetTim();
+</p>
+<p>
+Di On Time Hold の値のリストを取得します。
+</p>
+<dl>
+<dt></dt>
+<dd>
+</dd>
+</dl>
+<br>
+
+<h3>ReceiveEvent</h3>
+<p class="usage">
+Usage: @rt  = $kara-&gt;ReceiveEvent([TimeOut]);
+</p>
+<p>
+Eventデータを受け取り、変化情報を示すリスト<sup>※</sup>を返します。ReceiveEventが呼ばれてからTimeOutだけEventが送られてこない場合は空のリストを返します。なお、Event機能を有効にするためにはあらかじめKARACRIXの設定と、オブジェクトを作成する際に LocalEventPort を指定しておく必要があります。
+</p>
+<p><font size="-1">
+※変化情報: 変化情報はリストで返される。1つ目は変化後の値、2つ目は変化したビットを示す値(旧データと新データのXORをとった値)。
+</font></p>
+
+<dl>
+<dt>TimeOut</dt>
+<dd>
+Eventを待つ時間をTimeOutで設定します。省略するとデフォルトのタイムアウト値(3秒)が使用されます。
+</dd>
+<dt>イベントの使用例</dt>
+<dd>
+#Waiting event and read.<br>
+print &quot;Waiting event:\n&quot;;<br>
+while(1){<br>
+	unless(@rt = $kara-&gt;ReceiveEvent()){next;}<br>
+	print &quot;evt: $rt[0] $rt[1]\n&quot;;<br>
+}<br>
+</dd>
+</dl>
+<br>
+
+
+<br><br>
+
+<hr></hr>
+<address>Takashi Kosuge</address>
+</body>
+</html>

@@ -1,0 +1,334 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use Symbol;
+use stars;
+use nportserv;
+#################################################################
+# rs232br
+$::Version = '$Id: rs232br 01 2014-07-10 00:00:00Z kosuge $';
+#
+$::Version =~ s/\$//g;
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'rs232br';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'v'      => \$::Verbose,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+
+require 'config.pl';
+
+
+## Prepare RS connections. ###########################
+unless($::ConsoleDelimiter){
+	unless($::TelnetNode){
+		$::ConsoleDelimiter = "\n";
+	}else{
+		$::ConsoleDelimiter = "\r";
+	}
+}
+my $fh;
+$::Rs = nportserv->new($::NPORT_HOST, $::NPORT_PORT) or die "Could not connect RS232 Device.";
+$fh = $::Rs->GetSIOHandle();
+
+
+## Process Online Script
+if($::Script){proc_script();}
+
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+
+$::tak->addcallback(\&handler);
+$::tak->addcallback(\&s_handler, $fh, 'Lf');
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h] [-d] [-node MyNodeName] [StarsServer]
+       -h   Show this help.
+       -d   Run with debug mode.
+       -v   Run with verbose mode.
+__USAGE__
+
+exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	my $rt;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+	if($to =~ s/^$::NodeName\.(.*)/$1/){
+		if($::TelnetNode){
+			$::Rs->OutSIO("$::NodeName.$from>$to $mess\n");
+			if($::Debug){
+				print "RS232 SND: $::NodeName.$from>$to $mess\n";
+			}
+		}else{
+			$::Rs->OutSIO("$from>$to $mess\n");
+			if($::Debug){
+				print "RS232 SND: $from>$to $mess\n";
+			}
+		}
+		return;
+	}
+
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess eq 'help'){
+		$rt="help hello getversion";
+		if($::TelnetNode){$rt .= " quit";}
+	}elsif($mess eq 'quit' and $::TelnetNode){
+		$::Rs->OutSIO("$::DisconnectionMessage\n");
+		if($::Debug){
+			print "RS232 SND: $::DisconnectionMessage\n";
+		}
+		$rt='Ok:';
+	}elsif($mess eq 'getversion'){
+		$rt=$::Version;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+
+sub s_handler{
+	my $mess = shift;
+	my $from;
+	my $to;
+	my $rt;
+
+	unless($mess =~ s/^([a-zA-Z_0-9.\-]+)>([a-zA-Z_0-9.\-]+)\s*//){
+		if($::Debug){
+			print "RS232 RCV: $from>$to $mess\n";
+		}
+		if($::TelnetNode and $mess =~ /$::DetectDisconnection/){
+			die $mess;
+		}
+		return;
+	}
+	$from = $1;
+	$to = $2;
+	$mess =~ s/(\r|\n)//g;
+
+	if($::Debug){
+		print "RS232 RCV: $from>$to $mess\n";
+	}
+
+	if($::TelnetNode){
+		if($to eq $::TelnetNode){
+			if($mess eq 'hello'){
+				$rt="nice to meet you.";
+			}elsif($mess eq 'help'){
+				$rt="help hello getversion";
+			}elsif($mess eq 'getversion'){
+				$rt=$::Version;
+			}elsif($mess =~ /^[_@]/){
+				return;
+			}else{
+				$::Error = "Bad command or parameter.";
+				$rt = '';
+			}
+			if($rt eq ''){
+				$::Rs->OutSIO("$to>$from \@$mess Er: $::Error\n");
+				if($::Debug){
+					print "RS232 SND: $to>$from \@$mess Er: $::Error\n";
+				}
+			}else{
+				$::Rs->OutSIO("$to>$from \@$mess $rt\n");
+				if($::Debug){
+					print "RS232 SND: $to>$from \@$mess $rt\n";
+				}
+			}
+			return;
+		}
+		$to =~ s/^$::TelnetNode\.//;
+	}
+
+	$from = "$::NodeName.$from";
+	$::tak->Send("$from>$to $mess");
+	if($::Debug){
+		print "STARS SND: $from>$to $mess\n";
+	}
+
+}
+
+
+sub proc_script{
+	$::Script =~ s/\r//g;
+	my @script = split(/\n/, $::Script);
+	my $prc;
+	my $cmd;
+	my $val;
+	my $rt;
+
+	if($::Debug or $::Verbose){
+		print "== Start script ==\n";
+	}
+	for $prc (@script){
+		unless($prc =~ /^([^:]+):(.*)/){die "Script syntax error: $prc";}
+		$cmd = $1;
+		$val = $2;
+		if($::Debug or $::Verbose){
+			print "$cmd:$val\n";
+		}
+		if($cmd eq 'SEND'){
+			$::Rs->OutSIO("$val$::ConsoleDelimiter");
+			$rt = 'Ok:';
+		}elsif($cmd eq 'SENDB'){
+			$rt = script_sendb($val);
+		}elsif($cmd eq 'KEYW'){
+			$rt = script_key($::NodeName);
+		}elsif($cmd eq 'WAIT'){
+			$rt = script_wait($val);
+		}elsif($cmd eq 'SLEEP'){
+			$rt = select(undef,undef,undef,$val);
+		}
+		if($::Debug or $::Verbose){
+			if($rt eq ''){
+				print "$::Error\n";
+			}else{
+				print "=>$rt\n";
+			}
+		}
+	}
+	if($::Debug or $::Verbose){
+		print "== End script ==\n";
+	}
+}
+
+sub script_sendb{
+	my $buf = shift;
+	my @sbuf = split(/\s+/, $buf);
+	my $lp;
+	for $lp (@sbuf){
+		$lp =~ s/^0x(.+)/hex($1)/e;
+	}
+	if($::Debug){
+		print "RS232 SNB: ".join(", ", @sbuf)."\n";
+	}
+	$buf = pack("C*", @sbuf);
+	$::Rs->OutSIO($buf);
+	return('Ok:');
+}
+
+sub script_key{
+	my $nodename = shift;	my $hd = gensym();
+	my $keynumber;
+	my $kcount = 0;
+	my $rt;
+	my $lp;
+
+#GetNumber
+	$keynumber = script_wait('^\d+');
+	unless($keynumber =~ /^\d+/){
+		$::Error = "Could not get number from STARS Server.: $keynumber";
+		return('');
+	}
+
+	if($::Debug){
+		print "SCRIPT RCV: $keynumber\n";
+	}
+
+	unless(open($hd, "$nodename.key")){
+		close($fh);
+		$::Error = "Could not open keyfile $nodename.key, $!";
+		return('');
+	}
+
+	while(<$hd>){$kcount++;}
+	unless($kcount){close($hd); close($fh); $::Error="Key list not found"; return('');}
+
+	$kcount = $keynumber % $kcount;
+	seek($hd, 0, 0);
+	for($lp=0; $lp < $kcount; $lp++){$_=<$hd>;}
+	$_=<$hd>;
+	chomp;s/\r//;
+	close($hd);
+
+#---------------------
+	if($::Debug){
+		print "SCRIPT SND: $nodename $_\n";
+	}
+
+	$::Rs->OutSIO("$nodename $_$::ConsoleDelimiter");
+
+	$rt = $::Rs->InSIO(3, $::ConsoleDelimiter);
+	chomp($rt);$rt=~s/\r//;
+
+	$rt = script_wait('Ok:');
+	unless($rt =~ /Ok:/){
+		$::Error = "Could not connect to STARS server.: $rt";
+		return('');
+	}
+	return($rt);
+}
+
+
+sub script_wait{
+	my $wstr = shift;
+	my $rt;
+	while(1){
+		$rt = $::Rs->InSIO(10, "\n");
+		if($::Debug or $::Verbose){
+			print "Waiting $wstr: $rt\n";
+		}
+		if($rt eq ''){
+			$::Error = "Timeout\n";
+			return('');
+		}
+		if($rt =~ /$wstr/){
+			return($rt);
+		}
+	}
+}

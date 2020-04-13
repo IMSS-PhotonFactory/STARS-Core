@@ -1,0 +1,292 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use Tk;
+use Tk::Table;
+
+#################################################################
+# config autochangespeed of pm16c04-X
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName     = 'pm16cconfigXACS'; #Default node name.
+$::Server       = 'localhost';       #Default stars server.
+$::mt           = "0";               #Default motor number
+$::Cntl         = 'pm16c4x';         #Default controller.
+$::NumberOfRows = 128;				 #Default Number of Display rows
+#################################################################
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'node=s' => \$::NodeName,
+'c=s'    => \$::Cntl,
+'row=s'  => \$::NumberOfRows,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+if(($::NumberOfRows=~/[^\d]/) or $::NumberOfRows>128 or $::NumberOfRows < 1){
+	$::NumberOfRows= 128;
+}
+
+if($_ = shift(@ARGV)){$::mt     = $_;}
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+# Open Stars server. $::tak is a Stars object.
+	$::tak = stars->new($::NodeName, $::Server)
+		or die "Could not connect Stars server";
+
+## Check PM16C-04X or not
+	my $buf = $::tak->act("$::Cntl GetRomVersion");
+	(undef,undef,$buf) = split(/\s+/, $buf, 3);
+	unless($buf=~/PM16C-04X/){ die "This is not PM16C-04X.";}
+
+	my $root = MainWindow->new();
+	# widget creation 
+	$root->title("Setting AutoChangeSpeed of $::Cntl");
+
+#	my $m = $root->Menu( -type => 'menubar' );
+#	$root->configure( -menu => $m );
+#	my $m1 = $m->cascade(-label => 'ShowValidAccRateList',  -under => 0, -tearoff => 0, -command => \&ShowValidAccRateList);
+#	$m1->command(-label => 'load Configuration From File', -under => 0, -command => \&load_file);
+#	$m1->separator;
+#	$m1->command(-label => 'Save Configuration To File'  , -under => 0, -command => \&save2file);
+#	my $m2 = $m->cascade(-label => 'SpeedSelected',  -under => 0, -tearoff => 0);
+#	$::SelectSpeed='';
+#	$m2->radiobutton(-label=>'High',-value=>"H",-variable=>\$::SelectSpeed,-command=>\&select_Speed);
+#	$m2->radiobutton(-label=>'Middle',-value=>"M",-variable=>\$::SelectSpeed,-command=>\&select_Speed);
+#	$m2->radiobutton(-label=>'Low',-value=>"L",-variable=>\$::SelectSpeed,-command => \&select_Speed);
+
+	my($frame_0) = $root->Frame();
+
+	my($tableFrame) = $root->Frame(-borderwidth => 0, -relief => 'flat')
+		->pack(-expand => 'yes',-fill => 'both');
+	my($table) = $tableFrame->Table(-columns => 5, -rows => 9, -fixedrows => 1,
+		 -scrollbars => 'e', -borderwidth => 1, -relief => 'groove', -takefocus=>0);
+
+	my $tmp;
+	my $i;
+	foreach $i ( 0 .. 4 )
+	{
+		$tmp =$table->Label(-text => qw(NUM POINT PVAL FUNC FVAL)[$i],
+			 -padx => 2, -anchor => 'center', -width => qw(5 5 5 5 5)[$i],
+			 -borderwidth => 1, -relief =>'flat');
+		$table->put( 0, $i, $tmp );
+	}
+
+	@::PNTBAK=();
+	@::FNCBAK=();
+	@::JJJBAK=();
+	@::LLLBAK=();
+
+	@::PNT=();
+	@::FNC=();
+	@::JJJ=();
+	@::LLL=();
+
+	pclearbuf();
+
+	foreach $i ( 0 .. $::NumberOfRows-1 )
+	{
+		$tmp =$table->Label(-text => sprintf("%03d",$i),
+			-padx => 2, -anchor => 'center', -width=>3,
+			-borderwidth => 1, -relief =>'flat');
+		$table->put( $i+1, 0, $tmp );
+
+		$tmp = $table->Optionmenu(
+			-options => ["ADD","TIM","ACC","DEC","END"],
+			-textvariable => \$::PNT[$i], -takefocus=>1, -background => 'gray'
+		);
+		$table->put( $i+1, 1, $tmp );
+
+		$tmp =$table->Entry(-textvariable => \$::JJJ[$i],
+			-justify => 'right', -background => 'white', -relief =>'groove',
+			-width=>11, -takefocus=>1
+		);
+		$table->put( $i+1, 2, $tmp );
+
+		$tmp = $table->Optionmenu(
+			-options => ["SPD","RTE","SLW","FST","NOP",""],
+			-textvariable => \$::FNC[$i], -takefocus=>1, -background => 'gray'
+		);
+		$table->put( $i+1, 3, $tmp );
+	
+		$tmp =$table->Entry(-textvariable => \$::LLL[$i],
+			-justify => 'right', -background => 'white', -relief =>'groove',
+			-width=>7, -takefocus=>1
+		);
+		$table->put( $i+1, 4, $tmp );
+	}
+	$table->pack( -expand => 'yes', -fill => 'both');
+
+	my($frame_2) = $root->Frame ();
+
+	my($frame_3) = $root->Frame ();
+
+	my($label_0)= $root->Label (-text => 'Motor No./Name',);
+	my($option_1)= $root->Optionmenu(
+		-options => [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+		-textvariable => \$::mt,
+		-command => sub{pread();}
+	);
+	$::label_01 = $root->Label(-text => 'Name');
+
+	my($button_1) = $root->Button(-text => 'Apply');
+	my($button_2) = $root->Button(-text => 'Reset');
+	$button_1->configure(-command => \&ApplyButton);
+	$button_2->configure(-command => \&ResetButton);
+
+	$::label_msg = $root->Label(-text => ' ', -foreground=>'red');
+
+	$frame_0->grid(-in => $root, -column => '1', -row => '1');
+	$label_0->grid(-in => $frame_0, -column => '1', -row => '1');
+	$option_1->grid(-in => $frame_0, -column => '2', -row => '1');
+	$::label_01->grid(-in => $frame_0,-column => '3',-row => '1');
+
+	$tableFrame->grid(-in => $root, -column => '1', -row => '2');
+
+	$frame_2->grid(-in => $root,-column => '1',-row => '3');
+	$button_1->grid(-in => $frame_2,-column => '1',-row => '1');
+	$button_2->grid(-in => $frame_2,-column => '2',-row => '1');
+	$frame_2->gridColumnconfigure(1, -weight => 0, -minsize => 60);
+	$frame_2->gridColumnconfigure(2, -weight => 0, -minsize => 60);
+
+
+	$frame_3->grid(-in => $root,-column => '1',-row => '4');
+	$::label_msg->grid(-in => $frame_3,-column => '1',-row => '1');
+
+	pread();
+	MainLoop();
+	exit(1);
+
+sub ApplyButton{
+if(pwrite()){pread();}
+}
+
+sub ResetButton{
+pread();
+}
+
+sub pclearbuf{
+	my $i;
+	my $buf;
+
+	for($i=0;$i<$::NumberOfRows;$i++){
+		$::PNT[$i]="";
+		$::JJJ[$i]="";
+		$::FNC[$i]="";
+		$::LLL[$i]="";
+		$::PNTBAK[$i]=$::PNT[$i];
+		$::JJJBAK[$i]=$::JJJ[$i];
+		$::FNCBAK[$i]=$::FNC[$i];
+		$::LLLBAK[$i]=$::LLL[$i];
+	}
+	return;
+}
+
+sub pread{
+	my $i;
+	my $buf;
+	my($srate,$erate);
+
+	pclearbuf();
+	$::label_msg->configure('-text' => " ");
+	if($::mt eq ""){
+		$::label_01->configure('-text' => "Select me.");
+		return;
+	}
+	$buf = $::tak->act("$::Cntl GetMotorName $::mt");
+	(undef,undef,undef,$buf) = split(/\s+/, $buf);
+	$::label_01->configure('-text' => $buf);
+
+	for($i=0;$i<$::NumberOfRows;$i++){
+		$buf = $::tak->act("$::Cntl GetAutoChangeSpeed $::mt $i");
+		if($buf=~/(Er:.*)/){
+			$::label_msg->configure('-text' => "$1 of NUM $i.");
+			return(0);
+		}
+		(undef,undef,undef,undef,$buf) = split(/\s+/, $buf,5);
+		my($buf1,$buf2,$buf3,$buf4) = split(/\s/, $buf);
+		$::PNT[$i]=$buf1;
+		$::JJJ[$i]=$buf2;
+		$::FNC[$i]=$buf3;
+		$::LLL[$i]=$buf4;
+		$::PNTBAK[$i]=$::PNT[$i];
+		$::JJJBAK[$i]=$::JJJ[$i];
+		$::FNCBAK[$i]=$::FNC[$i];
+		$::LLLBAK[$i]=$::LLL[$i];
+	}
+}
+
+sub pwrite{
+	my $i;
+	my $buf;
+	my @updstr=();
+	
+	$::label_msg->configure('-text' => " ");
+	if($::mt eq ""){return(1);}
+	
+	for($i=0;$i<$::NumberOfRows;$i++){
+		$updstr[$i]="";
+
+		#Checking POINT
+		if($::PNTBAK[$i] ne $::PNT[$i]){
+			if($::PNT[$i] eq ""){
+				$::label_msg->configure('-text' => '"Er: POINT invalid." at NUM '.sprintf("%03d",$i).".");
+				return(0);
+			}
+		}
+		$updstr[$i]="$::PNT[$i]";
+		if($::PNT[$i] eq "END"){
+		}else{
+			#Checking POINTVALUE
+			if($::JJJ[$i] eq ""){
+				$::label_msg->configure('-text' => '"Er: PVAL invalid." at NUM '.sprintf("%03d",$i).".");
+				return(0);
+			}elsif($::JJJ[$i]!~/^-?\d+$/){
+				$::label_msg->configure('-text' => '"Er: PVAL invalid." at NUM '.sprintf("%03d",$i).".");
+				return(0);
+			}
+			$updstr[$i].=" $::JJJ[$i]";
+
+			#Checking FUNC
+			if($::FNC[$i] eq ""){
+				$::label_msg->configure('-text' => '"Er: FUNC invalid." at NUM '.sprintf("%03d",$i).".");
+				return(0);
+			}
+			$updstr[$i].=" $::FNC[$i]";
+			
+			if(($::FNC[$i] eq "SLW") or ($::FNC[$i] eq "FST") or ($::FNC[$i] eq "NOP")){
+			}else{
+				#Checking FUNCVALUE
+				if($::LLL[$i] eq ""){
+					$::label_msg->configure('-text' => '"Er: FVAL invalid." at NUM '.sprintf("%03d",$i).".");
+					return(0);
+				}elsif($::LLL[$i]!~/^-?\d+$/){
+					$::label_msg->configure('-text' => '"Er: FVAL invalid." at NUM '.sprintf("%03d",$i).".");
+					return(0);
+				}
+				$updstr[$i].=" $::LLL[$i]";
+			}
+		}
+	}
+	for($i=0;$i<$::NumberOfRows;$i++){
+		$buf = $::tak->act("$::Cntl SetAutoChangeSpeed $::mt $i ".$updstr[$i]);
+		if($buf=~/(Er:.*)/){
+			$::label_msg->configure('-text' => '"'.$1.'"'." at NUM ".sprintf("%03d",$i).".");
+			return(0);
+		}
+		$::PNTBAK[$i]=$::PNT[$i];
+		$::JJJBAK[$i]=$::JJJ[$i];
+		$::FNCBAK[$i]=$::FNC[$i];
+		$::LLLBAK[$i]=$::LLL[$i];
+	}
+	return(1);
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: pm16cconfigXACS [-h] [-node MyNodeName] [-c Controller] [-row NumberofDisplayRows] MotorNumber [StarsServer]\n";
+  exit(0);
+}

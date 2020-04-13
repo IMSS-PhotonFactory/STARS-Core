@@ -1,0 +1,564 @@
+<html>
+<header>
+<title>PM4C-05-Aコマンド概要</title>
+<style>
+<!--
+p.usage{font-style:italic;}
+p.body{text-indent:1em;}
+address{text-align:right}
+-->
+</style>
+</header>
+<body>
+<h1>PM4C-05-A STARS I/O Clientコマンド概要</h1>
+2006-04-07 暫定版
+<br>
+<br>
+<b>下記の使用上の注意もあわせてお読みください</b>
+<br>
+&nbsp;&nbsp;<A HREF="./readmesyncrun.txt">２台以上同時駆動使用時の注意事項</A>
+<br>
+&nbsp;&nbsp;<A HREF="./readmeDGLsBacklasg.txt">CW/CCWのソフトウェアリミットスイッチとバックラッシュについて</A>
+<hr>
+<h2>はじめに</h2>
+<p class="body">ツジ電子製PM4C-05-Aは4台のパルスモータを駆動可能なパルスモータコントローラです。</p>
+<p class="body">PM4C-05-A STARS I/O Client(以下、単にPM4C5Aとします)の作りはコントローラの先にモータが接続されているとような形をイメージしていているので、各モータへの命令は、送り先を&quot;PM4C5A.dth1&quot;のように階層化したような形式にします。</p>
+<pre>
+  -------    (コントローラ)   (モータ名)
+ |STARS  |------PM4C5A---------th
+ | Server|                 |
+  -------                  +----dth1
+                           |
+                           +----al1
+                           :
+                           : 略
+
+</pre>
+<p class="example">
+<hr width="70%" align="left">
+<b>例: term1というUser ClientからPM4C5Aに接続されたdth1というモータのポジションを取得</b><br>
+[term1から]<br>
+<i>PM4C5A.dth1 GetValue</i><br>
+<br>
+[PM4C5Aからの返事]<br>
+<i>PM4C5A.dth1&gt;term1 @GetValue 12345</i><br>
+<hr width="70%" align="left">
+</p>
+
+<p class="body">また、コントローラであるPM4C5A自身もコマンドを持っていますのでそれにアクセスする場合には<br><br>
+[term1から PM16Cの状態(Remote or Local)の取得]<br>
+<i>PM4C5A GetFunction</i><br>
+<br>
+[PM4C5Aからの返事]<br>
+<i>PM4C5A&gt;term1 @GetFunction 1</i><br>
+<br>
+のように送受信します。</p>
+<p>以下、ここではこのPM4C5Aのコマンドの概要について説明します。</p>
+<hr>
+<h2>主要コマンドおよびイベント</h2>
+<p class="body">モータへのアクセスは、&quot;はじめに&quot;で述べたとおり&quot;PM4C5A.dth1&quot;のように行うわけですが、実はPM4C5A自体のコマンドの中にもモータ関係のコマンドがあり、<br>
+<br>
+<i>PM4C5A GetValue 15</i>  (モータ番号15のポジションを取得)
+<br>
+もしくは
+<br>
+<i>PM4C5A GetValue A</i>  (チャンネルAのポジションを取得。ただしモータ名に'A'を使っていない場合)<br>
+<br>
+とすることも可能です。しかし、&quot;主要コマンド&quot;ではこれらのコマンドについては触れず、モータを動かす上で最低限必要と思われるものについて説明します。なお、Example:はいずれも&quot;term1&quot;と言う名前を持ったUser Clientからのコマンド送信を例としています。<br>
+<br>
+<br>
+</p>
+
+<pre>
+
+<h3>GetValue</h3>
+Usage:    GetValue
+Synopsis: モータの現在値を取得。
+Reply:    @GetValue <i>Value</i>
+Error:    @GetValue Er: <i>Reason</i>
+
+Example:
+<i>PM4C5A.dth1 GetValue</i> (term1から送信)
+<i>PM4C5A.dth1&gt;term1 @GetValue 12345</i> (受信)
+
+<i>PM4C5A.dth1 GetValue</i>
+<i>PM4C5A.dth1&gt;term1 @GetValue Er: Timeout</i> (コントローラの電源がOFFだった等でタイムアウトした)
+</pre>
+<pre>
+
+<h3>SetValue</h3>
+Usage:    SetValue <i>Value</i>
+Synopsis: モータをValueの値まで動かします。
+Reply:    @SetValue <i>Value</i> Ok:
+Error:    @SetValue Er: <i>Reason</i>
+Example:
+<i>PM4C5A.dth1 SetValue 12345</i> (term1から送信)
+<i>PM4C5A.dth1&gt;term1 @SetValue 12345 Ok:</i> (受信)
+
+<i>PM4C5A.dth1 SetValue 8388608</i>
+<i>PM4C5A.dth1&gt;term1 @SetValue 8388608 Er: Data out of range.</i> (範囲外のためエラー)
+</pre>
+
+<p class="body">SetValueを実行すると対象となるモータが動作中、あるいはコントローラがBusy状態である、コントローラが&quot;Local&quot;であるような場合以外は例で示すように&quot;Ok:&quot;をすぐに返します。
+モータが止まったことを検知するためには&quot;IsBusy&quot;を使って問い合わせるか、あらかじめ<br>
+<br>
+<i>System flgon PM4C5A.dth1</i> (term1からSystemにイベント配信要求)<br>
+<i>System&gt;term1 @flgon Node PM4C5A.dth1 has been registered.</i> (STARSサーバからの回答)<br>
+<br><br>
+のようにして、モータの停止後<br>
+<br>
+<i>PM4C5A.dth1&gt;term1 _ChangedIsBusy 0</i> (dth1が停止したというイベントを受信)<br>
+<br>
+のような、イベントを受け取るようにします。
+</p>
+
+<pre>
+
+<h3>Preset</h3>
+Usage:    Preset <i>Value</i>
+Synopsis: モータの現在値をプリセットします。
+Reply:    @Preset <i>Value</i> Ok:
+Error:    @Preset Er: <i>Reason</i>
+Example:
+<i>PM4C5A.dth1 Preset 12345</i> (term1から送信)
+<i>PM4C5A.dth1&gt;term1 @Preset 12345 Ok:</i> (受信)
+
+<i>PM4C5A.dth1 Preset 8388608</i>
+<i>PM4C5A.dth1&gt;term1 @Preset 8388608 Er: Data out of range.</i> (範囲外のためエラー)
+
+</pre>
+<pre>
+
+<h3>IsBusy</h3>
+Usage:    IsBusy
+Synopsis: モータが駆動可能であるかの問い合わせ。1=Busy、0=駆動可能
+Reply:    @IsBusy <i>Value</i>
+Example:
+<i>PM4C5A.dth1 IsBusy</i> (term1から送信)
+<i>PM4C5A.dth1&gt;term1 @IsBusy 1</i> (受信：動作中である)
+</pre>
+
+<pre>
+
+<h3>Stop</h3>
+Usage:    Stop
+Synopsis: モータを台形駆動の設定に沿って減速停止させる。
+Reply:    @Stop Ok:
+Example:
+<i>PM4C5A.dth1 Stop</i> (term1から送信)
+<i>PM4C5A.dth1&gt;term1 @Stop Ok:</i> (受信)
+</pre>
+
+<pre>
+
+<h3>StopEmergency</h3>
+Usage:    StopEmergency
+Synopsis: モータを台形駆動の設定に関係なく瞬時に停止させる。
+Reply:    @StopEmergency Ok:
+Example:
+<i>PM4C5A.dth1 StopEmergency</i> (term1から送信)
+<i>PM4C5A.dth1&gt;term1 @StopEmergency Ok:</i> (受信)
+</pre>
+
+<pre>
+
+<h3>Standby(コントローラのコマンド)</h3>
+Usage:    Standby
+Synopsis: 同時駆動のために全チャンネルをStandby状態にする。
+Reply:    @Standby Ok:
+Error:    @Standby Er: <i>Reason</i>
+Example:
+<i>PM4C5A Standby</i> (term1から送信)
+<i>PM4C5A&gt;term1 @Standby Ok:</i> (受信)
+<i>PM4C5A.m1u SetValue 12345</i> (m1uを12345へ、まだ駆動は開始しない)
+<i>PM4C5A.m1u&gt;term1 @SetValue 12345 Ok:</i> (受信)
+<i>PM4C5A.m1d SetValue 12345</i> (m1dを12345へ、まだ駆動は開始しない)
+<i>PM4C5A.m1d&gt;term1 @SetValue 12345 Ok:</i> (受信)
+<i>PM4C5A SyncRun</i> (駆動開始))
+<i>PM4C5A&gt;term1 @SyncRun Ok:</i> (受信)
+</pre>
+<pre>
+
+<h3>SyncRun(コントローラのコマンド)</h3>
+Usage:    SyncRun
+Synopsis: 同時駆動の開始。
+Reply:    @SyncRun Ok:
+Error:    @SyncRun Er: <i>Reason</i>
+Example:  Standbyの項を参照
+</pre>
+<pre>
+
+<h3>_ChangedIsBusyイベント</h3>
+Event:    _ChangedIsBusy <i>Value</i>
+Synopsis: PM4C5A配下のモータが駆動を開始したときや停止したときにはSTARSサーバ(System)に
+          その旨を示すイベントが送信されます。
+          &quot;System flgon PM4C5A.dth1&quot;のようにあらかじめ設定することでUser Clientで
+          受信が可能となります。モータが動き始めた場合にはValueが1、停止した場合にはValueが0
+          として送られてきます。
+Example:
+<i>System flgon PM4C5A.dth1</i> (term1からflgon)
+<i>System&gt;term1 @flgon Node PM4C5A.th has been registered.</i> (受信)
+<i>PM4C5A.dth1 SetValue 1000</i> (term1からdth1にSetValueコマンド)
+<i>PM4C5A.dth1&gt;term1 _ChangedIsBusy 1</i> (dth1が駆動開始したというイベントを受信)
+<i>PM4C5A.dth1&gt;term1 @SetValue 1000 Ok:</i>
+<i>PM4C5A.dth1&gt;term1 _ChangedValue 351</i> (Valueが変化した事を示すイベントを受信)
+<i>PM4C5A.dth1&gt;term1 _ChangedValue 899</i>
+<i>PM4C5A.dth1&gt;term1 _ChangedValue 999</i>
+<i>PM4C5A.dth1&gt;term1 _ChangedValue 1000</i>
+<i>PM4C5A.dth1&gt;term1 _ChangedIsBusy 0</i> (dth1が停止した事を示すイベントを受信)
+</pre>
+<pre>
+
+<h3>_ChangedValueイベント</h3>
+Event:    _ChangedValue <i>Value</i>
+Synopsis: PM4C5A配下のモータのValueが変化するとSTARSサーバに現在のValueデータが
+          イベントととして定期的に送られます。
+          &quot;System flgon PM4C5A.dth1&quot;のようにあらかじめ設定することでUser Clientで
+          受信が可能となります。
+Example:  _ChangedIsBusyイベントの項を参照
+</pre>
+<pre>
+
+<h3>_ChangedFunctionイベント(コントローラ)</h3>
+Event:    _ChangedFunction <i>Value</i>
+Synopsis: PM4C5AのFUNCTIONがREM(Remote)あるいはLOC(Local)に変化するとSTARSサーバにイベントが
+          送出されます。
+          &quot;System flgon PM4C5A&quot;のようにあらかじめ設定することでUser Clientで
+          受信が可能となります。Remoteになった場合にはValueが1、Localの場合にはValueが0
+          として送られてきます。
+Example:
+<i>System flgon PM4C5A</i> (term1からflgon)
+<i>System&gt;term1 @flgon Node PM4C5A has been registered.</i> (Systemから受信)
+<i>PM4C5A&gt;term1 _ChangedFunction 0</i> (Localになった旨を示すイベントを受信)
+<i>PM4C5A&gt;term1 _ChangedFunction 1</i> (Remoteになった旨を示すイベントを受信)
+</pre>
+<hr>
+
+
+
+<h2>他のコマンド</h2>
+<p class="body">上記以外のコマンドは比較的使用頻度が低いと思われるため、ここにまとめました。</p>
+<pre>
+--------------------------と、いっても、これから先は未完成です。---------------------------
+
+
+
+Usage: help [Commmand]
+Target: Controller, Motor
+    List commands or show usage (with "command")
+
+Usage: hello
+Target: Controller, Motor
+    The client returns "@hello nice to meet you."
+
+Usage: flushdata
+Target: Controller
+    Get all status of PM4C-05-A and sends event messages to "System".
+
+Usage: flushdatatome
+Target: Controller
+    Get all status of PM4C-05-A and sends event messages to me.
+
+#Status read
+Usage: GetAccRate Channel|MotorName|MotorNumber
+Target: Controller
+    Get acceleration rate of "MotorNumber" (0 to 3).
+
+Usage: GetAccRate
+Target: Motor
+    Get acceleration rate.
+
+Usage: GetCancelBacklash Channel|MotorName|MotorNumber
+Target: Controller
+    Get cancel backlash of "MotorNumber" (0 to 3).
+
+Usage: GetCancelBacklash
+Target: Motor
+    Get cancel backlash.
+
+Usage: GetDigitalCcwLs Channel|MotorName|MotorNumber
+Target: Controller
+    Get CCW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 3).
+
+Usage: GetDigitalCcwLs
+Target: Motor
+    Get CCW software limit switch (DIGITAL LS).
+
+Usage: GetDigitalCwLs Channel|MotorName|MotorNumber
+Target: Controller
+    Get CW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 3).
+
+Usage: GetDigitalCwLs
+Target: Motor
+    Get CW software limit switch (DIGITAL LS).
+
+Usage: GetFunction
+Target: Controller
+    Get function "1=Remote/0=Local".
+
+Usage: GetFunctionStatus Channel|MotorName|MotorNumber
+Target: Controller
+    Get limit switch and H.Off status of "MotorNumber" (0 to 3).
+    bit 0: POS CW LS, 1: POS CCW LS, 2: POS HP LS, 3: H.OFF,
+
+Usage: GetFunctionStatus
+Target: Motor
+    Get limit switch and H.Off status.
+    bit 0: POS CW LS, 1: POS CCW LS, 2: POS HP LS, 3: H.OFF,
+
+Usage: GetJogPulse Channel|MotorName|MotorNumber
+Target: Controller
+    Get jog pulse value of "MotorNumber" (0 to 3).
+
+Usage: GetJogPulse
+Target: Motor
+    Get jog pulse value.
+
+Usage: GetLowSpeed Channel|MotorName|MotorNumber
+Target: Controller
+    Get low speed value of "MotorNumber" (0 to 3).
+
+Usage: GetLowSpeed
+Target: Motor
+    Get low speed value of "MotorName" or "MotorNumber" (0 to 3).
+
+Usage: GetMiddleSpeed Channel|MotorName|MotorNumber
+Target: Controller
+    Get middle speed value of "MotorNumber" (0 to 3).
+
+Usage: GetMiddleSpeed
+Target: Motor
+    Get middle speed value.
+
+Usage: GetHighSpeed Channel|MotorName|MotorNumber
+Target: Controller
+    Get high speed value of "MotorNumber" (0 to 3).
+
+Usage: GetHighSpeed
+Target: Motor
+    Get high speed value.
+
+Usage: GetStatus Channel|MotorName|MotorNumber
+Target: Controller
+    Get status register value of "MotorNumber" (0 to 3).
+    bit 0: BUSY, 1: DRIVE, 2: not used, 3: not used
+        4: COMERR, 5: LDEND, 6: SSEND, 7: ESEND
+
+Usage: GetStatus
+Target: Motor
+    Get status register value. 
+    bit 0: BUSY, 1: DRIVE, 2: not used, 3: not used
+        4: COMERR, 5: LDEND, 6: SSEND, 7: ESEND
+
+#PM4C Commands
+Usage: Remote
+Target: Controller
+    Set function to "Remote". (Same as "SetFunction 1")
+
+Usage: Local
+Target: Controller
+    Set function to "Local". (Same as "SetFunction 0")
+
+Usage: SpeedLow
+Target: Controller
+    Set speed to "Low".
+
+Usage: SpeedMiddle
+Target: Controller
+    Set speed to "Middle".
+
+Usage: SpeedHigh
+Target: Controller
+    Set speed to "High".
+
+Usage: GetSpeedList
+Target: Controller, Motor
+    Get list of settable motor speed.
+
+Usage: GetAccRateList
+Target: Controller, Motor
+    Get list of settable motor acceleration rate.
+
+Usage: GetMotorList
+Target: Controller
+    List motor names.
+
+Usage: GetMotorName Channel|MotorNumber
+Target: Controller
+    Get motor name of "MotorNumber".
+
+Usage: GetMotorNumber MotorName
+Target: Controller
+    Get motor number of "MotorName".
+
+Usage: GetMotorNumber
+Target: Motor
+    Get motor number of "MotorName".
+
+#Set Commandst
+Usage: Preset Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set motor position data of "MotorNumber" (0 to 3) into "Value".
+
+Usage: Preset Value
+Target: Motor
+    Set motor position data into "Value".
+
+Usage: SetAccRate Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set acceleration rate of "MotorNumber" (0 to 3) into "Value".
+
+Usage: SetAccRate Value
+Target: Motor
+    Set acceleration rate into "Value".
+
+Usage: SetCancelBacklash Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set cancel backlash value of "MotorNumber" (0 to 3) into "Value".
+
+Usage: SetCancelBacklash Value
+Target: Motor
+    Set cancel backlash value into "Value".
+
+Usage: SetDigitalCcwLs Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set CCW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 3).
+    into "Value".
+
+Usage: SetDigitalCcwLs Value
+Target: Motor
+    Set CCW software limit switch (DIGITAL LS) into "Value".
+
+Usage: SetDigitalCwLs Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set CW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 3).
+    into "Value".
+
+Usage: SetDigitalCwLs Value
+Target: Motor
+    Set CW software limit switch (DIGITAL LS) into "Value".
+
+Usage: SetFunction 1|0
+Target: Controller
+    Set function (Remote=1, Local=0).
+
+Usage: SetHighSpeed Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set high speed of "MotorNumber" (0 to 3) into "Value".
+
+Usage: SetHighSpeed Value
+Target: Motor
+    Set high speed into "Value".
+
+Usage: SetHold Channel|MotorName|MotorNumber 1|0
+Target: Controller
+    Set hold (=1) or free (=0) motor on "MotorNumber" (0 to 3).
+    
+Usage: SetHold 1|0
+Target: Motor
+    Set hold (=1) or free (=0).
+    
+Usage: SetJogPulse Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set jog pulse value of "MotorNumber" (0 to 3) into "Value".
+
+Usage: SetJogPulse Value
+Target: Motor
+    Set jog pulse value into "Value".
+
+Usage: SetLowSpeed Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set low speed of "MotorNumber" (0 to 3) into "Value".
+
+Usage: SetLowSpeed Value
+Target: Motor
+    Set low speed into "Value".
+
+Usage: SetMiddleSpeed Channel|MotorName|MotorNumber Value
+Target: Controller
+    Set middle speed of "MotorNumber" (0 to 3) into "Value".
+
+Usage: SetMiddleSpeed Value
+Target: Motor
+    Set middle speed into "Value".
+
+Usage: SetValueREL Channel|MotorName|MotorNumber Value
+Target: Controller
+    Move motor which is shown "MotorNumber" to "Value" relatively.
+
+Usage: SetValueREL Value
+Target: Motor
+    Move motor to "Value" relatively.
+
+Usage: JogCw Channel|MotorName|MotorNumber
+Target: Controller
+    Send CW jog command to "MotorNumber" (0 to 3).
+
+Usage: JogCw
+Target: Motor
+    Send CW jog command.
+
+Usage: JogCcw Channel|MotorName|MotorNumber
+Target: Controller
+    Send CCW jog command to "MotorNumber" (0 to 3).
+
+Usage: JogCcw
+Target: Motor
+    Send CCW jog command.
+
+Usage: ScanCw Channel|MotorName|MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 3) to "CW" with scan mode.
+
+Usage: ScanCw
+Target: Motor
+    Move "CW" direction with scan mode.
+
+Usage: ScanCcw Channel|MotorName|MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 3) to "CCW" with scan mode.
+
+Usage: ScanCcw
+Target: Motor
+    Move "CCW" direction with scan mode.
+
+Usage: ScanCwConst Channel|MotorName|MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 3) to "CW" with
+    constant scan mode.
+
+Usage: ScanCwConst
+Target: Motor
+    Move "CW" direction with constant scan mode.
+
+Usage: ScanCcwConst Channel|MotorName|MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 3) to "CCW" with
+    constant scan mode.
+
+Usage: ScanCcwConst
+Target: Motor
+    Move "CCW" direction with constant scan mode.
+
+Usage: ScanCwHome Channel|MotorName|MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 3) to "CW" for finding
+    home position.
+
+Usage: ScanCwHome
+Target: Motor
+    Move "CW" direction for finding home position.
+
+Usage: ScanCcwHome Channel|MotorName|MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 3) to "CCW" for finding
+    home position.
+
+Usage: ScanCcwHome
+Target: Motor
+    Move "CCW" direction for finding home position.
+
+</pre>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<html>
+<head>
+<meta HTTP-EQUIV="Content-Type" content="text/html; charset=shift_jis">
+<title>KARACRIX Perl module</title>
+<style>
+<!--
+address{text-align:right}
+-->
+</style>
+</head>
+<body>
+<h1>
+Tuji ER2C-03A, ER4C-03A エンコーダカウンタ用
+STARS IO Client
+</h1>
+<address>2011-03-26 Takashi Kosuge</address>
+<hr>
+<h2>概要</h2>
+<p>
+&quot;erxc&quot;はツジ電子製エンコーダカウンタER2C-03A(2CH)及びER4C-03A(4CH)用のSTARS IO Clientです。
+なお、本ソフトを動作させるにはPerlが必要です。</p>
+<hr>
+<h2>各種ファイル</h2>
+<p>
+本ディレクトリには複数のファイルが含まれていますが、動作に必要なファイルと内容は以下の通りです。<br>
+<br>
+<b>config.pl</b>: 動作設定用ファイル。各エンコーダの名前の設定や、接続するSTARSサーバのホスト名などの設定などはこのファイルを変更することにより行います。<br>
+
+<b>er2c.key及びer4c.key</b>: STARS用キーファイル。あらかじめ用意されているキーファイルはサンプル的なものです。ノード名を変える場合などは適宜そのノード名用のキーファイルを用意してください。なお、STARS Server用ディレクトリ(takaserv-lib)へのコピーもお忘れなく。<br>
+
+<b>erxc</b>: IO Client 本体です。<br>
+
+<b>nportserv.pm</b>: ER2C-03A、ER4C-03AをLANを使ってアクセスするためにerxcから利用されます。<br>
+
+<b>stars.pm</b>: STARSとの接続のために、erxcから利用されます。<br>
+
+インストールはこれら動作に必要なファイルを適当なディレクトリにコピーすることにより行います。<br>
+
+</p>
+<hr>
+<h2>設定</h2>
+<pre>
+各種設定は config.pl ファイルを編集する事により行います。
+
+<b>#config.plの内容</b>
+if(
+$::NodeName eq 'er4c'  <i>#ノード名ごとの設定を行います。この場合、ノード名が"er4c"</i>
+                       <i>#として、起動されると以下が利用されます。</i>
+){###############################################################################
+
+<i>#各チャンネルの名前を"qw()"の中にスペース区切りで列挙します。
+#ER2C-03Aの場合は2個、ER4C-03Aの場合は4個設定します。</i>
+@::ChName     = qw(Gr M2 C D);
+
+<i>#上記の場合、宛先を "er4c.Gr" とすると、エンコーダカウンタのAチャンネルへの
+#アクセスが可能となります。
+</i>
+<i>#接続するSTARSサーバのホスト名を設定します。
+</i>##STARS server
+$::Server = 'localhost';
+
+#ER2C-03A、ER4C-03AのIPアドレス、ポート番号を設定します。
+## For NPORT interface
+$::NPORT_HOST  = '192.168.2.31';   #NPort host name.
+$::NPORT_PORT  = 7777;             #NPort port number.
+
+<i>#ファームウエアの V1.03 以降では、カウント桁数が 24 bitから 32 bitに拡張されています。
+#このオプションをセットすることで、32 bitのデータを読み取ることができます。</i>
+## Datalength for GetCommand. ('L' or 'l' is 10 degits, otherwize 7degits.)
+$::DataLengthOption = 'L';
+
+<i>#GetValueコマンドを受け取った時に返す値をカウント値から導き出すための計算式および
+#FactorとOffsetをチャンネル毎に設定します。</i>
+## Caluculatation for "GetValue" command.
+@::Calc   = ('INPUT * FACTOR * -1 + OFFSET',
+             'INPUT * FACTOR + OFFSET',
+             'INPUT*FACTOR+OFFSET',
+             'INPUT*FACTOR+OFFSET');               ##Calculation.
+@::Offset = (0.508564, 1.0148, 0, 0);              ##Offset of calculation;
+@::Factor = (0.002/3600, 0.002/3600, 1, 1);
+
+<i>#GetValueコマンドで返す値のフォーマットを設定します。
+# C言語の printf と同じ構文。</i>
+@::Format = ('%.6f', '%.6f', '%.4f', '%.4f', );
+
+<i># カウント値を読み込んで平均化する回数を設定します。</i>
+@::Average= (20, 20, 1, 1);
+
+
+<i>#設定を増やす場合は以下をコピーして増やしてゆきます。
+</i>}elsif(
+$::NodeName eq 'er2c'
+){###############################################################################
+
+</pre>
+<hr>
+<h2>IO Clientの機動</h2>
+<p>概要でも述べたとおり、本IO Clientの利用にはPerlが必要です。機動は以下のように行います。</p>
+<pre>
+<i>perl erxc [-h] [-d] NodeName</i>
+  -d    デバッグモードでプログラムを起動する。
+  -h    ヘルプの表示。
+  NodeName 利用するノード名。なお、config.pl内の設定の選択にはこのNodeNameが使用されます。
+
+<b>例</b>
+perl erxc er4c
+(ノード名を&quot;er4c&quot;として起動)
+</pre>
+<hr>
+<h2>コマンド</h2>
+<p>erxcは階層化構造を持った形にデザインされています。各カウンターはerxcの子ノードとして定義されていて、それぞれのカウンターへのアクセスは、&quot;erxcノード名.チャンネル名&quot;のような名前でアクセスします。</p>
+<h3>hello, help, getversion (getversionについては親ノードのみ)</h3>
+一般的な STARS Client 同様 hello, help, getversion コマンドが存在します。<br>
+
+<h3>GetValue (子ノードのみ)</h3>
+カウンターの値を取得します。<br>
+<pre>
+<b>例 (term1から、M2に割り当てられたカウンターの値を取得)</b>
+er4c.M2 GetValue
+er4c.M2>term1 @GetValue 1234
+
+</pre>
+<h3>Preset (子ノードのみ)</h3>
+カウンターをプリセットします。
+<pre>
+<b>例 (term1から、M2に割り当てられたカウンターをプリセット)</b>
+er4c.M2 Preset 2345
+er4c.M2>term1 @Preset 2345 Ok:
+
+
+</pre>
+
+<h3>SetHPMode (子ノードのみ)</h3>
+Z相入力によるカウンターリセットを立ち上がりにより行うか、立下りにより行うかセットします。
+<pre>
+<b>Usage:</b> SetHPMode <i>Up_or_Down</i>
+    <i>Up_or_Down</i> U, u, 1 を設定するとZ相パルスの立ち上がりで、
+               D, d, 0 を設定するとZ相パルスの立ち下がりで、カウンターをリセットします。
+
+<b>例 (カウンターリセットをZ相パルスの立ち上がりで行うようセットする。)</b>
+er4c.M2 SetHPMode U
+er4c.M2>term1 @SetHPMode U Ok:
+
+er4c.M2 SetHPMode 1
+er4c.M2>term1 @SetHPMode 1 Ok:
+
+<b>例 (カウンターリセットをZ相パルスの立ち下がりで行うようセットする。)</b>
+er4c.M2 SetHPMode D
+er4c.M2>term1 @SetHPMode D Ok:
+
+er4c.M2 SetHPMode 0
+er4c.M2>term1 @SetHPMode 0 Ok:
+
+
+</pre>
+
+
+<h3>GetHPMode (子ノードのみ)</h3>
+Z相入力によるカウンターリセットを立ち上がりにより行うか、立下りにより行うか取得します。
+<pre>
+<b>Usage:</b> GetHPMode
+    <i>戻り値</i> 1 = Z相パルスの立ち上がりで、カウンターをリセット。
+           0 = Z相パルスの立ち下がりで、カウンターをリセット。
+
+<b>例 (カウンターリセットをZ相パルスの立ち上がりあるいは立下りで行うか取得。)</b>
+er4c.M2 GetHPMode 1
+er4c.M2>term1 @GetHPMode 1 Ok:
+
+
+</pre>
+
+
+<h3>ScanHome (子ノードのみ)</h3>
+Z相入力によるカウンターリセットの待ち受け状態に入ります。なお、本クライアントからは、_ChangedIsBusy 1 がシステムに送られ、Z相を検出するまでIsBusyフラグがOnとなります。Z相パルスを検出すると _ChangedIsBusy 0 がSystemに送信されます。
+<pre>
+<b>Usage:</b> ScanHome
+
+<b>例 (Z相の検出を開始する。)</b>
+er4c.M2 ScanHome
+er4c.M2>term1 @ScanHome Ok:
+
+<b>例 (Z相の検出をイベントも利用して行う。)</b>
+System flgon er4c.M2
+System>term1 @flgon Node er4c.M2 has been registered.
+er4c.M2 ScanHome
+er4c.M2>term1 _ChangedIsBusy 1
+er4c.M2>term1 @ScanHome Ok:
+:
+:
+er4c.M2>term1 _ChangedIsBusy 0
+
+</pre>
+
+<h3>StopScan (子ノードのみ)</h3>
+Z相入力によるカウンターリセットの待ち受け状態を解除します。待ちうけ状態になっていた場合は、_ChangedIsBusy 0 がSystemに送信されます。
+<pre>
+<b>Usage:</b> StopScan
+
+<b>例 (Z相の検出を開始する。)</b>
+er4c.M2 StopScan
+er4c.M2>term1 @StopScan Ok:
+
+
+</pre>
+
+<h3>IsBusy (子ノードのみ)</h3>
+Z相入力によるカウンターリセットが待ち受け状態かをチェックします。<pre>
+<b>Usage:</b> IsBusy
+    <i>戻り値</i> 1 = 待ちうけ状態
+           0 = 通常状態
+
+<b>例 (Z相入力によるカウンターリセットが待ち受け状態かをチェック。)</b>
+er4c.M2 IsBusy
+er4c.M2>term1 @IsBusy 1
+
+
+</pre>
+
+
+<hr>
+<h2>イベント</h2>
+各チャンネルはZ相入力によるカウンターリセットの待ち受け状態に入ると _ChangedIsBusy 1 イベントを、Z相パルスを検地し、カウンターがリセットされると、_ChangedIsBusy 0 イベントを System に送信します。
+
+<hr>
+
+</body>
+</html>
+
+

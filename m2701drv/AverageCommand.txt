@@ -1,0 +1,12 @@
+m2701drv GetFunction DCV.AverageState
+m2701drv GetFunction DCV.AverageCount
+m2701drv SetFunction DCV.AverageState 1 (1|0)
+m2701drv SetFunction DCV.AverageCount 20 (1-100)
+m2701drv.i0 GetFunction DCV.AverageState
+m2701drv.i1 GetFunction DCV.AverageState
+m2701drv.i0 GetFunction DCV.AverageCount
+m2701drv.i1 GetFunction DCV.AverageCount
+m2701drv.i0 SetFunction DCV.AverageState 1  (1|0)
+m2701drv.i1 SetFunction DCV.AverageState 1  (1|0)
+m2701drv.i0 SetFunction DCV.AverageCount 20 (1-100)
+m2701drv.i1 SetFunction DCV.AverageCount 20 (1-100)

@@ -1,0 +1,321 @@
+<HTML>
+<HEAD>
+<META HTTP-EQUIV="Content-Type" content="text/html; charset=shift_jis">
+<TITLE>KARACRIX Perl module</TITLE>
+<STYLE>
+<!--
+P.usage{font-style:italic;}
+ADDRESS{text-align:right}
+-->
+</STYLE>
+</HEAD>
+
+<BODY>
+<H1>KARACRIX Perl module</H1>
+<ADDRESS>2002-05-21 Takashi Kosuge</ADDRESS>
+
+<HR></HR>
+<H2>概要</H2>
+<P>
+KARACRIX/IOB30RTAはネットワークを使用してパラレルポート、シリアルポート等をコントロールできる機器です。KARACRIX Perl moduleはこのKARACRIX/IOB30RTAをPerlから簡単に利用出来るようにするためのPerlモジュールです。
+</P>
+
+<HR></HR>
+<H2>インストール及び使用</H2>
+<P>
+karacrix.pmを作成するアプリケーションのあるディレクトリまたは@INCのパスの通ったディレクトリにコピーします。
+その後アプリケーションプログラムの頭のほうで<BR>
+use karacrix;<BR>
+とすれば利用が可能となります。
+</P>
+
+<H4>helloコマンドの実行</H4>
+<PRE>
+use karacrix;
+$kara = karacrix-&gt;new('192.168.0.200');  #Command port = 20000, SIO port=20001, No Alarm
+print $kara-&gt;hello().&quot;\n&quot;;
+</PRE>
+
+<H4>PIOの読み出し</H4>
+<PRE>
+use karacrix;
+$kara = karacrix-&gt;new('192.168.0.200');
+$val  = $kara-&gt;InPIO();
+print &quot;$val\n&quot;;
+@val  = $kara-&gt;InPIO();
+print &quot;In = $val[0],  Out = $val[1]\n&quot;;
+</PRE>
+
+<H4>PIO出力</H4>
+<PRE>
+use karacrix;
+$kara = karacrix-&gt;new('192.168.0.200');
+$kara-&gt;OutPIO(&quot;1010&quot;);  #Set OUTPUT on,off,on,off
+</PRE>
+
+<H4>ADCのデータを読み出す。</H4>
+<PRE>
+use karacrix;
+$kara = karacrix-&gt;new('192.168.0.200');
+$val = $kara-&gt;GetADC();   #Get text
+print &quot;$val\n&quot;;
+@val = $kara-&gt;GetADC();   #Get list 
+print &quot;$val[1]\n&quot;;        #Print Ch1
+</PRE>
+
+<H4>シリアルポートの利用</H4>
+<PRE>
+# Send &quot;Hello&quot;
+use karacrix;
+$kara = karacrix-&gt;new('192.168.0.200');
+$kara-&gt;OutSIO(&quot;Hello\r\n&quot;);
+
+# Read SIO
+use karacrix;
+$kara = karacrix-&gt;new('192.168.0.200');
+print $kara-&gt;InSIO().&quot;\n&quot;;
+
+# With select function
+use IO::Select;
+use karacrix;
+$kara     = karacrix-&gt;new('192.168.0.200');
+$fh       = $kara-&gt;GetSIOHandle();
+$readable = IO::Select-&gt;new('192.168.0.200');
+$readable-&gt;add($fh);
+while($readable-&gt;can_read(10)){        #timeout 10 seconds
+	print $kara-&gt;InSIO().&quot;\n&quot;;
+}
+</PRE>
+
+<H4>Alarmの利用</H4>
+<PRE>
+use IO::Select;
+use karacrix;
+$kara     = karacrix-&gt;new('192.168.0.200', 20000, 20001, 20002) or die;
+$fh       = $kara-&gt;GetAlarmHandle();
+$readable = IO::Select-&gt;new('192.168.0.200');
+$readable-&gt;add($fh);
+$kara-&gt;SetAlarm('difu');         #Set alarm, it will be sent when off-&gt;on.
+while($readable-&gt;can_read(10)){  #Wait for alarm, timeout 10 seconds.
+	print $kara-&gt;GetAlarm().&quot;\n&quot;;
+}
+</PRE>
+
+<HR></HR>
+<H2>Functions</H2>
+<BR>
+<H3>new</H3>
+<P CLASS="usage">
+Usage: $object = pinic-&gt;new('Host', [CmdPort], [SIOPort], [AlarmPort]);
+</P>
+
+<P>
+オブジェクトのリファレンスが返されます。また、失敗するとundefが返されます。
+</P>
+<DL>
+<DT>Host</DD>
+<DD>KARACRIXのホスト名あるいはIPアドレスを指定します。省略すると192.168.0.200が使用されます。</DD>
+
+<DT>CmdPort</DT>
+<DD>KARACRIXのコマンド用UDPポート番号を設定します。省略すると20000が使用されます。また、-1 を設定するとポートはオープンされません。</DD>
+
+<DT>SIOPort</DT>
+<DD>KARACRIXのシリアルポートが使用するUDPポートの番号を指定します。省略すると20002が使用されます。また、-1 を設定するとポートはオープンされません。</DD>
+
+<DT>AlarmPort</DT>
+<DD>Alarm機能を使用する場合はここにAlarmPortの番号を設定します。-1 を指定、または省略するとAlarm機能は無効になります。</DD>
+</DL>
+
+<BR>
+<H3>hello</H3>
+<P CLASS="usage">
+Usage: $rt  = $object-&gt;hello();
+</P>
+<P>
+IOB30RTAにHELLOコマンドを送出します。IOB30RTAのシステム情報が返されます。通信エラー時はundefが返されます。
+</P>
+
+<DL>
+<DT>システム情報</DT>
+<DD>
+IOB30RTA[space]MACアドレス[space]ファームウエアバージョン[space]カーネルタイムカウンタ
+</DD>
+</DL>
+
+
+<BR><BR>
+<H3>InPIO</H3>
+<P CLASS="usage">
+Usage: $rt | @rt = $object-&gt;InPIO();
+</P>
+<P>
+接点入力の状態及びリレー出力の出力情報を取得します。スカラーコンテキストではそれぞれの状態を示す文字列(例: 1010 1111)が、リストコンテキストではそれぞれの状態を示す文字列のリストが返されます。1は接点がショートしている事を、0は接点がオープンであることを示します。
+</P>
+
+<BR>
+<H3>OutPIO</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;OutPIO(OutData);
+</P>
+<P>
+リレー出力の状態をセットします。成功した場合には文字列&quot;BOUT&quot;を、エラー時には文字列&quot;ERR&quot;を、通信エラー時にはundefを返します。
+</P>
+<DL>
+<DT>OutData</DT>
+<DD>出力するデータを&quot;0&quot;, &quot;1&quot;, &quot;-&quot;で指定します。
+&quot;0&quot;はOFF(リレーオープン)を&quot;1&quot;はON(リレーショート)、&quot;-&quot;は変更しないことを示します。
+(例: 1010 -&gt; on,off,on,off)</DD>
+</DL>
+
+<BR>
+<H3>SetAlarm</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;SetAlarm(Alarm);
+</P>
+<P>
+接点入力CH1の状態変化を警報通知として扱う設定をします。
+&quot;ALARM&quot;コマンド文字列が返されます。
+Alarm機能を使用する際はオブジェクトをnewする時に必ずAlarmPortの設定を行う必要があります。
+</P>
+<DL>
+<DT>Alarm</DT>
+<DD>Alarm通知の条件を設定します。
+&quot;difu&quot;を設定するとoffからonとなった場合にAlarmが通知され、
+&quot;difd&quot;を設定するとonからoffとなった場合にAlarmが通知されます。
+&quot;disable&quot;(正確にはdifu,difd以外)を設定するとAlarm動作が無効になります。
+</DD>
+</DL>
+
+<BR>
+<H3>GetAlarmHandle</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;GetAlarmHandle();
+</P>
+<P>
+Alarmポートのファイルハンドルを返します。
+Select関数を使用してアラーム入力があるかどうかをチェックする際に有効です。
+Alarm機能を使用する際はオブジェクトをnewする時に必ずAlarmPortの設定を行う必要があります。
+</P>
+
+<BR>
+<H3>GetAlarm</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;GetAlarm([TimeOut]);
+</P>
+<P>
+接点入力CH1の入力が変化した際に通知されるAlarmの内容の取得及びAlarmのリセットが行われます。<BR>
+<I>ALARMコマンド文字列[space]Alarm発生装置のIPアドレス[space]状態値(1:on、2:off)</I>
+のメッセージが返されます。(例： ALARM 192.168.0.200 1)
+</P>
+<DL>
+<DT>TimeOut</DT>
+<DD>Alarm内容取得待ちの時間を秒単位で設定します。省略するとTime out値に0.5秒が設定されます。</DD>
+</DL>
+
+<BR><BR>
+<H3>OutSIO</H3>
+<P CLASS="usage">
+Usage: $object-&gt;OutSIO(Strings);
+</P>
+<P>
+シリアルポートにデータを出力します。
+</P>
+<DL>
+<DT>Strings</DT>
+<DD>シリアルポートに出力する文字列(バイナリーも可)を設定します。</DD>
+</DL>
+
+<BR>
+<H3>GetSIOHandle</H3>
+<P CLASS="usage">
+Usage: $fh = $object-&gt;GetSIOHandle();
+</P>
+<P>
+シリアルポートの使用するファイルハンドルを返します。Select関数で入力をチェックする際に有用です。
+</P>
+
+<BR>
+<H3>InSIO</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;InSIO(TimeOut);
+</P>
+<P>
+シリアルポートからデータを読み取ります。実際に読み取った文字列が返されます。
+</P>
+<DL>
+<DT>TimeOut</DT>
+<DD>入力待ちの時間を秒単位で設定します。省略するとTime outに3秒が設定されます。</DD>
+</DL>
+
+<BR><BR>
+<H3>Range</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;Range(Config);
+</P>
+<P>
+ADC入力各チャンネルの入力電圧レンジ及び取り込み周波数(入力レート)を設定します。
+成功すると&quot;RANGE&quot;を、AD変換中は&quot;BUSY&quot;、設定エラー時には&quot;ERR&quot;の
+コマンド文字列を返します。
+なお、通信エラー時にはundefを返します。
+</P>
+<DL>
+<DT>Config</DT>
+<DD>入力電圧レンジ及び取り込み周波数を文字列でセットします。(取扱説明書参照: range コマンドより後の部分を入力)</DD>
+</DL>
+
+<BR>
+<H3>SetCal</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;SetCal(Config);
+</P>
+<P>
+ADCのゲイン校正データと、オフセット校正データを設定します。
+成功すると&quot;SETCAL&quot;を、AD変換中は&quot;BUSY&quot;、設定エラー時には&quot;ERR&quot;の
+コマンド文字列を返します。
+なお、通信エラー時にはundefを返します。
+</P>
+<DL>
+<DT>Config</DT>
+<DD>ADCのゲイン校正データと、オフセット校正データを文字列でセットします。
+(取扱説明書参照: setcal コマンドより後の部分を入力)
+</DD>
+</DL>
+
+<BR>
+<H3>GetCal</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;GetCal();
+</P>
+<P>
+ADCに設定されている校正済みのゲイン校正データと、オフセット校正データを取得します。
+成功すると&quot;GETCAL 入力各チャンネルデータ&quot;を、AD変換中は&quot;BUSY&quot;、設定エラー時には&quot;ERR&quot;の
+コマンド文字列を返します。(リストコンテキストではリストを返します。)
+なお、通信エラー時にはundefを返します。
+</P>
+<BR>
+<H3>Cal</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;Cal();
+</P>
+<P>
+ADCの校正を行います。入力チャンネルのレンジや入力レートを変更した場合、計測器の設置場所の温度環境が大きく変化した場合に実行する必要があります。
+レスポンスには数秒から十数秒かかります。
+</P>
+
+<BR>
+<H3>GetADC</H3>
+<P CLASS="usage">
+Usage: $rt = $object-&gt;GetADC();
+</P>
+<P>
+ADC全チャンネルを状態を取得します。ユニポーラの場合0～65535、
+バイポーラの場合-32768～32767の整数値として取得することができます。
+成功すると&quot;AIN 入力各チャンネルデータ&quot;を、AD変換中は&quot;BUSY&quot;、設定エラー時には&quot;ERR&quot;の
+コマンド文字列を返します。(リストコンテキストではリストを返します。)
+なお、通信エラー時にはundefを返します。
+</P>
+
+<HR></HR>
+<ADDRESS>Takashi Kosuge</ADDRESS>
+</BODY>
+</HTML>

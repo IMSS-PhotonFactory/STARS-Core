@@ -1,0 +1,216 @@
+#! /usr/bin/perl
+#################################################################
+# CAEN Model C111C MAIN DRIVER STARS client
+# 2006-08-31 Yasuko Nagatani
+##-------------------------------------------------------
+## CVS $Revision: 1.1 $ $Date: 2010-01-19 01:55:24 $ $Author: yasukon $
+##-------------------------------------------------------
+## Updated
+#################################################################
+use strict;
+use Getopt::Long;
+use stars;
+use caenc111clib;
+#use caenc111clib_test;
+#################################################################
+## ToDo: Constant Variables here.
+use constant PGM_VERSION => '1.1'; # PGM Ver.No
+#################################################################
+## ToDo: Set parameters here.
+$::Server      = 'localhost';     # Default Stars Server.
+$::NodeName    = 'caenc111c';     # Default Node Name:
+$::Debug       = '';
+$::PGMVersion  = PGM_VERSION;    # Default Program Version
+#################################################################
+## ToDo: Globals for Slot Table. Internal Use Only.
+@::REGSTARSNAME=();			#Use For Slot Configuration.
+%::REGNODENAME=();
+%::REGSLOTNO=();			#Use For Slot Configuration.
+%::REGINITH=();				#Use For Slot Configuration.
+%::REGREQH=();				#Use For Slot Configuration.
+%::REGINTH=();				#Use For Slot Configuration.
+%::REGIRQH=();				#Use For Slot Configuration.
+%::REGDESC=();				#Use For Slot Configuration.
+$::DISABLEINTERVAL='';			#FLAG for DISABLE INTERVAL
+#################################################################
+# ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'h'      => \&usage,
+'d'      => \$::Debug
+) or die 'Bad switch.\n';
+$|=1;
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+require 'config.pl';
+
+## Open C111C.
+$::camac = caenc111c->new($::CAMAC_HOST)
+or die 'Could not connect CAMAC Controller';
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die 'Could not connect Stars server';
+
+MAIN_init();
+$::tak->addcallback(\&MAIN_handler);
+if($::DISABLEINTERVAL){
+stars->Mainloop();
+}else{
+stars->Mainloop(\&MAIN_interval,50);
+}
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for '-h' option.
+  print "Usage: $::NodeName [-h] [-d] [nodename]\n";
+  exit(0);
+}
+#############################################################
+## Irq handler called by CAMAC HANDLER
+#############################################################
+sub MAIN_irq{
+	my ($irq_cmd, $irq_data) = @_;
+	my $i;
+	print "IRQ Catched $irq_cmd $irq_data\n";
+	if($irq_cmd eq ''){return;}
+	for($i=0;$i<@::REGSTARSNAME;$i++){
+		if($::REGIRQH{$::REGSTARSNAME[$i]} eq ''){next;}
+		print "$::REGSTARSNAME[$i] IRQ CALLED\n";
+		$::REGIRQH{$::REGSTARSNAME[$i]}->($irq_cmd, $irq_data);
+	}return;
+}
+#############################################################
+## Interval Handler called by Stars Server
+#############################################################
+sub MAIN_interval{
+	my $i;
+	my $nodename;
+	for($i=0;$i<@::REGSTARSNAME;$i++){
+		if($::REGINTH{$::REGSTARSNAME[$i]} eq ''){next;}
+		$nodename=$::REGSTARSNAME[$i];
+		$::REGINTH{$nodename}->($nodename,$::REGSLOTNO{$nodename});#RunInterval
+## Test Insert
+		while(1){
+			my($from,$to,$mess)=$::tak->Read();
+			if($from eq ''){last;}
+			MAIN_handler($from,$to,$mess);
+		}
+	}
+	return;
+}
+#############################################################
+## Main handler called by Stars Server
+#############################################################
+sub MAIN_handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+	my ($from, $to, $mess) = @_;
+	my $rt='';
+	my($rc,$retmsg);
+	my $nodename=$to;
+
+	##Ignore Event/Reply Messages ##
+	if($mess=~/^[_@]/){return;}
+	
+	if($nodename eq $::NodeName){
+		if($mess eq 'GetNodeNameList'){
+			$rt=join(" ",@::REGSTARSNAME);
+			$::tak->Send("\@$mess Ok: $rt", $from);return;
+		}elsif($mess=~/^GetSlotNumber\s*/){
+			$mess=~/^GetSlotNumber\s(\S+)/;
+			if($1 eq ''){
+				$::tak->Send("\@$mess Er: Bad Parameter.", $from);return;
+			}
+			$rt=$::REGSLOTNO{$1};
+			if($rt eq ''){
+				$::tak->Send("\@$mess Ng: Nodename invalid.", $from);return;
+			}else{
+				$::tak->Send("\@$mess Ok: $rt", $from);return;
+			}
+		}
+	}
+	
+	## C111C Drivers Commands ##
+	if($::REGSLOTNO{$nodename} ne ''){
+		if($mess=~/^GetSlotNumber\s*/){
+			unless($mess=~/^GetSlotNumber$/){
+				$::tak->Send("\@$mess Er: Bad Parameter.", $from);return;
+			}
+			$rt=$::REGSLOTNO{$nodename};
+			if($rt eq ''){
+				$::tak->Send("\@$mess Ng: Nodename invalid.", $from);return;
+			}else{
+				$::tak->Send("\@$mess Ok: $rt", $from);return;
+			}
+		}
+		$rt=$::REGREQH{$nodename}->($from,$to,$mess
+		                     ,$nodename,$::REGSLOTNO{$nodename});
+		return;
+	}else{
+		$::tak->Send("\@$mess Er: $to is down.", $from);return;
+	}
+	
+	return;
+}
+#############################################################
+## Interval Handler called by Stars Server
+#############################################################
+sub MAIN_init{
+	my($rt,$i);
+	for($i=0;$i<@::REGSTARSNAME;$i++){
+		if($::REGINITH{$::REGSTARSNAME[$i]} eq ''){next;}
+		if($::Debug){print "INIT:$::REGSTARSNAME[$i]\n";}
+		$rt=$::REGINITH{$::REGSTARSNAME[$i]}->($::REGSTARSNAME[$i]
+								,$::REGSLOTNO{$::REGSTARSNAME[$i]});
+		if($rt eq ''){die "Init Error. $::REGSTARSNAME[$i]\n";}
+	}
+	return;
+}
+#############################################################
+## Return StarsNodeName
+#############################################################
+sub MAIN_getnodenamebyno{
+	my $slotno=shift;
+	return("$::REGNODENAME{$slotno}");
+}
+#############################################################
+## ADD HELP
+#############################################################
+sub MAIN_mainhelp(){
+my $data=<<EOF;
+GetNodeNameList#Returns the list of the all valid stars nodename.
+GetSlotNumber#args:StarsNodename => Returns the slot number of the stars nodename.
+EOF
+	return($data);
+}
+sub MAIN_subhelp(){
+my $data=<<EOF;
+GetSlotNumber#Returns the slot number of the stars nodename.
+EOF
+	return($data);
+}
+#############################################################
+## Main handler called by Stars Server
+#############################################################
+sub MAIN_RegisterModule2Controller{
+	my($starsdest,$slotno,$inith,$handler,$inth,$irqh,$description)=@_;
+	if($slotno=~/^([0-9]|1[0-9]|2[0-5])$/){
+		$::REGSLOTNO{$starsdest}=$slotno;
+		unless(defined($::REGNODENAME{$slotno})){
+			$::REGNODENAME{$slotno}=$starsdest;
+		}
+	}else{die "SLOT Number Invalid.\n";}
+	
+	push(@::REGSTARSNAME,"$starsdest");
+
+	unless($inith eq ''){$::REGINITH{$starsdest}=$inith;}
+	unless($handler eq ''){$::REGREQH{$starsdest}=$handler;
+	}else{die "No handler defined.\n";}
+	unless($inth eq ''){$::REGINTH{$starsdest}=$inth;}
+	unless($irqh eq ''){$::REGIRQH{$starsdest}=$irqh;}
+	$::REGDESC{$starsdest}=$description;
+	if($::Debug){
+	  print "STARSNODE $starsdest SLOT $slotno FOR $description.($inith,$handler,$inth,$irqh)\n";
+	}
+	return(1);
+}

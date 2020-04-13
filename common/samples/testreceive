@@ -1,0 +1,14 @@
+#! /usr/bin/perl
+
+use stars;
+
+my $nd = stars->new('RcvDev',undef,undef,'takaserv-lib/RcvDev.key') or die;
+my $fh1 = $nd->gethandle();
+
+while(<$fh1>){
+	chomp;s/\r//;
+	print "$_\n";
+	if($_ =~ / quit$/){last;}
+}
+
+undef $hd;

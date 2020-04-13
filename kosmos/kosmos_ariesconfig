@@ -1,0 +1,648 @@
+#! /usr/bin/perl
+use strict;
+use Getopt::Long;
+use stars;
+use Tk;
+use Tk::NoteBook;
+
+#################################################################3
+# KOHZU KOSMOS ARIES config STARS client
+# 2015-03-31 Ver 0.9(Beta version) Yasuko Nagatani
+#################################################################
+# Version 0.9: ARIES Ver.1.23 Tested
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'ariesconfig';      #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::mt         = 0;                  #Default motor number
+$::Cntl       = 'aries';            #Default controller.
+#################################################################
+$::mtname     = "";                 #Default motor number
+$::tagno      = 0;                  #Default tagno
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'node=s' => \$::NodeName,
+'c=s'    => \$::Cntl,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::mt     = $_;}
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+## Check Device name
+	my $ver = $::tak->act("$::Cntl GetDeviceName");
+	(undef,undef,$ver) = split(/\s+/, $ver, 3);
+	unless($ver=~/(\S+)/){
+		die "Unsupported target=$ver\n";return;
+	}
+	setCMDTBL($ver);
+	my $mw = MainWindow->new();
+	$mw->title("Setting of $::Cntl");
+
+	my $book = $mw->NoteBook()->pack( -fill=>'both', -expand=>1 );
+
+	@::tabtag=qw(SYSASI SYSESI SYSMPC SYSTRG SPDTBL);
+	my @tabname=("MotorParameter","EncoderConfig","MotorConfig","Trigger","SpeedTable");
+	my @tagptr=();
+	my %tagentries=();
+	my @frame_0=();
+	my @frame_1=();
+	my @option_1=();
+	my @label_0=();
+	my @button_1=();
+	my @button_2=();
+	my $t=0;
+	my $spdtitle;
+	my $spddesc;
+	foreach(@::tabtag){
+		my @title=();
+		my @label_i=();
+		my @w=();
+		@::entry=();
+		@::label_a=();
+		my @keys=GetTabKeyTable($_);
+		foreach my $keytag (@keys){
+			push(@title,$::HELP_DEVICE{$keytag});
+			push(@::cmd,"$keytag");
+			if($::RW_DEVICE{$keytag}=~/w/){
+				push(@w,1);
+			}else{
+				push(@w,0);
+			}
+#			print $::RW_DEVICE{$keytag},"\n";
+		};
+		my $NumberOfCmds=$#title+1;
+		# widget creation 
+		push(@tagptr,$book->add($_, -label=>$tabname[$t]
+		,-raisecmd=>[ \&RefreshPage, $t ]));
+		push(@frame_0,$tagptr[$#tagptr]->Frame());
+		push(@frame_1,$tagptr[$#tagptr]->Frame());
+		push(@option_1,$tagptr[$#tagptr]->Optionmenu(
+			-options => [0,1],
+			-textvariable => \$::mt,
+			-command => [ \&pread, $t ]
+		));
+		push(@label_0 , $tagptr[$#tagptr]->Label (
+				-text => 'Motor No./Name',
+		));
+		push(@::label_01 , $tagptr[$#tagptr]->Label (
+			-text => 'Name',
+		));
+		if($::tabtag[$t] eq "SPDTBL"){
+			$spdtitle=$tagptr[$#tagptr]->Label (
+				-text => 'StartSpd MaxSpd Acctime Dcctime AccType'
+				);
+			$spddesc=$tagptr[$#tagptr]->Label (
+				-text => 'Accpls Dccpls'
+				);
+		}
+			for(my $i=0;$i<$NumberOfCmds;$i++){
+				push(@label_i, $tagptr[$#tagptr]->Label (
+ 					-text => $title[$i],
+ 					-justify => 'left',
+ 				));
+				if($w[$i]){
+					push(@::entry, $tagptr[$#tagptr]->Entry (
+						-justify => 'right',
+						-text=>"e"
+#						-state=>'disabled'
+					));
+				}else{
+					push(@::entry, $tagptr[$#tagptr]->Label (
+						-text=>""
+#						-state=>'disabled'
+					)->pack(-anchor=>'e',-expand=>1,-side => 'right'));
+				}
+				push(@::label_a, $tagptr[$#tagptr]->Label (
+ 					-text => "",
+ 					-justify => 'left',
+ 				));
+			}
+		@{$::tagentries{$_}}=@::entry;
+#		print "$_:",@{$::tagentries{$_}},"\n";
+		@{$::taglabels{$_}}=@::label_a;
+		push(@button_1 , $tagptr[$#tagptr]->Button (
+			-text => 'Apply',
+		));
+		push(@button_2 , $tagptr[$#tagptr]->Button (
+			-text => 'Reset',
+		));
+		$button_1[$#tagptr]->configure(
+			-command => [ \&ApplyButton, $t ] 
+		);
+		$button_2[$#tagptr]->configure(
+			-command => [ \&ResetButton, $t ]
+		);
+		# Geometry management
+		$label_0[$#tagptr]->grid(
+			-in => $tagptr[$#tagptr],
+			-column => '1',
+			-row => '1'
+		);
+		$frame_0[$#tagptr]->grid(
+			-in => $tagptr[$#tagptr],
+			-column => '2',
+			-row => '1'
+		);
+		$option_1[$#tagptr]->grid(
+		-in => $frame_0[$#tagptr],
+		-column => '1',
+		-row => '1'
+		);
+		$::label_01[$#tagptr]->grid(
+			-in => $frame_0[$#tagptr],
+			-column => '2',
+			-row => '1'
+		);
+		my $c=0;
+		if($::tabtag[$t] eq "SPDTBL"){
+			$c=1;
+			$spdtitle->grid(
+				-sticky=>'w',
+				-in => $tagptr[$#tagptr],
+				-column => '2',
+				-row => 2
+			);
+			$spddesc->grid(
+				-sticky=>'w',
+				-in => $tagptr[$#tagptr],
+				-column => '3',
+				-row => 2
+			);
+		}
+		for(my $i=0;$i<$NumberOfCmds;$i++){
+			$label_i[$i]->grid(
+				-sticky=>'w',
+				-in => $tagptr[$#tagptr],
+				-column => '1',
+				-row => $i+2+$c
+			);
+#			if($::RW_DEVICE{$arrays[0]}=$arrays[8];}
+
+			$::entry[$i]->grid(
+				-in => $tagptr[$#tagptr],
+				-column => '2',
+				-row => $i+2+$c,
+			);
+			$::label_a[$i]->grid(
+				-sticky=>'w',
+				-in => $tagptr[$#tagptr],
+				-column => '3',
+				-row => $i+2+$c
+			);
+		}
+		$frame_1[$#tagptr]->grid(
+			-in => $tagptr[$#tagptr],
+			-column => '2',
+			-row => $NumberOfCmds + 2+$c
+		);
+		$button_1[$#tagptr]->grid(
+			-in => $frame_1[$#tagptr],
+			-column => '1',
+			-row => '1'
+		);
+		$button_2[$#tagptr]->grid(
+			-in => $frame_1[$#tagptr],
+			-column => '2',
+			-row => '1'
+		);
+		# Resize behavior management
+
+		# container $tab1 (rows)
+		for(my $i=0;$i<$NumberOfCmds;$i++){
+			$tagptr[$#tagptr]->gridRowconfigure($i+1+$c, -weight  => 0, -minsize  => 18);
+		}
+		$tagptr[$#tagptr]->gridRowconfigure($NumberOfCmds+2+$c, -weight     => 0, -minsize  => 42);
+		# container $tab1 (columns)
+		$tagptr[$#tagptr]->gridColumnconfigure(1, -weight => 0, -minsize => 2);
+		$tagptr[$#tagptr]->gridColumnconfigure(2, -weight => 0, -minsize => 2);
+		# container $frame_1 (rows)
+		$frame_1[$#tagptr]->gridRowconfigure(1, -weight  => 0, -minsize  => 30);
+		# container $frame_1 (columns)
+		$frame_1[$#tagptr]->gridColumnconfigure(1, -weight => 0, -minsize => 79);
+		$frame_1[$#tagptr]->gridColumnconfigure(2, -weight => 0, -minsize => 72);
+		# additional interface code
+		# end additional interface code
+		$t++;
+	}
+
+
+
+
+# widget commands
+pread(0);
+
+MainLoop();
+
+
+
+exit(1);
+
+sub ApplyButton{
+	my $t=shift;
+	pwrite($t);
+	pread($t);
+	return;
+}
+
+sub ResetButton{
+	my $t=shift;
+	pread($t);
+	return;
+}
+
+sub pwrite{
+	my $t=shift;
+	my $buf="";
+	my $page=$::tabtag[$t];
+	my @keys=GetTabKeyTable($::tabtag[$t]);
+	my @entry=@{$::tagentries{$::tabtag[$t]}};
+	my $i=0;
+	if($page eq "SPDTBL"){
+		foreach my $keytag (@keys){
+			if(defined($::CMD_DEVICE{$keytag})){
+				my $s=$keytag;
+				$s=$s-9000;
+				if($::RW_DEVICE{$keytag}=~/w/){
+					$buf= $entry[$i]->get();
+#					print "$i $s $buf","\n";
+					$buf=~s/^\s+//;
+					$buf=~s/\s+$//;
+					if($buf eq ''){
+					}else{
+						$buf = $::tak->act("$::Cntl.$::mtname SetSpeedTblInfo $s $buf");
+					}
+				}
+			}
+			$i++;
+		}
+		return;
+	}
+	foreach my $keytag (@keys){
+			if(defined($::CMD_DEVICE{$keytag})){
+				my $s=$keytag;
+				if($::RW_DEVICE{$keytag}=~/w/){
+					$buf= $entry[$i]->get();
+#					print "$i $s $buf","\n";
+					$buf=~s/^\s+//;
+					$buf=~s/\s+$//;
+					if($buf eq ''){
+					}else{
+						$buf = $::tak->act("$::Cntl.$::mtname SetSysInfo $s $buf");
+					}
+				}
+			}
+			$i++;
+	}
+	RefreshPage($::tagno);
+	return;
+}
+
+sub pread{
+	my $t=shift;
+	my $buf = $::tak->act("$::Cntl GetMotorName $::mt");
+	(undef,undef,undef,$buf) = split(/\s+/, $buf);
+	$::mtname=$buf;
+	$::label_01[$t]->configure('-text' => $buf);
+	$buf = $::tak->act("$::Cntl.$::mtname GetSysInfo");
+	(undef,undef,$buf) = split(/\s+/, $buf, 3);
+
+	%::SYSINFOVALUES=();
+	my @vals=split(',',$buf);
+	for(my $i=0;$i<=$#vals;$i++){
+		if($vals[$i]=~/^(\d+)\s(\S+)$/){
+			$::SYSINFOVALUES{$1}=$2;
+		}elsif($vals[$i]=~/^(\d+)$/){
+			$::SYSINFOVALUES{$1}='-';
+		}else{
+			next;
+		}
+#		print "$1 $::SYSINFOVALUES{$1}\n";
+	}
+	
+	my $buf2 = $::tak->act("$::Cntl.$::mtname GetSpeedTblInfo");
+	(undef,undef,$buf2) = split(/\s+/, $buf2, 3);
+	my @vals2=split(',',$buf2);
+	for(my $i=0;$i<=$#vals2;$i++){
+		if($vals2[$i]=~/^(\d+)\s(.+)$/){
+			$::SYSINFOVALUES{$1+9000}=$2;
+		}elsif($vals2[$i]=~/^(\d+)$/){
+			$::SYSINFOVALUES{$1+9000}='-';
+		}else{
+			next;
+		}
+#		print "$1 $::SYSINFOVALUES{$1+9000}\n";
+	}
+	RefreshPage($t);
+	return;
+}
+
+
+sub RefreshPage{
+	my $t=shift;
+	my $buf=$::mtname;
+	$::label_01[$t]->configure('-text' => $buf);
+	my @keys=GetTabKeyTable($::tabtag[$t]);
+	my @entry=@{$::tagentries{$::tabtag[$t]}};
+	my @label_a=@{$::taglabels{$::tabtag[$t]}};
+#	print "$::tabtag[$t]",@entry,"\n";
+#	print "@keys","\n";
+	my $i=0;
+	
+	foreach my $keytag (@keys){
+		if(defined($::CMD_DEVICE{$keytag})){
+			my $s=$keytag;
+			if(defined($::SYSINFOVALUES{$s})){
+				if($::RW_DEVICE{$keytag}=~/w/){
+					$buf=$::SYSINFOVALUES{$s};
+					if(($s+0)>=9000){
+						$buf=~s/ (\d+) (\d+)$//;
+						$label_a[$i]->configure('-text' =>"$1 $2");
+					}else{
+						$label_a[$i]->configure('-text' =>'');
+					}
+					$entry[$i]->delete(0,"end");
+					$entry[$i]->insert(0, $buf);
+				}else{
+					$entry[$i]->configure('-text' => $::SYSINFOVALUES{$s},
+						-anchor=>'e');
+				}
+			}
+		}else{
+			$entry[$i]->configure('-text' => "");
+			if($::RW_DEVICE{$keytag}=~/w/){
+				$entry[$i]->delete(0,"end");
+			}
+		}
+		$i++;
+	}
+	$::tagno=$t;
+	return;
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: configpm16c02 [-h] [-node MyNodeName] [-c Controller] MotorNumber [StarsServer]\n";
+  exit(0);
+}
+
+###################################
+# Globals
+###################################
+use constant STAT_OK   => 'Ok:';
+use constant STAT_ERR  => '';
+use constant MSG_ARGMISSING  => '1 Parameter Required.';
+use constant MSG_ARG0ONLY    => 'No Parameter Required.';
+#@::RAWCMDLIST_DEVICE=();
+%::GPP_DEVICE=();
+%::CMDTOTAG_DEVICE=();
+%::CMD_DEVICE=();
+%::PRE_DEVICE=();
+%::CHECK_DEVICE=();
+%::POST_DEVICE=();
+%::VER_DEVICE=();
+%::SC_DEVICE=();
+%::HELP_DEVICE=();
+%::RW_DEVICE=();
+%::HELP2_DEVICE=();
+%::ARG1_DEVICE=();
+%::ARG2_DEVICE=();
+@::CMDKeys=();
+
+###################################
+# Check Functions Added for m6487
+###################################
+sub convNDN{
+	my $val=uc(shift);
+	my($v,$sign,$sign2)=('',1,1);
+	if($val=~/^#H([0-9|A-E]+)$/){
+		$v = hex($1);
+	}elsif($val=~/^#Q([0-7]+)$/){
+		$v = oct($1);
+	}elsif($val=~/^#B([0|1]+)$/){
+		$v = unpack("C",  pack("B".length($1),$1));
+	}elsif($val=~/^(\d+)$/){
+		$v = $1;
+	}
+	return($v);
+}
+###################################
+# Check Functions
+###################################
+sub checkArgMissing{
+	my $val=shift;
+	if($val eq ''){
+		$::Error=MSG_ARGMISSING;
+		return(STAT_ERR);
+	}
+	return(STAT_OK);
+}
+sub checkBusyOff{
+	my $rt=Ctl_IsBusy();
+	unless($rt eq '0'){
+		$::Error="Busy.";
+		return(STAT_ERR);
+	}
+	return(STAT_OK);
+}
+#--------------------------------------------------------------------
+sub convEtoN{
+	my $val=uc(shift);
+	my($v,$sign,$sign2)=('',1,1);
+	if($val=~/^(-?)(\d*)(.?)(\d*)[E](-?)(\d+)$/){
+		if($1 eq '-'){$sign=-1;}
+		if($5 eq '-'){$sign2=-1;}
+		unless("$2$4" eq ''){
+			if($3 eq '.'){$v="$2.$4";}else{$v="$2$4";}
+			$v=$sign*scalar($v)*(10**($sign2*$6));
+		}
+	}elsif($val=~/^(-?)(\d*)(.?)(\d*)$/){
+		if($1 eq '-'){$sign=-1;}
+		unless("$2$4" eq ''){
+			if($3 eq '.'){$v="$2.$4";}else{$v="$2$4";}
+			$v=$sign*scalar($v);
+		}
+	}
+	return($v);
+}
+
+#--------------------------------------------------------------------
+sub checkLIST{
+	my $tag=shift;
+	my $val=uc(shift);
+	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
+	if($::ARG1_DEVICE{$tag}=~/^\s*$/){
+		$::Error="Definition Error. No arg1 for $tag.";
+		return(STAT_ERR);
+	}
+	my $rt=0;
+#	print "\$rt=(\$val=~$::ARG1_DEVICE{$tag} \? 1:0));\n";
+	eval("\$rt=(\$val=~$::ARG1_DEVICE{$tag} \? 1:0);");
+	if( $@ ){
+		$::Error="Program Error. $tag $@.";
+		return(STAT_ERR);
+	}
+#	print "CHECKED RESULT:$rt\n";
+	if($rt){
+		return($val);
+	}else{
+		my $cmd=$::CMD_DEVICE{$tag};
+		$::Error="Bad Parameter. command $tag $val";
+		return(STAT_ERR);
+  	}
+}
+sub checkNUMBERRANGE{
+	my $tag=shift;
+	my $val=uc(shift);
+	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
+	if($::ARG1_DEVICE{$tag}=~/^\s*$/){
+		$::Error="Definition Error. No arg1 for $tag.";
+		return(STAT_ERR);
+	}
+	if($::ARG2_DEVICE{$tag}=~/^\s*$/){
+		$::Error="Definition Error. No arg2 for $tag.";
+		return(STAT_ERR);
+	}
+	my $min=$::ARG1_DEVICE{$tag};
+	my $max=$::ARG2_DEVICE{$tag};
+	my $v=convEtoN($val);
+	if($v eq ''){
+		$::Error='Invalid number format.';
+		return(STAT_ERR);
+	}elsif($val=~/\./){
+		$::Error='Invalid number format.';
+	}elsif(($min<=$v) and ($v<=$max)){
+		return($v);
+	}else{
+		my $cmd=$::CMD_DEVICE{$tag};
+		$::Error="Bad Parameter. command $tag $val";
+		return(STAT_ERR);
+	}
+}
+###################################
+# READ COMMAND PARAMETERS
+###################################
+sub GetTabKeyTable{
+	my $group=shift;
+	my @arrays=();
+#	print "@::CMDKeys\n";
+#print "$group";
+	foreach (@::CMDKeys){
+		if(/^#/){next;}
+		if($group eq $::GRP_DEVICE{$_}){
+			push(@arrays,$_);
+		}
+	}
+	return(@arrays);
+}
+
+sub setCMDTBL{
+	my $devname=shift;
+	my @arrays;
+	@::CMDKeys=();
+	while(<DATA>){
+		if(/^#/){next;}
+#		print "DATA:",$_,"\n";
+		@arrays=split(/\t/,$_);
+		my $group=shift(@arrays);
+		unless($arrays[0] eq ''){
+			push(@::CMDKeys,$arrays[0]);
+#			print "0:",$arrays[0],":",$group,"\n";
+			unless($devname=~/^$arrays[6]/){
+#				print "$arrays[6], $devname\n";
+				next;
+			}
+			$::CMD_DEVICE{$arrays[0]}=$arrays[1];
+			if($arrays[0]=~/^\$RAW\$/){
+				push(@::RAWCMDLIST_DEVICE,$arrays[0]);
+#				print "@::RAWCMDLIST_DEVICE;\n";
+				$::CMDTOTAG_DEVICE{$arrays[1]}=$arrays[0];
+			}
+			if($group ne ''){
+				$::GRP_DEVICE{$arrays[0]}=$group;
+			}
+			if($arrays[2] ne ''){
+				eval '$::PRE_DEVICE{$arrays[0]}='."$arrays[2];";warn $@ if $@;
+			}
+			if($arrays[3] ne ''){
+				eval '$::CHECK_DEVICE{$arrays[0]}='."$arrays[3];";warn $@ if $@;
+			}
+			if($arrays[4] ne ''){
+				eval '$::POST_DEVICE{$arrays[0]}='."$arrays[4];";warn $@ if $@;
+			}
+			$::VER_DEVICE{$arrays[0]}=$arrays[5];
+			$::HELP_DEVICE{$arrays[0]}=$arrays[7];
+			if($#arrays>=8) {$::RW_DEVICE{$arrays[0]}=$arrays[8];}
+			if($#arrays>=9) {$::HELP2_DEVICE{$arrays[0]}=$arrays[9];}
+			if($#arrays>=10) {$::ARG1_DEVICE{$arrays[0]}=$arrays[10];}
+			if($#arrays>=11){$::ARG2_DEVICE{$arrays[0]}=$arrays[11];}
+		}
+#		push(@title,$::HELP_DEVICE{$arrays[0]});
+	}
+	return('Ok:');
+}
+###################################
+# COMMAND PARAMETERS
+###################################
+
+__DATA__
+#PAGE	SYSRAWNO	CMD	PRECHECK	CHECK	POSTCHECK	VER	DEVICE	DESC	RWMODE	VALUETOOLTIP	ARG1	ARG2	MEMO
+SYSASI	1			\&checkNUMBERRANGE		1	(ARIES|CRUX)	ORG Offset	rw	原点復帰後の座標値、原点オフセット値	-134217728	134217727
+SYSASI	2			\&checkLIST		1	(ARIES|CRUX)	ORG Type	rw	原点復帰方式	/^([1-9]|1[012345])$/	
+SYSASI	3			\&checkNUMBERRANGE		1	(ARIES)	ORG Scan Speed	rw	原点検索時の速度	1	5000000
+SYSMPC	6			\&checkNUMBERRANGE		1	(ARIES|CRUX)	PulseMotor Prescale	r	パルス値 プリスケール(設定した値を超えた時０に戻す)多回転テーブル使用時,0 位置でのクリア機能。		
+SYSMPC	7			\&checkLIST		1	(ARIES|CRUX)	PulseMotor Rotate Change	rw	モータ回転方向の変更	/^[01]$/	
+SYSMPC	8			\&checkLIST		1	(ARIES|CRUX)	Limit Swap 0:Normal 1:Switch	rw	リミット信号入替え	/^[01]$/	
+SYSMPC	9			\&checkLIST		1	(ARIES)	PulseMotor Clock 1:1CLK 2:2CLK	rw	パルス出力方式切替	/^[12]$/	
+SYSMPC	10			\&checkLIST		1	(ARIES)	PulseMotor Logic 0:Positive 1:Negative	rw	パルス出力論理切替	/^[01]$/	
+SYSASI	11			\&checkNUMBERRANGE		1	(ARIES)	Backash Pulse	rw	バックラッシュ補正 パルス数	0	16777215
+SYSASI	12			\&checkLIST		1	(ARIES)	Backash Mode	rw	0-4 バックラッシュ補正方式 0：無効 1～4：方式選択	/^[01234]$/	
+SYSASI	13			\&checkLIST		1	(ARIES)	Software Limit Enable	rw	ソフトリミット設定 0:無効 1:有効	/^[01]$/	
+SYSASI	14			\&checkNUMBERRANGE		1	(ARIES)	Software CW Limit	rw	ソフトリミットCW	0	134217727
+SYSASI	15			\&checkNUMBERRANGE		1	(ARIES)	Software CCW Limit	rw	ソフトリミットCCW	0	134217727
+SYSASI	16			\&checkNUMBERRANGE		1	(ARIES)	Top Speed Limit	r	最高速度制限値	2	5000000
+SYSMPC	21			\&checkLIST		1	(ARIES|CRUX)	Limit Logic 0:NC 1:NO	rw	リミット信号論理の変更	/^[01]$/	
+SYSMPC	22			\&checkLIST		1	(ARIES|CRUX)	NORG 0:NO 1:NC	rw	NORG センサ信号論理の変更	/^[01]$/	
+SYSMPC	23			\&checkLIST		1	(ARIES|CRUX)	ORG 0:NO 1:NC	rw	ORG センサ信号論理の変更	/^[01]$/	
+SYSESI	31			\&checkLIST		1	(ARIES)	Encoder MULTIPLI 1,2,4	r	エンコーダ値 逓倍 1：1 逓倍 2：2 逓倍 4：4 逓倍	/^[124]$/	
+SYSESI	32			\&checkNUMBERRANGE		1	(ARIES)	Encoder PRESCALE	r	エンコーダ値 プリスケール(設定した値を超えた時０に戻す) 多回転テーブル使用時,0 位置でのクリア機能。	0	134,217,727
+SYSESI	33			\&checkNUMBERRANGE		1	(ARIES)	Encoder CALC NUM	r	モータパルス/エンコーダ分解能比率	1	134217727
+SYSESI	34			\&checkNUMBERRANGE		1	(ARIES)	Encoder CALC DEN	r	モータパルス/エンコーダ分解能比率	1	134217727
+SYSESI	35			\&checkLIST		1	(ARIES)	Encoder ROTATE CHANGE	r	エンコーダカウントの加算方向	/^[01]$/	
+SYSESI	36			\&checkLIST		1	(ARIES)	Encoder Z LOGIC	r	エンコーダZ相の論理切替	/^[01]$/	
+SYSESI	37			\&checkLIST		1	(ARIES)	PM&ENC SyncWrite	r	エンコーダ座標同期	/^[01]$/	
+SYSESI	38			\&checkLIST		1	(ARIES)	PM&ENC Filter	r	エンコーダ信号のフィルタ切替	/^[01]$/	
+SYSESI	41			\&checkLIST		1	(ARIES)	Encoder Feedback type 0,1,2	r	エンコーダ補正方式 0：補正なし 1：位置決め時のみ補正 2：常時補正	/^[0-2]$/	
+SYSESI	42			\&checkLIST		1	(ARIES)	Encoder Permit range	r	エンコーダパルス許容範囲	0	10000
+SYSESI	43			\&checkLIST		1	(ARIES)	Encoder Feedback retry count	r	フィードバック時のリトライ回数	1	10000
+SYSTRG	51			\&checkLIST		1	(ARIES)	TriggerSource 0:PM 1:ENC 2:ENCx2 3:ENCx4	rw	トリガ信号源選択 0:パルス値 1:エンコーダ値(1逓倍) 2:エンコーダ値(2逓倍) 3:エンコーダ値(4逓倍)	/^[0-3]$/	
+SYSTRG	52			\&checkLIST		1	(ARIES)	TriggerEdge 0:Up 1:Down1	rw	トリガ信号のエッジの選択 0:立上がり 1:立下がり	/^[01]$/	
+SYSTRG	53			\&checkNUMBERRANGE		1	(ARIES)	Trigger PM Pitch 1-100000	rw	トリガ信号の分周比設定　モータパルス同期の場合	1	100000
+SYSTRG	54			\&checkNUMBERRANGE		1	(ARIES)	Trigger ENC Pitch 1-100000	rw	トリガ信号の分周比設定　エンコーダパルス同期の場合	1	100000
+SYSTRG	55			\&checkLIST		1	(ARIES)	Trigger PulseWidth(microsec) 1:1 2:10 3:100 4:1000	rw	トリガ出力のパルス幅 0:1microsec 1:10microsec 2:100microsec 3:1000microsec	/^[1-4]$/	
+SYSTRG	56			\&checkLIST		1	(ARIES)	Trigger Logic 0:Positive 1:Negative	rw	トリガ出力の論理切替 0:正論理 1:負論理	/^[01]$/	
+SYSASI	61			\&checkLIST		1	(ARIES|CRUX)	Hold on OFF:0 ON:1	rw	モータ励磁 1：励磁ON 0：励磁OFF	/^[01]$/	
+SYSMPC	62			\&checkLIST		1	(ARIES)	SERVO USE 0:Pulse motor 1:Servo motor	r	サーボモータ仕様の有無 0:パルスモータ 1:サーボモータ	/^[01]$/	
+SYSMPC	63			\&checkLIST		1	(ARIES)	ALARM VALID 0:invalid 1:valid	r	アラーム入力信号 0:無効 1:有効	/^[01]$/	
+SYSMPC	65			\&checkLIST		1	(ARIES|CRUX-A)	Microstep select 0:M1 1:M2	r	マイクロステップM1/M2の選択	/^[01]$/	
+SYSMPC	66			\&checkLIST		1	(CRUX)$	Microstep div num	r	マイクロステップ分割数指定	/^[01]$/	
+SYSMPC	67			\&checkLIST		1	(CRUX)$	Motor driver current 0:0.75A 1:0.35A	r	モータドライバ電流値	/^[01]$/	
+SYSMPC	68			\&checkNUMBERRANGE		1	(CRUX)	Job movement amount	r	ジョグボックス(RPSモード)移動量	-16777215	16777215
+SYSASI	99			\&checkLIST		1	(ARIES|CRUX)	Limit Stop 0:Normal 1:Emergency	rw	リミット停止方式 0：緊急停止 1：減速停止	/^[01]$/	
+SPDTBL	9000					1	(ARIES|CRUX)	Speed Tbl. 0	rw	速度テーブル		
+SPDTBL	9001					1	(ARIES|CRUX)	Speed Tbl. 1	rw	速度テーブル		
+SPDTBL	9002					1	(ARIES|CRUX)	Speed Tbl. 2	rw	速度テーブル		
+SPDTBL	9003					1	(ARIES|CRUX)	Speed Tbl. 3	rw	速度テーブル		
+SPDTBL	9004					1	(ARIES|CRUX)	Speed Tbl. 4	rw	速度テーブル		
+SPDTBL	9005					1	(ARIES|CRUX)	Speed Tbl. 5	rw	速度テーブル		
+SPDTBL	9006					1	(ARIES|CRUX)	Speed Tbl. 6	rw	速度テーブル		
+SPDTBL	9007					1	(ARIES|CRUX)	Speed Tbl. 7	rw	速度テーブル		
+SPDTBL	9008					1	(ARIES|CRUX)	Speed Tbl. 8	rw	速度テーブル		
+SPDTBL	9009					1	(ARIES|CRUX)	Speed Tbl. 9	rw	速度テーブル		
+SPDTBL	9010					1	(ARIES|CRUX)	Speed Tbl.10	rw	速度テーブル		
+SPDTBL	9011					1	(ARIES|CRUX)	Speed Tbl.11	rw	速度テーブル		

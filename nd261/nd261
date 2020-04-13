@@ -1,0 +1,151 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+#################################################################
+# STARS client for nd261 HEIDENHAIN Encoder.
+# 2006-04-03 Takashi Kosuge
+# 2008-02-23 Added invert switch. T.Kosuge
+# $Revision: 1.2 $
+# $Date: 2010-03-08 01:50:09 $
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'nd261';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::NPORT_HOST = '192.168.11.160';   #IP address of NPORT
+$::NPORT_PORT = 4001;               #Portnumber of NPORT
+$::AVERAGE_COUNT = 1;				#AVERAGE_COUNT
+$::DIGITNUM  = 4;                   #YOMITORI SEIDO
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+$::FlgInvert  = 0;                  #Invert output value 1=invert
+
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'i'      => \$::FlgInvert,
+'h'      => \&usage,
+'avgcount=s' => \$::AVERAGE_COUNT,
+'digitnum=s' => \$::DIGITNUM,
+) or die "Bad switch.\n";
+
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+$::AVERAGE_COUNT=$::AVERAGE_COUNT+0;
+if($::AVERAGE_COUNT<1){$::AVERAGE_COUNT=1;}
+$::DIGITNUM=$::DIGITNUM+0;
+if($::DIGITNUM<1){$::DIGITNUM=4;}
+
+require 'nportsvr.pl';
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+device_init();
+
+$::tak->addcallback(\&handler);
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: $::NodeName [-h] [-d] [-i] [-avgcount Number] [-node MyNodeName] [StarsServer]\n";
+  print "       -h   Show this help.\n";
+  print "       -i   Invert sine of output.\n";
+  print "       -d   Run with debug mode.\n";
+  print "       -avgcount Number\n";
+  print "            Read value \"Number\" times then return the average.\n";
+  exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	my $rt='';
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess eq 'help GetValue'){
+		$rt="help hello";
+	}elsif($mess eq 'GetValue'){
+		$rt=getdata($::AVERAGE_COUNT);
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+
+sub getdata{
+	my $avgcount=shift;
+	my $rt='';
+	my $val=0;
+	my $i;
+	
+	if($avgcount<1){$avgcount=1;}
+
+	for($i=0;$i<$avgcount;$i++){
+		device_write(pack("C", 2), 1);
+		$rt = device_read();
+		if($rt eq ''){
+			$::Error = 'The hardware does not respond.';
+			return('');
+		}
+		unless($rt =~ /^\s*([+\-])\s*(\S+)\s/){
+			$::Error = 'Bad data received from the hardware.';
+			return('');
+		}
+		$rt = $1.$2;
+		if($::FlgInvert){
+			$rt *= -1;
+		}else{
+			$rt *= 1;
+		}
+		if($::Debug){
+			print "$::NodeName Value[$i]=>$rt\n";
+		}
+		$val=$val+$rt;
+	}
+	$val=$val/$i;
+	if($::Debug){
+		print "$::NodeName AveragedValue $val/$i=$val\n";
+	}
+	return(sprintf("%.".$::DIGITNUM."f", $val));
+}

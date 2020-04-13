@@ -1,0 +1,12 @@
+m2701drv:i0.DCV.AverageState=1
+m2000drv:DMM.DCV.Range=AUTO
+m2701drv:i0.DCV.NPLCycles=5
+m2701drv:i1.DCV.AverageState=1
+m2701drv:i1.DCV.Range=AUTO
+m2701drv:DMM.TriggerDelay=AUTO
+m2000drv:DMM.DCV.NPLCycles=0.2
+m2701drv:i1.DCV.NPLCycles=5
+m2000drv:DMM.TriggerDelay=2
+m2701drv:i1.DCV.AverageCount=20
+m2701drv:i0.DCV.Range=AUTO
+m2701drv:i0.DCV.AverageCount=20

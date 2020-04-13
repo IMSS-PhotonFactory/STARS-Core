@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<Message Mtype="Execute" IOC="#IOCNAME#">
+   <Command TimeStamp="#TIME#" StopAnswerBack="True">
+      <FromDevice>
+         <NodeDefinition ID="#TERMFROM#" ClientWinNo="#TERMFROM#-W1"/>
+      </FromDevice>
+      <ToDevice>
+         <NodeDefinition ID="#TERMTO#">
+            <DeviceProperty PropertyID="Status">
+               <PropertyValue Value="#P1#"/>
+            </DeviceProperty>
+         </NodeDefinition>
+         <DeviceMethod MethodID="SetCache"/>
+      </ToDevice>
+   </Command>
+</Message>

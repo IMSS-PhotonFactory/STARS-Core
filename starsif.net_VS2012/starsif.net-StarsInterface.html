@@ -1,0 +1,347 @@
+<HTML>
+<HEAD>
+<TITLE>STARS.NET interface library - StarsInterface.dll</TITLE>
+<STYLE>
+<!--
+P.usage{font: bold}
+ADDRESS{text-align:right}
+.style1 {color: #FFFFFF}
+.style2 {color: #FFFF00}
+-->
+</STYLE>
+</HEAD>
+
+<BODY>
+<H1>Readme for StarsInterface.dll - Stars .NET Interface library</H1>  
+<ADDRESS>2006-12-15 Takashi Kosuge<br>   
+  Yasuko Nagatani</ADDRESS>  
+
+<H2>SYNOPSIS</H2>
+
+<P>本書はStars .NET インターフェースライブラリーファイル'<strong>StarsInterface.dll</strong>'について解説します。<br>
+  <br>
+  'StarsInterface.dll'はStarsの基本ライブラリーです。<br>
+Starsのコンソールアプリケーションのクライアントプログラムを作成する場合は、'StarsInterface.dll'を使います。<br>
+StarsのWindowsフォームアプリケーションのクライアントプログラムを作成する方は、'StarsInterface.dll'に加えてＳｔａｒｓのフォーム用の追加ライブラリ'<a href="./starsif.net-StarsInterfaceWinForm.html" target="_blank">StarsInterfaceWinForm.dll</a>'についてもお読みください。
+
+<H2>DESCRIPTION</H2>
+<P>STARS .NETインターフェースライブラリー'StarsInterface.dll'を使用すると、.NETアプリケーションから簡単にTAKサーバへの接続が可能となります。   
+<H2>METHODS</H2>
+<H3><A NAME="STARS.StarsInterface">STARS.StarsInterface</A> Constructor</H3>
+<P CLASS="usage">Usage:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href="#STARS.Directive">STARS.</a>StarsInterface <i> stars</i> = new <a href="#STARS.Directive">STARS.</a>StarsInterface(<i>nodename</i>,                                                   
+<i>serverhost</i>, <i>keyfile</i>, <i>serverport</i>);</P>
+<DL>
+<DT>新たにSTARS.StarsInterface型のインスタンスを作成します。成功するとインスタンスのリファレンスを返します。</DT>
+<DT><br>
+  stars
+</DT>
+<DD>STARS.StarsInterface型のインスタンスです。</DD>
+<dt>　</dt>
+<DT>
+  nodename</DT>
+<DD>STARSで使用する自ノード名を指定します。</DD>
+<DT>serverhost</DT>
+<DD>TAKサーバが動作しているホスト名を指定します。省略すると'localhost'が使用されます。</DD>
+<DT>serverport</DT>
+<DD>使用するTCP/IPソケットのPort番号を指定します。省略すると6057が使用されます。</DD>
+<DT>keyfile</DT>
+<DD>認証に使用するキーワードリストのファイル名を指定します。省略するとnodename+'.key'がファイル名として使用されます。</DD>
+</DL>
+
+<H3><A NAME="STARS.StarsInterface.Connect">STARS.StarsInterface.Connect</A></H3>
+<P CLASS="usage">Usage:<br>
+&nbsp;&nbsp;&nbsp; <i><a href="#STARS.StarsInterface">stars</a></i>.Connect();                                                   
+</P>
+<P>
+TAKサーバとのコネクションを確立します。&nbsp;
+</P>
+
+<DL>
+<DT>
+  stars
+</DT>
+<DD>既生成のSTARS.StarsInterface型のインスタンスを指定します。　</DD>
+</DL>
+
+<H3><A NAME="STARS.StarsInterface.Send">STARS.StarsInterface.Send</A></H3>
+<P CLASS="usage">Usage:<br>
+&nbsp;&nbsp; &nbsp;&nbsp;&nbsp; <i><a href="#STARS.StarsInterface">stars</a></i>.Send(<i>message</i>);<br>                                                 
+or &nbsp;&nbsp; <i><a href="#STARS.StarsInterface">stars</a></i>.Send(<i>termto</i>, <i>message</i>);<br>                                                  
+ot&nbsp;&nbsp;&nbsp; <i><A href="#STARS.StarsInterface">stars</A></i>.Send(<i>termfrom</i>, <i>termto</i>, <i>message</i>);                                                    
+</P>
+<P>メッセージの送信を行います。</P>
+
+<DL>
+  <DT>stars </DT>
+  <DD>既生成のSTARS.StarsInterface型のインスタンスを指定します。</DD>
+</DL>
+<DL><DT>message</DT>
+<DD>送信するメッセージを指定します。デリミタ(LF)はSTARS .NETインターフェースライブラリーが自動的に付加します。</DD>                                                  
+<DT>termto</DT>
+<DD>termtoを指定すると送信メッセージの先頭にtermtoとスペースが付加されます。
+</DD>
+<DT>termfrom</DT>
+<DD>termfromを指定すると送信メッセージの先頭にtermfromと'&gt;'が付加されます。
+</DD>
+</DL>
+
+<H3><A NAME="STARS.StarsInterface.Receive">STARS.StarsInterface.Receive</A>
+</h3>
+<P CLASS="usage">
+Usage:<br>
+&nbsp;&nbsp;&nbsp; <a href="#STARS.Directive">STARS.</a>StarsMessage <i>rcvMesg</i> = <i><a href="#STARS.StarsInterface">stars</a></i>.Receive（<i>timeout</i>);</P>
+<P>メッセージの受信を行います。TAKサーバからのメッセージがデリミタ(LF)を取り除いてSTARS.StarsMessage型の変数に対して返されます。<br>
+STARS.NETインターフェースの<a href="#STARS.StarsInterface.StartCbHandler">Callbackモード</a>を開始した以降は、Receiveメソッドを利用したメッセージの受信はおこなわないでください。
+</P>
+
+<DL>
+<DT>rcvMesg
+</DT>
+<DD>STARS.StarsMessage型のインスタンスです。受信したメッセージが返されます。
+  <br>
+  <br>
+  <DL>
+<DT><A NAME="rcvMesg.allMessage">rcvMesg.allMessage</A>
+</DT>
+<DD>メッセージの受信データの値をフルフォーマットで参照できます。</DD>
+<DT>rcvMesg.from
+</DT>
+<DD>メッセージの受信データの送信元のStarsノード名の値が参照できます。</DD>
+<DT>rcvMesg.to
+</DT>
+<DD>メッセージの受信データの宛先のStarsノード名の値が参照できます。</DD>
+<DT>rcvMesg.Message
+</DT>
+<DD>メッセージの受信データのメッセージ部の値が参照できます。</DD>
+<DT>rcvMesg.command
+</DT>
+<DD>メッセージの受信データのコマンド部（メッセージ部の中の１番目の単語）の値が参照できます。</DD>
+<DT>rcvMesg.paramater
+</DT>
+<DD>メッセージの受信データのパラメータ部（メッセージ部の中でコマンド部に続く文字列）の値が参照できます。<br>
+</DD>
+</DL>
+
+</DD>
+<DT>&nbsp;
+  </DT>
+<DT>stars </DT>
+<DD>既生成のSTARS.StarsInterface型のインスタンスを指定します。</DD>
+<DT></DT>
+<dt>　</dt>
+<DT>timeout</DT>
+<DD>受信待ち時間を指定します。単位はm secondです。省略すると、デフォルト値が使用されます。</DD>                                                      
+</DL>
+
+<H3><A NAME="STARS.StarsCbHandler">STARS.StarsCbHandler Constructor</A></H3> 
+<P CLASS="usage">
+Usage:<br>
+&nbsp;　　　<a href="#STARS.Directive">STARS</a>.StarsCbHandler <i>cb</i> = new                                             
+<a href="#STARS.Directive">STARS</a>.StarsCbHandler(<i>handler</i>);                                          
+</P>
+
+<DL>
+<DT>STARS.NETインターフェースのCallbackモードを開始するメソッド<A href="#STARS.StarsInterface.StartCbHandler">STARS.StarsInterface.StartCbHandler</A>に渡すSTARS.StarsCbHandler型のインスタンスを生成します。</DT>
+<DT>　</DT>
+<DT>cb
+</DT>
+<DD>STARS.StarsCbHandler型のインスタンスです。</DD>
+<DL>
+<DT>&nbsp;</DT>
+<DT><A NAME="handler">handler</A><br>
+</DT>
+<DD>入力が発生したときに呼び出されるサブルーチンへのリファレンスを指定します。<br>
+  <br>
+  handlerは型宣言は以下のとおりです。<br>
+  <br>
+  static void handler(<i>Object obj</i>, <a href="#STARS.Directive">STARS</A>.<i>StarsCbArgs ev</i>)<br>
+  <br>                                            
+  <DL>
+<DT>obj
+</DT>
+<DD>STARS.StarsInterface型のインスタンスの値が参照できます。<br>
+</DD>
+<DT>ev
+</DT>
+<dd>STARS.StarsCbArgs型で受信したメッセージが返されます。
+
+  <DL>
+<DT><A NAME="ev.allMessage">ev.allMessage</A>
+</DT>
+<DD>メッセージの受信データの値をフルフォーマットで参照できます。</DD>
+<DT>ev.from
+</DT>
+<DD>メッセージの受信データの送信元のStarsノード名の値が参照できます。</DD>
+<DT>ev.to
+</DT>
+<DD>メッセージの受信データの宛先のStarsノード名の値が参照できます。</DD>
+<DT>ev.Message
+</DT>
+<DD>メッセージの受信データのメッセージ部の値が参照できます。</DD>
+<DT>ev.command
+</DT>
+<DD>メッセージの受信データのコマンド部（メッセージ部の中の１番目の単語）の値が参照できます。</DD>
+<DT>ev.parameter
+</DT>
+<DD>メッセージの受信データのパラメータ部（メッセージ部の中でコマンド部に続く文字列）の値が参照できます。</DD>
+</DL>
+
+</dd>
+</DL>
+
+</DD>
+</DL>
+
+<H3>                                           
+<A NAME="STARS.StarsInterface.StartCbHandler">STARS.StarsInterface.StartCbHandler</A></H3>
+<P CLASS="usage">
+Usage:&nbsp;<br>
+　　　<a href="#STARS.StarsInterface">stars</a>.StartCbHandler(<i><A HREF="#STARS.StarsCbHandler">cb</A></i>);                                          
+</P>
+
+<DL>
+<DT>STARS.NETインターフェースのCallbackモードを開始します。TAKサーバからデータの入力が発生するたびにhandlerで設定したサブルーチンが自動的に呼び出されるようになります。Callbackモードを開始した以降は、<A HREF="#STARS.StarsInterface.Receive">STARS.StarsInterface.Receive</A>メソッドを利用したメッセージの受信はおこなわないでください。<br>
+  <br>
+  ConsoleアプリケーションからCallbackモードを開始する場合は当メソッドを使用します。</DT>
+<DT>WindowsフォームアプリケーションからCallbackモードを開始する場合は、当メソッドの代わりに<a href="./starsif.net-StarsInterfaceWinForm.html#STARS.WinForm.StartCbHandler" target="_blank">STARS.WinForm.StartCbHandler</A>メソッドを使用してください。<br>
+</DT>
+<DD></DD>
+<DT>&nbsp; </DT>
+<DT>stars </DT>
+<DD>既生成のSTARS.StarsInterface型のインスタンスを指定します。　</DD>
+<DT>cb
+</DT>
+<DD>既生成のSTARS.StarsCbHandler型のインスタンスを指定します。<br>
+  なお
+  handlerはインスタンス生成時の引数として渡されています。
+</DD>
+
+<dt>&nbsp;</dt>
+
+</DL>
+
+</DL>
+<H3><A NAME="STARS.Directive">STARS Directive</A></H3>                            
+<P CLASS="usage">
+Usage:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; using STARS;                                              
+</P>
+
+<P>STARSディレクティブを宣言します。&nbsp;STARSディレクティブを使用すると修飾子'STARS.'の記述が省略できます。<br>
+プログラムファイルの先頭（namespace宣言より上部）に記述してください。
+</P>
+
+<H3><br>
+サンプルプログラム</H3>
+<P CLASS="usage">
+Visual Studio C# 2005によるコンソールプログラムのサンプルです。 </P>
+<table bgcolor="#CCCCCC">
+<tr><td><pre>using System;
+using System.Collections.Generic;
+using System.Text;
+//when activates directive 'STARS' - 'using STARS', expression 'STARS.' in this program can be omitted. 
+//<a href="#STARS.directive">using STARS;</a>
+
+namespace ConsoleApplication1
+{
+    class Program
+    {
+        /// &lt;summary&gt;
+        /// Entry Point here.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;args&quot;&gt;Parameters for this program.&lt;/param&gt;;
+        static void Main(string[] args)
+        {
+            // Make Instance of StarsInterface.
+            <a href="#STARS.StarsInterface">STARS.StarsInterface stars = new STARS.StarsInterface(&quot;csterm&quot;, &quot;localhost&quot;);</a>
+            try
+            {
+                // Connect to Stars Server.
+                <a href="#STARS.StarsInterface.Connect">stars.Connect();</a>
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(&quot;stars.Connect:&quot; + e);
+                Console.Read();
+                return;
+            }
+            // Send &quot;System hello&quot; to Stars Server.
+            // Write as stars.Send(&quot;System hello&quot;); =&gt; ok.
+            <a href="#STARS.StarsInterface.Send">stars.Send(&quot;System&quot;, &quot;hello&quot;);</a>
+
+            // Wait for receiving reply message for &quot;System hello&quot; from Stars Server.
+            // Class 'StarsMessage' is used for store data receiving from Stars Server by using method 'Receive'.
+            try
+            {
+                <a href="#STARS.StarsInterface.Receive">STARS.StarsMessage rcvMesg = stars.Receive();</a>
+                // Output the received data to Console.
+                Console.WriteLine(&quot;Data arriving from Stars Server for method 'Receive'&quot;);
+                Console.WriteLine(&quot;=&gt;&quot; + <a href="#rcvMesg.allMessage">rcvMesg.allMessage</a>);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(&quot;Stars.Receive:&quot; + e);
+                Console.Read();
+                return;
+            }
+
+            // Add Stars handler which is called when Stars message is arriving from Stars Server.
+            // Method 'Receive' can't work after using Stars handler because Stars handler has priorty to be called for data arriving.
+            // Write as stars.StartCbHandler(new STARS.StarsCbHandler(handler)); =&gt; ok.
+            <a href="#STARS.StarsCbHandler">STARS.StarsCbHandler cb = new STARS.StarsCbHandler(handler);</a>
+            <a href="#STARS.StarsInterface.StartCbHandler">stars.StartCbHandler(cb);</a>
+
+            // Wait for Console input. Program exit for 'quit', or Send input to Stars Server.
+            Console.WriteLine(&quot;Input Stars message, or 'quit' for terminating program.&quot;);
+            String input = &quot;&quot;;
+            while (input != &quot;quit&quot;)
+            {
+                input = Console.ReadLine();
+                switch(input){
+                    case &quot;&quot;:
+                        break;
+                    case &quot;quit&quot;:
+                        break;
+                    default:
+                        // Send input to Stars Server.
+                        // Reply from Stars Server can be catched at handler().
+                        <a href="#STARS.StarsInterface.Send">stars.Send(input);</a>
+                        break;
+                }
+            }
+            return;
+        }
+
+        /// &lt;summary&gt;
+        /// This is prepared as Stars handler which is called when Stars message is arriving from Stars Server.
+        /// &lt;/summary&gt;
+        /// &lt;param name=&quot;obj&quot;&gt;Indicate type Object.&lt;/param&gt;;
+        /// &lt;param name=&quot;ev&quot;&gt;Indicate type StarsCbArgs which is used for store data receiving from Stars Server for Stars handler.&lt;/param&gt;
+        <a href="#handler">static void handler(Object obj, STARS.StarsCbArgs ev)</a>
+        {
+            Console.WriteLine(&quot;handler() is called&quot;);
+            Console.WriteLine(&quot;=&gt;&quot;+<a href="#ev.allMessage">ev.allMessage</a>);
+        }
+    }
+}</pre></td></tr></table>
+
+<br>
+サンプルプログラムの実行結果です。
+<table bgcolor="#000000"><tr><td><pre class="style1">Data arriving from Stars Server for method 'Receive'
+=&gt;System&gt;csterm @hello Nice to meet you.　<span class="style2">--- 'System hello'に対する返答を'Receive'メソッドで受け取った.</span>
+Input Stars message, or 'quit' for terminating program.
+System listnodes                 <span class="style2">        --- 'System listnodes'を実行する.</span>
+handler() is called              
+=&gt;System&gt;csterm @listnodes csterm　<span class="style2">      --- handler()に対して'System listnodes'に対する返答が返される.</span>
+System flgon term1<span class="style2">                       --- 'term1' のイベントメッセージの監視を開始する.</span>
+handler() is called
+=&gt;System&gt;csterm @flgon Node term1 has been registered.
+handler() is called
+=&gt;term1&gt;csterm _Connected　            <span class="style2">  --- 'term1'のStars Server接続をイベントとして検知した.</span>
+System listnodes<br>handler() is called<br>=&gt;System&gt;csterm @listnodes csterm term1<br>handler() is called
+=&gt;term1&gt;csterm hello                   <span class="style2">  --- 'term1'からcstermに対して送ったhelloメッセージを受け取った.</span>
+quit</pre></td></tr></table>
+<p>（終わり）</p>
+</BODY>
+</HTML>

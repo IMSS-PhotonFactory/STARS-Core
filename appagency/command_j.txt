@@ -1,0 +1,13 @@
+<コマンドの実行>
+script execute script_name arg1 arg2... argN
+script @execute script_name Ok: serial_id
+
+<コマンドのプロセスＩＤの取得>
+script getpid script_name.serial_id
+
+<コマンドの強制終了の取得>
+script terminate script_name.serial_id
+
+<script_name.serial_id一覧>
+script listproc
+script @listproc sim_tcpserv.13731491

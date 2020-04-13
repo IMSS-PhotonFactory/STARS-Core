@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarsInterface", "StarsInterface\StarsInterface.csproj", "{F8EC4606-A119-40CC-8848-2EDDE3DF108C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarsInterfaceWinForm", "StarsInterfaceWinForm\StarsInterfaceWinForm.csproj", "{35142B04-6CA0-4123-9819-C4511FB22689}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F8EC4606-A119-40CC-8848-2EDDE3DF108C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8EC4606-A119-40CC-8848-2EDDE3DF108C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8EC4606-A119-40CC-8848-2EDDE3DF108C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8EC4606-A119-40CC-8848-2EDDE3DF108C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{35142B04-6CA0-4123-9819-C4511FB22689}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{35142B04-6CA0-4123-9819-C4511FB22689}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{35142B04-6CA0-4123-9819-C4511FB22689}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{35142B04-6CA0-4123-9819-C4511FB22689}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,19 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  All bat files in this directory willbe deleted.
+This program should be used for Windows.
+';
+#####################################################
+$::Offline= 1;
+require 'scriptlib.pl';
+
+stYesNo("All bat files will be deleted. Ok?") or die "Cancelled.\n";
+
+`DEL *.bat`;
+
+print "Done. Please use perl \"perl generate_bat_files\" if you need generate bat files.\n";
+

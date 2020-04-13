@@ -1,0 +1,12 @@
+obj\Release\ResolveAssemblyReference.cache
+bin\Release\StarsInterface.dll
+bin\Release\StarsInterface.pdb
+obj\Release\StarsInterface.dll
+obj\Release\StarsInterface.pdb
+bin\Debug\StarsInterface.dll
+bin\Debug\StarsInterface.pdb
+obj\Debug\ResolveAssemblyReference.cache
+obj\Debug\StarsInterface.dll
+obj\Debug\StarsInterface.pdb
+bin\Release\StarsInterface.xml
+bin\Debug\StarsInterface.xml

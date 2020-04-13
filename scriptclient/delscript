@@ -1,0 +1,37 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = '';
+$::Description = '
+  "delscript" moves script file into the backup directory.
+';
+#####################################################
+$::Offline= 1;
+## Settings ##
+$::Param    = 'File_name';
+##===================================================
+
+require 'scriptlib.pl';
+use File::Copy;
+
+stLoadParam("configscript.cfg");
+if(!$::Param{'Script_Backup_Directory'} or !(-d $::Param{'Script_Backup_Directory'})){
+	die "Script backup directory is not found. Please make directory or set \"Script Backup Directory\" with \"configscript\".\n";
+}
+
+my $src;
+($src) = stSetParam();
+$::DataFile = $src;
+stAddSuffixDataFile();
+$::DataFile =~ s/\.txt/.bak/;
+
+unless(-e $src){die "$src does not exist.\n";}
+
+my $dst = "$::Param{'Script_Backup_Directory'}/$::DataFile";
+
+stYesNo("Delete $src?") or die "Cancelled.\n";
+
+move($src, $dst) or die $!;
+if(-e "$src.bat"){unlink("$src.bat");}
+print "Done. Backup file is \"$dst\".\n";

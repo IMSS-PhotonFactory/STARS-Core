@@ -1,0 +1,240 @@
+#! /usr/bin/perl
+
+use Getopt::Long;
+use Cwd qw(chdir abs_path);
+use File::Copy;
+use strict;
+
+$::Version  = '$Revision: 1.6 $';
+$::Version .= '$Date: 2011-04-07 02:44:41 $';
+
+my $os=shift(@ARGV) or usage();
+my $dir=shift(@ARGV) or usage();
+my $pgm=shift(@ARGV);
+
+GetOptions(
+'d'      => \$::Debug,
+'h'      => \&usage
+) or die 'Bad switch.\n';
+
+my $cmd;
+my $catc;
+my $suf;
+my $htmlfilename;
+if(lc($os) eq 'win'){
+	$cmd='zip -r';
+	$catc='w';
+	$suf='.zip';
+	$htmlfilename='package_win.html';
+}elsif(lc($os eq 'unix')){
+	$cmd='tar cvzf';
+	$catc='u';
+	$suf='.tgz';
+	$htmlfilename='package_unix.html';
+}else{usage();}
+
+my $curdir=$ENV{'PWD'};
+if($ENV{'PWD'} eq ''){
+	$curdir = Cwd::getcwd();
+}
+
+my $category;
+my $package;
+my $sfile;
+my @sfilelist;
+my $lp;
+my $description;
+my $dateid=ksg_localtimemd();
+#my $startpath=$ENV{'PWD'};
+my $startpath=$curdir;
+my $workingpath;
+my $package_name;
+my $filesize;
+my $tmpdir;
+
+my $htmlhead='<html>
+<head><title>STARS Package</title></head>
+<body>
+<h2>STARS server, documents and clients</h2>
+<hr>
+<ul>
+';
+
+my $htmlfoot='</ul>
+<hr>
+</body>
+</html>';
+
+
+######################################
+unless(mkdir($dir, 0755)){
+	warn "WARNING: $!\n";
+}
+
+$tmpdir=$ENV{'PWD'};
+if($ENV{'PWD'} eq ''){
+	$tmpdir = Cwd::getcwd();
+}
+chdir('../');
+$workingpath=$ENV{'PWD'};
+if($ENV{'PWD'} eq ''){
+	$workingpath = Cwd::getcwd();
+}
+
+open(HTML, ">$dir/$htmlfilename") or die;
+print HTML $htmlhead;
+
+while(<DATA>){
+	chomp;
+	if(/^#/){next;}
+	($category, $sfile, $package_name, $description)=split(':', $_);
+	unless($category =~ /$catc/){next;}
+
+	@sfilelist=split(/,/,$sfile);
+
+	$package=$sfilelist[0];
+	$package=~s/.+\///g;
+
+	unless($package_name){$package_name = $package;}
+#print "$package_name";
+	if($pgm){
+		if($pgm ne $package_name){
+			next;
+		}
+	}
+
+	if(@sfilelist > 1){
+		mkdir("$tmpdir/$package_name", 0755);
+		chdir($workingpath);
+		for $lp (@sfilelist){
+			print "copying $lp => $tmpdir/$package_name/.\n";
+			#Changed By Nagatani. START 11/27
+			#copy($lp, "$tmpdir/$package_name/.");
+			if($lp=~s/\/\*$//){
+				if(opendir(DIR,$lp)){
+					foreach my $lp2 (readdir(DIR)){
+						print "$lp/$lp2\n";
+						if(-f "$lp/$lp2"){
+							print "$lp/$lp2";
+							copy("$lp/$lp2", "$tmpdir/$package_name/.");
+						}
+					}
+					close(DIR);
+				}
+			}else{
+				copy($lp, "$tmpdir/$package_name/.");
+			}
+			#Changed By Nagatani. END 11/27
+		}
+		$sfile = $tmpdir;
+		$package = $package_name;
+	}else{
+		$sfile = $sfilelist[0];
+		$sfile=~s/\/*[^\/]+$//;
+	}
+
+	
+	if($sfile){chdir($sfile);}
+#	print Cwd::getcwd(),"\n";
+	print "$cmd $dir/${package_name}_$dateid$suf $package";
+	print `$cmd $dir/${package_name}_$dateid$suf $package`;
+	if($sfile){chdir($workingpath);}
+
+	(undef,undef,undef,undef,undef,undef,undef,$filesize) = stat("$dir/${package_name}_$dateid$suf");
+	$filesize =~ s<\G((?:^-)?\d{1,3})(?=(?:\d\d\d)+(?!\d))><$1,>g;
+
+	print HTML "<li><b><font size=\"+1\">$package_name</font></b><br>\n$description<br>\n";
+	print HTML "<a href=\"${package_name}_$dateid$suf\">${package_name}_$dateid$suf\</a>";
+	print HTML " ($filesize Bytes)<br><br></li>";
+}
+
+
+print HTML $htmlfoot;
+close(HTML);
+chdir($startpath);
+####################################
+exit(0);
+
+
+
+sub usage{
+	print <<__USAGE__;
+STARS Distribution Package creater $::Version
+Usage: $0 (win|unix) outputdir
+__USAGE__
+
+ 	exit(0);
+}
+
+sub ksg_localtimemd{
+my $tm = shift(@_);
+if($tm eq ''){$tm=time();}
+my @tt = localtime($tm);
+return(sprintf("%04d%02d%02d%02d%02d%02d",
+$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+
+
+
+__DATA__
+wu:kernel::Release version of STARS kernel.
+#wu:kernel2::Beta version of STARS kernel.
+wu:doc:KernelDocuments:Documents of stars kernel.
+wu:starsinst::STARS installer.
+wu:pythonlib/stars.py,pythonlib/singlestars.py,pythonlib/STARSPython.pdf:pythonlib:Python libraries such as stars.py etc..
+#wu:perllib::Perl libraries such as stars.pm, nportserv.pm etc..
+wu:perllib/*,doc/karacrix-readme.html,doc/picnic-readme.html,doc/stars-interface-module.html:perllib:Perl libraries such as stars.pm, nportserv.pm etc..
+wu:starsif.net_VS2012/StarsInterface/bin/Release/StarsInterface.dll,starsif.net_VS2012/StarsInterfaceWinForm/bin/Release/StarsInterfaceWinForm.dll,starsif.net_VS2012/starsif.net-StarsInterface.html,starsif.net_VS2012/starsif.net-StarsInterfaceWinForm.html:starsinterface.NET_lib:STARS .NET interface library. (library and help) Please refer samples.
+wu:starsif.net_VS2012:starsinterface.NET_source:STARS .NET interface library. (with source files)
+w:starsif.netPocketPC2003/StarsInterface/bin/Release/StarsInterface.dll,starsif.netPocketPC2003/StarsInterfaceWinForm/bin/Release/StarsInterfaceWinForm.dll:starsinterface.NET_lib_PocketPC2003:STARS .NET interface library for Pocket PC 2003.
+w:common/vb/installer/starsinterface::STARS VB interface ActiveX control.
+wu:starsclib::C library for stars client.
+wu:samples::Sample programs.
+wu:newplclient::Perl STARS Client development wizard.
+w:newvbclient::Visual Basic 6 STARS Client development wizard.
+w:winformcs_template_VS2012/distribution/STARSWinFormApplication.zip,winformcs_template_VS2012/usage_j.pdf:winformcs_template:Visual Studio 2012 C# project template for windows form (Also Work on VS2015). Builded application with the template runs on windows and Mono.
+w:winformvb_template_VS2012/distribution/STARSWinFormApplication.zip,winformvb_template_VS2012/usage_j.pdf:winformvb_template:Visual Studio 2012 Visual Basic project template for windows form (Also Work on VS2015). Builded application with the template runs on windows and Mono.
+wu:logger::STARS logger.
+wu:syslogger::STARS System logger. It connects with node name Debugger.
+wu:logreader::logreader for STARS logger.
+wu:manager::STARS client manager, which controls execute and terminate clients on demand.
+wu:managercntrl::GUI tool for manager.
+wu:mcdirec::Macro command director of stars.
+wu:mceditor::Editor for mcdirec.
+wu:scriptclient::Perl library for developping simple STARS script client.
+wu:appagency::STARS Application agency. It handles scripts and it's simpler than mcdirec.
+wu:testnwpf::STARS performance checker.
+wu:m2701drv::I/O client of KEITHLEY digital multi meter.
+wu:m6485drv::I/O client of KEITHLEY 6485 Picoammeter.
+wu:m6487drv::I/O client of KEITHLEY 6487 Picoammeter/Voltage Source.
+wu:sanwadmm::I/O client of Sanwa digital multi meter PC series.
+wu:nct08::I/O client of Tuji 8 channel Counter/Timer NCT08-02 and NCT08-01.
+wu:npm2c01::I/O client of Tuji pusle motor controller NPM-2C.
+wu:npm2ccntlpnl::GUI control panel for npm2c01.
+wu:npm2cconfig::GUI configuration tool for npm2c01.
+wu:ortec974::I/O client of ORTEC 974 counter.
+wu:pm16c02::I/O client of Tsuji pulse motor controller PM16C-02 series.
+wu:pm16c04::I/O client of Tsuji pulse motor controller PM16C-04 series.(PM16C-04XD, PM16C-04, PM16C-04S)
+wu:pm16ccntlpnl::GUI control panel for pm16c and pm4c.
+wu:pm16cconfig::GUI configuration tool for pm16c.
+wu:pm16cconfigXACS::GUI configuration tool for "Auto Change Speed functions" Of Tsuji pulse motor controller PM16C-04XD series.
+wu:pm4c05a::I/O client of Tsuji pulse motor controller PM16C-05.
+wu:pm4cconfig::GUI configuration tool for pm16c.
+wu:shot102::I/O client of SIGMA stage controller SHOT102.
+wu:shot102cntlpnl::GUI control panel for shot102.
+wu:nd261::I/O client of HEIDENHAIN nd261.
+wu:sc400::I/O client of KOZU pulse motor controller SC-200, SC-400, SC-210, SC410.
+wu:erxc::I/O client of Tsuji encoder counter for ER2C-03A, ER4C-03A.
+wu:caenc111c::I/O client of C.A.E.N ethernet CAMAC crate controller C111C and drivers, C.A.E.N 16ch TTL Scaler Mod.C257, Kinetic Systems Timing Generator 3655.
+wu:streg::Status register client.
+wu:spman::Advanced GUI for client manager.
+wu:clientBridge::Starsbr provides interface similar to STARS server. But it allows connection with same client name.
+#wu:stars_tine_ioc::STARS client for connecting TINE server.
+wu:coastbr::COACK bridge.
+wu:breaker::You can define the stars commands which is executed when the specific stars client has terminated.
+wu:starsbridge::You can connect Stars Servers each other with using this program.
+wu:scriptclient::You can create the script that brings the procedures on stars together as you like.
+#wu:ring::PF Ring Information Reference Client.
+#wu:pfringdisplay::PF Ring Information Reference Client.
+#wu:pfarringdisplay::PF-AR Ring Information Reference Client.
+wu:mailer::Mailer Client.

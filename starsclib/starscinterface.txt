@@ -1,0 +1,193 @@
+-------------------------------------------------------------------------------------
+Structure of STARS_CONNECTION
+-------------------------------------------------------------------------------------
+STARS_CONNECTION has members as follows.
+
+
+int           handle                     socket port of stars connection
+
+struct        timeval *timeout           timeout of receive function
+
+char          rcvto[STARS_SVRN_MAX]      Destination terminal name of receive function
+                                            normally, it will be this terminal name
+
+char          rcvfrom[STARS_SVRN_MAX]    Sender terminal name of receive function
+
+char          rcvmess[STARS_MESSAGE_MAX] Received message
+
+int           rcvcnt                     Buffered position which is used by callback routine
+
+STARS_CBMODE  cbmode                     Callback mode, 
+
+
+int    (*cbfunc)()                       Pointer of function which will be called
+
+
+
+
+
+
+-------------------------------------------------------------------------------------
+STARS_CONNECTION *stars_open(char *nodename, char *svrhost, int svrport, char *keyfile);
+-------------------------------------------------------------------------------------
+Connection of STARS will be established by using this function. Momories are allocated
+for the structure automatically and returns pointer of the struucture.
+
+char *nodename;
+Define node name of the client program.
+
+char *svrhost;
+Host name of STARS server.
+
+int svrport;
+Port number of STARS server. Normally, 6057 shuld be used.
+
+char *keyfile
+Keyword file name.
+
+
+
+-------------------------------------------------------------------------------------
+int   stars_close(STARS_CONNECTION *scp);
+-------------------------------------------------------------------------------------
+It closes a connection to the STARS server and releases memories the STARS_CONNECTION
+structure. It returns "1" at any time.
+
+
+
+-------------------------------------------------------------------------------------
+int   stars_send(STARS_CONNECTION *scp, char *message, char *sendto);
+-------------------------------------------------------------------------------------
+Send a message to STARS server. It returns result of "send" (TCP/IP socket function).
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+char *message;
+Message to send.
+
+char *sendto;
+Client name (node name) ot destination.
+
+
+-------------------------------------------------------------------------------------
+int   stars_receive(STARS_CONNECTION *scp);
+-------------------------------------------------------------------------------------
+Receive a message from STARS server. Received message will be set into the members
+of the structure as follows.
+
+rcvfrom: Client name (node name) of sender.
+
+rcvto: Destination of the message. Usually, it's me.
+
+rcvmess: command, event or reply message.
+
+"stars_receive" returns count of message (rcvfrom + rcvto + messages) and value under
+"0" means error or timeout (returnend value of "select").
+
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+
+
+-------------------------------------------------------------------------------------
+int   stars_add_callback(STARS_CONNECTION *scp);
+-------------------------------------------------------------------------------------
+Add function to callback list. "cbfunc"(member of the structure) and cbmode must be
+ set befor calling "strs_mainloop".
+Types of cbmode is shown below.
+
+
+STARS_CBMODE_STARS   Works as STARS interface. "stars_open" sets this mode automatically.
+
+STARS_CBMODE_CR      The function will be called when receives "CR".
+
+STARS_CBMODE_LF      The function will be called when receives "LF".
+
+STARS_CBMODE_DIRECT  The function will be called when receives any data.
+
+STARS_CBMODE_DETECT  The function will be called before storing buffer.
+
+
+"stars_add_callback" returns count of "callback" in the list.
+
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+
+
+
+-------------------------------------------------------------------------------------
+int   stars_mainloop(int timeout);
+-------------------------------------------------------------------------------------
+"stars_mainloop" watches file handles in the callback list and calls functions.
+
+int timeout;
+Time out in mili seconds.
+
+
+"Hello" will be printed out every 2 secound in the example.
+Example 1:
+while(1){
+    stars_mainloop(2000);
+    printf("Hello\n");
+}
+
+And, callback function will work during STARS connection is established.
+Example 2:
+stars_mainloop(0);
+
+
+
+-------------------------------------------------------------------------------------
+STARS_CONNECTION *stars_alloc();
+-------------------------------------------------------------------------------------
+"stars_alloc" allocates memories for STARS_CONNECTION structure and returns pointer
+of the structure. This function is used for call back with file handle (eg. STDIN). 
+
+
+
+-------------------------------------------------------------------------------------
+void  stars_free(STARS_CONNECTION *scp);
+-------------------------------------------------------------------------------------
+Releases memories of STARS_CONNECTION stracture. This function is used for the 
+structure which is allocated with "stars_alloc".
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+
+
+-------------------------------------------------------------------------------------
+void  stars_set_timeout(STARS_CONNECTION *scp, int timeout);
+-------------------------------------------------------------------------------------
+Set timeout for receiving message from STARS server (it works with "stars_receive").
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+int timeout;
+Read time out in mili seconds.
+
+
+-------------------------------------------------------------------------------------
+int   stars_get_timeout(STARS_CONNECTION *scp);
+-------------------------------------------------------------------------------------
+Get timeout for receiving message from STARS server. It returns time out in mili
+seconds.
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+
+-------------------------------------------------------------------------------------
+int   stars_get_handle(STARS_CONNECTION *scp);
+-------------------------------------------------------------------------------------
+Get file handle or socket number.
+
+STARS_CONNECTION *scp;
+Pointer of STARS_CONNECTION structure.
+
+

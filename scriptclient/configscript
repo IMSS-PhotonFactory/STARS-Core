@@ -1,0 +1,17 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  This program set parameters for STARS scriptclient.
+';
+#####################################################
+$::Offline= 1;
+$::Param  = 'STARS_Server Editor_Program Script_Backup_Directory STARS_NodeName';
+require 'scriptlib.pl';
+
+stLoadParam();
+stSetParam();
+stSaveParam();
+

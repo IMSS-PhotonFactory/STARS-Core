@@ -1,0 +1,400 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use Tk;
+use File::Basename;
+
+#################################################################
+# configpm16c02
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'npm2cconfig';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+#$::mt         = 0;                  #Default motor number
+$::Cntl       = 'npm2c01';          #Default controller.
+$::Interval   = 10000;              #Interval time for CheckSpeedSelect.
+#################################################################
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'server=s' => \$::Server,
+'node=s' => \$::NodeName,
+'c=s'    => \$::Cntl,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+@::cmd  =qw(DigitalCwLs DigitalCcwLs HighSpeed MiddleSpeed LowSpeed AccRate CancelBacklash FLAG LSEN LSIV);
+my @cmdtitle=('CW DGLS','Ccw DGLS','High Speed','Middle Speed','Low Speed','Acc Rate','Cancel Backlash','LS Flag Bit','LS Enable Bit','LS Invert Bit');
+
+#if($_ = shift(@ARGV)){$::mt     = $_;}
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+sub check_SpeedSelect {
+	my($f,$t);
+	(undef,undef,$t)=split(/\s+/,$::tak->act("$::Cntl GetSpeedSelect"));
+	if($::SelectSpeed ne $t){
+		$::mw->afterCancel($::id);
+		$::mw->messageBox(-type=>'ok',-icon=>'warning',-title=>'Speed Selection has Chaneged',-message=>"Speed Selection has Changed to $t by other client.");
+		$::SelectSpeed=$t;
+	}
+	$::id=$::mw->after($::Interval,\&check_SpeedSelect);
+	if($::Debug){print "check_SpeedSelect called\n";}
+}
+
+	my($buf1,$buf2);
+	my($i,$r);
+
+	# widget creation 
+	my $top = MainWindow->new();
+	$::mw=$top;
+	$top->title("Setting of $::Cntl");
+	# menu creation 
+	my $m = $top->Menu( -type => 'menubar' );
+	$top->configure( -menu => $m );
+	my $m1 = $m->cascade(-label => 'File',  -under => 0, -tearoff => 0);
+#	my $m2 = $m->cascade(-label => 'Memory Clear', -under => 0, -tearoff => 0);
+	$m1->command(-label => 'load Configuration From File', -under => 0, -command => \&load_file);
+	$m1->separator;
+	$m1->command(-label => 'Save Configuration To File'  , -under => 0, -command => \&save2file);
+	my $m2 = $m->cascade(-label => 'SpeedSelected',  -under => 0, -tearoff => 0);
+	$::SelectSpeed='';
+	$m2->radiobutton(-label=>'High',-value=>"H",-variable=>\$::SelectSpeed,-command=>\&select_Speed);
+	$m2->radiobutton(-label=>'Middle',-value=>"M",-variable=>\$::SelectSpeed,-command=>\&select_Speed);
+	$m2->radiobutton(-label=>'Low',-value=>"L",-variable=>\$::SelectSpeed,-command => \&select_Speed);
+
+
+	# frame creation 
+	my %frame_bit;
+	my %frame_flag;
+	$frame_flag{'A'}=$top->Frame();
+	$frame_flag{'B'}=$top->Frame();
+	$frame_bit{'L'}=$top->Frame();
+	$frame_bit{'A'}=$top->Frame();
+	$frame_bit{'B'}=$top->Frame();
+	my($frame_f)=$top->Frame();
+
+	# item creation 
+	my $label_0 = $top->Label (-text => 'Motor No./Name');
+	$_ = $::tak->act("$::Cntl GetMotorList");
+	($_,$_,$buf1,$buf2)=split(/\s+/,$_);
+	my $label_0A = $top->Label(-text => "0/".$buf1,);
+	my $label_0B = $top->Label(-text => "1/".$buf2,);
+
+##################################
+#   Input Item
+##################################
+	my @labelCaption;
+	for($i=1;$i<8;$i++){
+		$labelCaption[$i] = $top->Label(-text => $cmdtitle[$i-1],);
+		$::entry{"A$i"}= $top->Entry(-justify => 'right');
+		$::entry{"B$i"}= $top->Entry(-justify => 'right');
+	}
+##################################
+#   Input Flag Bit
+##################################
+	$labelCaption[$i] = $top->Label(-text => $cmdtitle[$i-1],);
+	$::entry{"A$i"."1"}= $top->Checkbutton(-text=>'DGLS Enable',-variable=>\$::entryBit{"A$i"."1"},-anchor=>'w');
+	$::entry{"A$i"."2"}= $top->Checkbutton(-text=>'LS Stop',-variable=>\$::entryBit{"A$i"."2"},-anchor=>'w');
+	$::entry{"B$i"."1"}= $top->Checkbutton(-text=>'DGLS Enable',-variable=>\$::entryBit{"B$i"."1"},-anchor=>'w');
+	$::entry{"B$i"."2"}= $top->Checkbutton(-text=>'LS Stop',-variable=>\$::entryBit{"B$i"."2"},-anchor=>'w');
+	$i++;
+##################################
+#   Enable Bit & Invert Bit
+##################################
+	my %labelBit;
+	my $label_dummy = $top->Label(-text => ' ');
+	$labelBit{'A1'} = $top->Label(-text => 'HP');
+	$labelBit{'A2'} = $top->Label(-text => 'NG');
+	$labelBit{'A3'} = $top->Label(-text => 'CCW');
+	$labelBit{'A4'} = $top->Label(-text => 'CW');
+	$labelBit{'B1'} = $top->Label(-text => 'HP');
+	$labelBit{'B2'} = $top->Label(-text => 'NG');
+	$labelBit{'B3'} = $top->Label(-text => 'CCW');
+	$labelBit{'B4'} = $top->Label(-text => 'CW');
+
+	$labelCaption[$i] = $top->Label(-text => $cmdtitle[$i-1],);
+	$::entry{"A$i"."1"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."1"});
+	$::entry{"A$i"."2"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."2"});
+	$::entry{"A$i"."3"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."3"});
+	$::entry{"A$i"."4"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."4"});
+	$::entry{"B$i"."1"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."1"});
+	$::entry{"B$i"."2"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."2"});
+	$::entry{"B$i"."3"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."3"});
+	$::entry{"B$i"."4"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."4"});
+	$i++;
+
+	$labelCaption[$i] = $top->Label(-text => $cmdtitle[$i-1],);
+	$::entry{"A$i"."1"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."1"});
+	$::entry{"A$i"."2"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."2"});
+	$::entry{"A$i"."3"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."3"});
+	$::entry{"A$i"."4"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"A$i"."4"});
+	$::entry{"B$i"."1"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."1"});
+	$::entry{"B$i"."2"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."2"});
+	$::entry{"B$i"."3"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."3"});
+	$::entry{"B$i"."4"} = $top->Checkbutton(-text=>'',-variable=>\$::entryBit{"B$i"."4"});
+	$i++;
+##################################
+#   Buttons
+##################################
+	# button creation 
+	my($button_1) = $top->Button(-text => 'Apply',);
+	my($button_2) = $top->Button(-text => 'Reset',);
+
+##################################
+# 	Geometry Management
+##################################
+	# container $top
+	$top->gridColumnconfigure(1, -weight => 0, -minsize => 10, -pad=>10);
+	$top->gridColumnconfigure(2, -weight => 0, -minsize => 20, -pad=>10);
+	$top->gridColumnconfigure(3, -weight => 0, -minsize => 20, -pad=>10);
+
+	$top->gridRowconfigure(1, -weight  => 0, -minsize  => 30, -pad => 2);
+	$label_0->grid( -in => $top,-column => '1',-row => '1');
+	$label_0A->grid(-in => $top,-column => '2',-row => '1');
+	$label_0B->grid(-in => $top,-column => '3',-row => '1');
+
+##################################
+#   Input Item
+##################################
+	for($i=1,$r=2;$i<8;$i++,$r++){
+		$top->gridRowconfigure($r, -weight  => 0, -minsize  => 2, -pad => 2);
+		$labelCaption[$i]->grid(-in => $top,-column => '1',-row => $r);
+		$::entry{"A$i"}->grid(-in => $top,-column => '2',-row => $r);
+		$::entry{"B$i"}->grid(-in => $top,-column => '3',-row => $r);
+	}
+##################################
+#   Input Flag Bit
+##################################
+	$top->gridRowconfigure($r, -weight  => 10, -minsize  => 30, -pad => 2);
+	$frame_flag{'A'}->grid(-in => $top,-column => '2',-row => $r);
+	$frame_flag{'B'}->grid(-in => $top,-column => '3',-row => $r);
+	$labelCaption[$i]->grid(-in => $top,-column => '1',-row => $r);
+	$::entry{"A$i"."1"}->grid(-in => $frame_flag{'A'},-column => '1',-row => '1',-sticky=>'nsew');
+	$::entry{"A$i"."2"}->grid(-in => $frame_flag{'A'},-column => '1',-row => '2',-sticky=>'nsew');
+	$::entry{"B$i"."1"}->grid(-in => $frame_flag{'B'},-column => '1',-row => '1',-sticky=>'nsew');
+	$::entry{"B$i"."2"}->grid(-in => $frame_flag{'B'},-column => '1',-row => '2',-sticky=>'nsew');
+	$i++;$r++;
+
+##################################
+#   Enable Bit & Invert Bit
+##################################
+	$top->gridRowconfigure($r, -weight  => 10, -minsize  => 30, -pad => 2);
+	$frame_bit{'L'}->grid(-in => $top,-column => '1',-row => $r);
+	$frame_bit{'A'}->grid(-in => $top,-column => '2',-row => $r);
+	$frame_bit{'B'}->grid(-in => $top,-column => '3',-row => $r);
+	$label_dummy->grid(-in => $frame_bit{'L'},-column => '1',-row => 1);
+	$labelCaption[$i]->grid(-in => $frame_bit{'L'},-column => '1',-row => 2);
+	$labelBit{'A1'}->grid(-in => $frame_bit{'A'},-column => '1',-row => 1);
+	$labelBit{'A2'}->grid(-in => $frame_bit{'A'},-column => '2',-row => 1);
+	$labelBit{'A3'}->grid(-in => $frame_bit{'A'},-column => '3',-row => 1);
+	$labelBit{'A4'}->grid(-in => $frame_bit{'A'},-column => '4',-row => 1);
+	$::entry{"A$i"."1"}->grid(-in => $frame_bit{'A'},-column => '1',-row => 2);
+	$::entry{"A$i"."2"}->grid(-in => $frame_bit{'A'},-column => '2',-row => 2);
+	$::entry{"A$i"."3"}->grid(-in => $frame_bit{'A'},-column => '3',-row => 2);
+	$::entry{"A$i"."4"}->grid(-in => $frame_bit{'A'},-column => '4',-row => 2);
+	$::entry{"B$i"."1"}->grid(-in => $frame_bit{'B'},-column => '1',-row => 2);
+	$::entry{"B$i"."2"}->grid(-in => $frame_bit{'B'},-column => '2',-row => 2);
+	$::entry{"B$i"."3"}->grid(-in => $frame_bit{'B'},-column => '3',-row => 2);
+	$::entry{"B$i"."4"}->grid(-in => $frame_bit{'B'},-column => '4',-row => 2);
+	$i++;
+	$labelCaption[$i]->grid(-in => $frame_bit{'L'},-column => '1',-row => 3);
+	$labelBit{'B1'}->grid(-in => $frame_bit{'B'},-column => '1',-row => 1);
+	$labelBit{'B2'}->grid(-in => $frame_bit{'B'},-column => '2',-row => 1);
+	$labelBit{'B3'}->grid(-in => $frame_bit{'B'},-column => '3',-row => 1);
+	$labelBit{'B4'}->grid(-in => $frame_bit{'B'},-column => '4',-row => 1);
+	$::entry{"A$i"."1"}->grid(-in => $frame_bit{'A'},-column => '1',-row => 3);
+	$::entry{"A$i"."2"}->grid(-in => $frame_bit{'A'},-column => '2',-row => 3);
+	$::entry{"A$i"."3"}->grid(-in => $frame_bit{'A'},-column => '3',-row => 3);
+	$::entry{"A$i"."4"}->grid(-in => $frame_bit{'A'},-column => '4',-row => 3);
+	$::entry{"B$i"."1"}->grid(-in => $frame_bit{'B'},-column => '1',-row => 3);
+	$::entry{"B$i"."2"}->grid(-in => $frame_bit{'B'},-column => '2',-row => 3);
+	$::entry{"B$i"."3"}->grid(-in => $frame_bit{'B'},-column => '3',-row => 3);
+	$::entry{"B$i"."4"}->grid(-in => $frame_bit{'B'},-column => '4',-row => 3);
+	$i++;
+	$r++;
+##################################
+#   Buttons
+##################################
+	$top->gridRowconfigure($r, -weight  => 0, -minsize  => 30, -pad=>2);
+	$frame_f->grid(-in => $top,-column => '2',-row => $r, -columnspan => '2');
+	$button_1->grid(-in => $frame_f,-column => '1',-row => 1);
+	$button_2->grid(-in => $frame_f,-column => '2',-row => 1);
+	$frame_f->gridColumnconfigure(1, -weight => 0, -minsize => 20, -pad=>10);
+	$frame_f->gridColumnconfigure(2, -weight => 0, -minsize => 20, -pad=>10);
+	$frame_f->gridRowconfigure(1, -weight  => 0, -minsize  => 40);
+	$button_1->configure(-command => \&ApplyButton);
+	$button_2->configure(-command => \&ResetButton);
+##################################
+#   Manager Start
+##################################
+pread();
+
+$::id=$::mw->after($::Interval,\&check_SpeedSelect);
+
+MainLoop();
+exit(1);
+
+sub ApplyButton{
+pwrite();
+pread();
+}
+
+sub ResetButton{
+pread();
+}
+
+sub pread{
+	my($ch,$i,$buf);
+
+	(undef,undef,$::SelectSpeed)=split(/\s+/,$::tak->act("$::Cntl GetSpeedSelect"));
+
+	foreach $ch (qw(A B)){
+		for($i=1;$i<8;$i++){
+			$buf = $::tak->act("$::Cntl Get$::cmd[$i-1] $ch");
+			(undef,undef,undef,$buf) = split(/\s+/, $buf);
+			$::entry{"$ch$i"}->delete(0,"end");
+			$::entry{"$ch$i"}->insert(0, $buf);
+		}
+		$buf = $::tak->act("$::Cntl Get$::cmd[$i-1] $ch");
+		(undef,undef,undef,$buf) = split(/\s+/, $buf);
+		$_=unpack("B8",  pack("H2", $buf));
+		~/^\S\S\S(\S)\S\S\S(\S)$/;
+		$::entryBit{"$ch$i"."1"}=$1;
+		$::entryBit{"$ch$i"."2"}=$2;
+		$i++;
+		$buf = $::tak->act("$::Cntl Get$::cmd[$i-1] $ch");
+		(undef,undef,undef,$buf) = split(/\s+/, $buf);
+		$_=unpack("B4",  pack("H1", $buf));
+		~/^(\S)(\S)(\S)(\S)$/;
+		$::entryBit{"$ch$i"."1"}=$1;
+		$::entryBit{"$ch$i"."2"}=$2;
+		$::entryBit{"$ch$i"."3"}=$3;
+		$::entryBit{"$ch$i"."4"}=$4;
+		$i++;
+		$buf = $::tak->act("$::Cntl Get$::cmd[$i-1] $ch");
+		(undef,undef,undef,$buf) = split(/\s+/, $buf);
+		$_=unpack("B4",  pack("H1", $buf));
+		~/^(\S)(\S)(\S)(\S)$/;
+		$::entryBit{"$ch$i"."1"}=$1;
+		$::entryBit{"$ch$i"."2"}=$2;
+		$::entryBit{"$ch$i"."3"}=$3;
+		$::entryBit{"$ch$i"."4"}=$4;
+	}
+}
+
+sub pwrite{
+	my($ch,$i,$buf);
+
+	foreach $ch (qw(A B)){
+		for($i=1;$i<8;$i++){
+			$buf = $::entry{"$ch$i"}->get();
+			$buf= $::tak->act("$::Cntl Set$::cmd[$i-1] $ch $buf");
+		}
+		$buf=uc(unpack("H2", pack("B8","000".$::entryBit{"$ch$i"."1"}."000".$::entryBit{"$ch$i"."2"})));
+		$buf= $::tak->act("$::Cntl Set$::cmd[$i-1] $ch $buf");
+		$i++;
+		$buf=uc(unpack("H1", pack("B4",$::entryBit{"$ch$i"."1"}.$::entryBit{"$ch$i"."2"}.$::entryBit{"$ch$i"."3"}.$::entryBit{"$ch$i"."4"})));
+		$buf= $::tak->act("$::Cntl Set$::cmd[$i-1] $ch $buf");
+		$i++;
+		$buf=uc(unpack("H1", pack("B4",$::entryBit{"$ch$i"."1"}.$::entryBit{"$ch$i"."2"}.$::entryBit{"$ch$i"."3"}.$::entryBit{"$ch$i"."4"})));
+		$buf= $::tak->act("$::Cntl Set$::cmd[$i-1] $ch $buf");
+		$i++;
+	}
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: configpm16c02 [-h] [-node MyNodeName] [-c Controller] MotorNumber [StarsServer]\n";
+  exit(0);
+}
+
+sub load_file {
+  my $i;
+  my $filename = $top->getOpenFile( -filetypes => [],
+                                    -initialdir => $::path_name );
+  if( $filename ){
+    $::path_name = dirname( $filename ) . '/';
+	open ( FILEHANDLE , $filename ) ; 
+	my @array = <FILEHANDLE>;
+	for($i=1;$i<8;$i++){
+		$_=$array[$i-1];
+		~/^(\S+)\t(\S+)\s*$/;
+		$::entry{"A$i"}->delete(0,"end");
+		$::entry{"B$i"}->delete(0,"end");
+		$::entry{"A$i"}->insert(0, $1);
+		$::entry{"B$i"}->insert(0, $2);
+	}
+	$_=$array[$i-1];
+	~/^(\S)\s(\S)\t(\S)\s(\S)\s*$/;
+	$::entryBit{"A$i"."1"}=$1;
+	$::entryBit{"A$i"."2"}=$2;
+	$::entryBit{"B$i"."1"}=$3;
+	$::entryBit{"B$i"."2"}=$4;
+	$i++;
+	$_=$array[$i-1];
+	~/^(\S)\s(\S)\s(\S)\s(\S)\t(\S)\s(\S)\s(\S)\s(\S)\s*$/;
+	$::entryBit{"A$i"."1"}=$1;
+	$::entryBit{"A$i"."2"}=$2;
+	$::entryBit{"A$i"."3"}=$3;
+	$::entryBit{"A$i"."4"}=$4;
+	$::entryBit{"B$i"."1"}=$5;
+	$::entryBit{"B$i"."2"}=$6;
+	$::entryBit{"B$i"."3"}=$7;
+	$::entryBit{"B$i"."4"}=$8;
+	$i++;
+	$_=$array[$i-1];
+	~/^(\S)\s(\S)\s(\S)\s(\S)\t(\S)\s(\S)\s(\S)\s(\S)\s*$/;
+	$::entryBit{"A$i"."1"}=$1;
+	$::entryBit{"A$i"."2"}=$2;
+	$::entryBit{"A$i"."3"}=$3;
+	$::entryBit{"A$i"."4"}=$4;
+	$::entryBit{"B$i"."1"}=$5;
+	$::entryBit{"B$i"."2"}=$6;
+	$::entryBit{"B$i"."3"}=$7;
+	$::entryBit{"B$i"."4"}=$8;
+	$i++;
+  }
+}
+sub save2file {
+  my $i;
+  my $filename = $top->getSaveFile( -filetypes => [],
+                                    -initialdir => $::path_name );
+  if( $filename ){
+    $::path_name = dirname( $filename ) . '/';
+	open(FILEHANDLE, ">$filename" ) ;
+	select(FILEHANDLE);
+	for($i=1;$i<8;$i++){
+		print $::entry{"A$i"}->get()."\t".$::entry{"B$i"}->get()."\n";
+	}
+	print $::entryBit{"A$i"."1"}." ".$::entryBit{"A$i"."2"}."\t";
+	print $::entryBit{"B$i"."1"}." ".$::entryBit{"B$i"."2"}."\n";
+	$i++;
+	print $::entryBit{"A$i"."1"}." ".$::entryBit{"A$i"."2"}." ".$::entryBit{"A$i"."3"}." ".$::entryBit{"A$i"."4"}."\t";
+	print $::entryBit{"B$i"."1"}." ".$::entryBit{"B$i"."2"}." ".$::entryBit{"B$i"."3"}." ".$::entryBit{"B$i"."4"}."\n";
+	$i++;
+	print $::entryBit{"A$i"."1"}." ".$::entryBit{"A$i"."2"}." ".$::entryBit{"A$i"."3"}." ".$::entryBit{"A$i"."4"}."\t";
+	print $::entryBit{"B$i"."1"}." ".$::entryBit{"B$i"."2"}." ".$::entryBit{"B$i"."3"}." ".$::entryBit{"B$i"."4"}."\n";
+	$i++;
+	close(FILEHANDLE);
+  }
+}
+sub select_Speed{
+	my $spd=shift;
+	if($::SelectSpeed eq 'H'){
+		$::tak->act("$::Cntl SpeedHigh");
+	}elsif($::SelectSpeed eq 'M'){
+		$::tak->act("$::Cntl SpeedMiddle");
+	}else{
+		$::tak->act("$::Cntl SpeedLow");
+	}
+	(undef,undef,$::SelectSpeed)=split(/ /,$::tak->act("$::Cntl GetSpeedSelect"));
+}
+

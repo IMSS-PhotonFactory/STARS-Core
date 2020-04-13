@@ -1,0 +1,10 @@
+obj\Debug\ResolveAssemblyReference.cache
+obj\Debug\STARSWinFormApplication.Properties.Resources.resources
+obj\Debug\STARSWinFormApplication.csproj.GenerateResource.Cache
+bin\Debug\STARSWinFormApplication.exe.config
+bin\Debug\STARSWinFormApplication.exe
+bin\Debug\STARSWinFormApplication.pdb
+bin\Debug\StarsInterface.dll
+bin\Debug\StarsInterfaceWinForm.dll
+obj\Debug\STARSWinFormApplication.exe
+obj\Debug\STARSWinFormApplication.pdb

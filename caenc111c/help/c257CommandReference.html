@@ -1,0 +1,435 @@
+<HTML>
+<HEAD>
+<style type="text/css">
+UL  {list-style-type:none}
+</style>
+</HEAD>
+<BODY>
+<H1>Stars Program Reference <BR>&nbsp;&nbsp;&nbsp;&nbsp;- CAEN Module C257 Controller Commands.</H1><P><UL><LI>Comamnd List<UL><LI><A NAME="SECDGeneral" HREF="#SECGeneral">General</A></LI><UL><LI><A NAME="SECDAbout CAEN Module C257 contoller commands" HREF="#SECAbout CAEN Module C257 contoller commands">About CAEN Module C257 contoller commands</A><LI><A NAME="SECDStars destination client name of CAEN Module C257 controller commands" HREF="#SECStars destination client name of CAEN Module C257 controller commands">Stars client name of CAEN Module C257 controller commands</A><LI><A NAME="SECDHow to execute the Stars Command of CAEN Module C257 controller" HREF="#SECHow to execute the Stars Command of CAEN Module C257 controller">How to execute the Stars Command of CAEN Module C257 controller</A><LI><A NAME="SECDError General" HREF="#SECError General">Error General</A></UL><LI><A NAME="SECDStars Information Command" HREF="#SECStars Information Command">Stars Information Command</A></LI><UL><LI><A NAME="SECDhello" HREF="#SEChello">hello</A><LI><A NAME="SECDhelp" HREF="#SEChelp">help</A><LI><A NAME="SECDhelp" HREF="#SEChelp">help</A><LI><A NAME="SECDGetSlotNumber" HREF="#SECGetSlotNumber">GetSlotNumber</A><LI><A NAME="SECDGetCounterNameList" HREF="#SECGetCounterNameList">GetCounterNameList</A><LI><A NAME="SECDGetCounterName" HREF="#SECGetCounterName">GetCounterName</A></UL><LI><A NAME="SECDStars Event Information Command" HREF="#SECStars Event Information Command">Stars Event Information Command</A></LI><UL><LI><A NAME="SECDflushdatatome" HREF="#SECflushdatatome">flushdatatome</A><LI><A NAME="SECDflushdata" HREF="#SECflushdata">flushdata</A></UL><LI><A NAME="SECDController Command (Control CAEN Model C257)" HREF="#SECController Command (Control CAEN Model C257)">Controller Command (Control CAEN Model C257)</A></LI><UL><LI><A NAME="SECDGetValue" HREF="#SECGetValue">GetValue</A><LI><A NAME="SECDGetValueInhibitReset" HREF="#SECGetValueInhibitReset">GetValueInhibitReset</A><LI><A NAME="SECDGetLAMJumperSettings" HREF="#SECGetLAMJumperSettings">GetLAMJumperSettings</A><LI><A NAME="SECDReset" HREF="#SECReset">Reset</A><LI><A NAME="SECDResetValueLAM" HREF="#SECResetValueLAM">ResetValueLAM</A><LI><A NAME="SECDSetLAMEnable" HREF="#SECSetLAMEnable">SetLAMEnable</A><LI><A NAME="SECDGetLAMIsBusy" HREF="#SECGetLAMIsBusy">GetLAMIsBusy</A><LI><A NAME="SECDGetValueInternalLAM" HREF="#SECGetValueInternalLAM">GetValueInternalLAM</A><LI><A NAME="SECDGetInhibitIsBusy" HREF="#SECGetInhibitIsBusy">GetInhibitIsBusy</A><LI><A NAME="SECDRunTestSignal" HREF="#SECRunTestSignal">RunTestSignal</A></UL><LI><A NAME="SECDEvent Message List" HREF="#SECEvent Message List">Event Message List</A></LI><UL><LI><A NAME="SECD_ChangedInhibitIsBusy" HREF="#SEC_ChangedInhibitIsBusy">_ChangedInhibitIsBusy</A><LI><A NAME="SECD_ChangedLAMIsBusy" HREF="#SEC_ChangedLAMIsBusy">_ChangedLAMIsBusy</A></UL></UL></LI></UL><HR><H2><A NAME="SECGeneral" HREF="#SECDGeneral">General</A></H2>
+<H3><A NAME="SECAbout CAEN Module C257 contoller commands" HREF="#SECDAbout CAEN Module C257 contoller commands">About CAEN Module C257 contoller commands</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>About CAEN Module C257 contoller commands</SAMP>
+</DT>
+<DD>
+CAEN Module C257 has 2 types of command system, controller commands and counter commands.
+<BR>Controller command system has the whole functions(including the counter command functions) of CAEN Module C257.
+<BR>Be careful, the Stars client name for controller commands and that for counter commands are different.
+</Tt></DL>
+<HR>
+<H3><A NAME="SECStars destination client name of CAEN Module C257 controller commands" HREF="#SECDStars destination client name of CAEN Module C257 controller commands">Stars client name of CAEN Module C257 controller commands</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Stars client name of CAEN Module C257 controller commands</SAMP>
+</DT>
+<DD>
+In this Manual, '<B>caenc111c.c257</B>' is used for the client name for CAEN Module C257 controller commands.
+</Tt></DL>
+<HR>
+<H3><A NAME="SECHow to execute the Stars Command of CAEN Module C257 controller" HREF="#SECDHow to execute the Stars Command of CAEN Module C257 controller">How to execute the Stars Command of CAEN Module C257 controller</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>How to execute the Stars Command of CAEN Module C257 controller</SAMP>
+</DT>
+<DD>
+<BR>Send the Stars message as following format<BR>
+<BR>caenc111c.c257 <I>CAEN_C257_Controller_Stars_Command</I> <I>Command_Parameters</I>
+<BR><UL>
+<BR><LI>'caenc111c.c257' is the Stars client name for CAEN Module C257 controller commands.</LI>
+<BR><LI><I>CAEN_C257_Controller_Stars_Command</I></LI>
+<BR><LI><I>Command_Parameters</I>&nbsp;&nbsp;&nbsp;&nbsp;(Only necessary)</LI>
+<BR></UL>
+<BR>Then reply arrives as following<BR>
+<BR>caenc111c.c257&gt;<I>test</I> <I>@CAEN_C257_Controller_Stars_Command</I> <I>Command_Parameters</I> <I>Command_Message</I>
+<BR><UL>
+<BR><LI>'<I>test</I>' is used, in this manual, as the Stars client name that sends the Stars message.</LI>
+<BR><LI><I>Command_Message</I><UL><LI>starts with 'Ok: ' : the Stars command executed with success.</LI>
+<BR><LI>starts with 'Er: ' : the Stars command did not executed because of command nonexistent, command paramarer invalid, etc.</LI>
+<BR><LI>starts with 'Ng: ' : the Stars command executed but failed.</LI>
+<BR></UL></LI></UL>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECError General" HREF="#SECDError General">Error General</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Error General</SAMP>
+</DT>
+<DD>
+<OL>
+<BR><LI>Destination client name nonexistent :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111c.c257c hello<BR>(reply)&nbsp;&nbsp;System&gt;test @hello <I>Er: caenc111c.c257c is down.</I></LI></UL></LI>
+<BR><LI>Command nonexistent :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111c.c257 hell<BR>(reply)&nbsp;&nbsp;caenc111c.c257&gt;test @hell <I>Er: Bad Command.</I></LI></UL></LI>
+<BR><LI>Command parameter missing or invalid :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111c.c257 SetLAMEnable<BR>(reply)&nbsp;&nbsp;caenc111c.c257&gt;test @SetLAMEnable<I>Er: Bad Parameter.</I></LI></UL></LI>
+<BR>
+<LI>Command executed but network error occured :<br>
+  (Usually not happens. But if it's happened, stop 'caenc111c' Program, restart CAMAC Controller CAEN C111C. then start 'caenc111c')<BR>
+<UL><LI>(send)&nbsp;&nbsp;caenc111c.c257 SetLAMEnable 1<BR>
+(reply)&nbsp;&nbsp;caenc111c.c257&gt;test @SetLAMEnable 1<I>Er: -4</I>
+</LI>
+  </UL>
+</LI>
+</OL>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECStars Information Command" HREF="#SECDStars Information Command">Stars Information Command</A></H2>
+<H3><A NAME="SEChello" HREF="#SECDhello">hello</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>hello</SAMP>
+</DT>
+<DD>
+Returns 'nice to meet you.'
+<BR><BR>[Usage]<BR>caenc111c.c257 hello
+<BR><BR>[Reply Message Format]<BR>@hello <I>nice to meet you.</I>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 hello
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @hello nice to meet you.
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEChelp" HREF="#SECDhelp">help</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>help</SAMP>
+</DT>
+<DD>
+Show StarsCommand list.
+<BR><BR>[Usage]<BR>caenc111c.c257 help
+<BR><BR>[Reply Message Format]<BR>@help <I>command1 command2 ... commandN</I>&nbsp;&nbsp;&nbsp;&nbsp;(each command separated by a space)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 help
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @help GetCounterName GetCounterNameList GetInhibitIsBusy Get
+<BR>LAMIsBusy GetLAMJumperSettings GetSlotNumber GetValue GetValueInhibitReset GetVa
+<BR>lueInternalLAM Reset ResetValueLAM RunTestSignal SetLAMEnable flushdata flushdat
+<BR>atome hello help
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEChelp" HREF="#SECDhelp">help</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>help</SAMP>
+</DT>
+<DD>
+Show command help.
+<BR><BR>[Usage]<BR>caenc111c.c257 help <I>StarsCommand</I>
+<BR><BR>[Reply Message Format]<BR>@help <I>StarsCommand</I> <I>helpText</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@help <I>StarsCommand</I> <I>Ng: Bad Command.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified <I>StarsCommand</I> invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 help GetLAMIsBusy
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @help GetLAMIsBusy [F(8)]  Tests the LAM line. Q is true if
+<BR> LAM is enable and present.
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetSlotNumber" HREF="#SECDGetSlotNumber">GetSlotNumber</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetSlotNumber</SAMP>
+</DT>
+<DD>
+Returns the slot number of the selfnode.
+<BR><BR>[Usage]<BR>caenc111c.c257 GetSlotNumber
+<BR><BR>[Reply Message Format]<BR>@GetSlotNumber <I>Ok: SlotNumber</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)<ol><li>SlotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li></ol>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.257 GetSlotNumber
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetSlotNumber Ok: 22
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetCounterNameList" HREF="#SECDGetCounterNameList">GetCounterNameList</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetCounterNameList</SAMP>
+</DT>
+<DD>
+Returns the Stars Nodename List of C257 Counters.
+<BR><BR>[Usage]<BR>caenc111c.c257 GetCounterNameList
+<BR><BR>[Reply Message Format]<BR>@GetCounterNameList <I>Ok: Counter0Name Counter1Name Counter2Name...Counter14Name Counter15Name</I>&nbsp;&nbsp;&nbsp;&nbsp;(each name separated by a space)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetCounterNameList
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetCounterNameList Ok: caenc111c.C01 caenc111c.C02 caenc111
+<BR>c.C03 caenc111c.C04 caenc111c.C05 caenc111c.C06 caenc111c.C07 caenc111c.C08 caen
+<BR>c111c.C09 caenc111c.C10 caenc111c.C11 caenc111c.C12 caenc111c.C13 caenc111c.C14
+<BR>caenc111c.C15 caenc111c.C16
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetCounterName" HREF="#SECDGetCounterName">GetCounterName</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetCounterName</SAMP>
+</DT>
+<DD>
+Returns the Stars Nodename of the C257 Counter specified.
+<BR><BR>[Usage]<BR>caenc111c.c257 GetCounterName <I>CounterNumber</I><ol><li>CounterNumber&nbsp;&nbsp;&nbsp;&nbsp;0 - 15</li></ol>
+<BR>[Reply Message Format]<BR>@GetCounterName <I>CounterNumber Ok: CounterName</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@GetCounterName <I>CounterNumber Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetCounterName 1
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetCounterName 1 Ok: caenc111c.C02
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECStars Event Information Command" HREF="#SECDStars Event Information Command">Stars Event Information Command</A></H2>
+<H3><A NAME="SECflushdatatome" HREF="#SECDflushdatatome">flushdatatome</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>flushdatatome</SAMP>
+</DT>
+<DD>
+Send C257 controller and counter event messages to fromnode. See C257 <A HREF="#SECEvent Message List">controller Event Message List</A> and <A HREF="c257CounterCommandReference.html#SECEvent Message List">counter Event Message List</A>.
+<BR><BR>[Usage]<BR>caenc111c.c257 flushdatatome
+<BR><BR>[Reply Message Format]<BR>@flushdatatome <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 flushdatatome
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest _ChangedInhibitIsBusy 0
+<BR>caenc111c.C01&gttest _ChangedValue 13149361
+<BR>caenc111c.C02&gttest _ChangedValue 0
+<BR>caenc111c.C03&gttest _ChangedValue 0
+<BR>caenc111c.C04&gttest _ChangedValue 0
+<BR>caenc111c.C05&gttest _ChangedValue 0
+<BR>caenc111c.C06&gttest _ChangedValue 0
+<BR>caenc111c.C07&gttest _ChangedValue 0
+<BR>caenc111c.C08&gttest _ChangedValue 0
+<BR>caenc111c.C09&gttest _ChangedValue 0
+<BR>caenc111c.C10&gttest _ChangedValue 0
+<BR>caenc111c.C11&gttest _ChangedValue 0
+<BR>caenc111c.C12&gttest _ChangedValue 0
+<BR>caenc111c.C13&gttest _ChangedValue 0
+<BR>caenc111c.C14&gttest _ChangedValue 0
+<BR>caenc111c.C15&gttest _ChangedValue 0
+<BR>caenc111c.C16&gttest _ChangedValue 0
+<BR>caenc111c.c257&gttest _ChangedLAMIsBusy 0
+<BR>caenc111c.c257&gttest @flushdatatome Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECflushdata" HREF="#SECDflushdata">flushdata</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>flushdata</SAMP>
+</DT>
+<DD>
+Send C257 controller and counter event messages to System. See C257 <A HREF="#SECEvent Message List">controller Event Message List</A> and <A HREF="c257CounterCommandReference.html#SECEvent Message List">counter Event Message List</A>.
+<BR><BR>[Usage]<BR>caenc111c.c257 flushdata
+<BR><BR>[Reply Message Format]<BR>@flushdata <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>System flgon caenc111c.c257
+<BR>System flgon caenc111c.C01
+<BR>System flgon caenc111c.C02
+<BR>caenc111c.c257 flushdata
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest _ChangedInhibitIsBusy 0
+<BR>caenc111c.C01&gttest _ChangedValue 13149361
+<BR>caenc111c.C02&gttest _ChangedValue 0
+<BR>caenc111c.c257&gttest _ChangedLAMIsBusy 0
+<BR>caenc111c.c257&gttest @flushdata Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECController Command (Control CAEN Model C257)" HREF="#SECDController Command (Control CAEN Model C257)">Controller Command (Control CAEN Model C257)</A></H2>
+<H3><A NAME="SECGetValue" HREF="#SECDGetValue">GetValue</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValue(1)</SAMP>
+</DT>
+<DD>
+Returns a value held in the specified counter(0..15). [F(0) A(0-15)]<BR>
+<BR>[Usage]<BR>caenc111c.c257 GetValue <I>CounterNumber</I>&nbsp;&nbsp;&nbsp;&nbsp;<ol><li>CounterNumber&nbsp;&nbsp;&nbsp;&nbsp;0 - 15</li></ol>
+<BR>[Reply Message Format]<BR>@GetValue <I>CounterNumber Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)<ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215</li></ol>
+<BR>@GetValue <I>CounterNumber Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR>
+<Tt>(sender)
+<BR>caenc111c.c257 GetValue 0
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetValue 0 Ok: 7
+<BR>
+</Tt></DL>
+<DL COMPACT><DT><SAMP>GetValue(2)</SAMP>
+</DT>
+<DD>
+Return all 16 channel values using delimiter ','.<BR>
+This command using CAMAC Block transfer method internally.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR>
+<BR>[Usage]<BR>caenc111c.c257 GetValue
+<BR>
+<BR>[Reply Message Format]<BR>@GetValue <I>Ok: AllValues</I>&nbsp;&nbsp;&nbsp;&nbsp;<ol><li>AllValues (return 16 channel's values using delimiter ','), each value is 0 - 16777215</li></ol>
+<BR>[Examples]<BR>
+<Tt>(sender)
+<BR>caenc111c.c257 GetValue
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetValue Ok: 7,2,4,5,6,1,0,0,23,4,233535,0,0,0,0,0
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueInhibitReset" HREF="#SECDGetValueInhibitReset">GetValueInhibitReset</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueInhibitReset</SAMP>
+</DT>
+<DD>
+Returns a value held in the specified counter(0..15), and when reads the 15th counter (last counter), if the input is inhibited, resets all the counters(0..15) and the LAM line. [F(2) A(0-15)]
+<BR><BR>[Usage]<BR>caenc111c.c257 GetValueInhibitReset <I>CounterNumber</I>&nbsp;&nbsp;&nbsp;&nbsp;<ol><li>CounterNumber&nbsp;&nbsp;&nbsp;&nbsp;0 - 15</li></ol>
+<BR>[Reply Message Format]<BR>@GetValueInhibitReset <I>CounterNumber Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)<ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215</li></ol>
+<BR>@GetValueInhibitReset <I>CounterNumber Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetInhibitIsBusy
+<BR>caenc111c.c257 GetValueInhibitReset 0
+<BR>caenc111c.c257 GetValueInhibitReset 15
+<BR>caenc111c.c257 GetValueInhibitReset 0
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetInhibitIsBusy Ok: 1
+<BR>caenc111c.c257&gttest @GetValueInhibitReset 0 Ok: 7
+<BR>caenc111c.c257&gttest @GetValueInhibitReset 15 Ok: 14
+<BR>caenc111c.c257&gttest @GetValueInhibitReset 0 Ok: 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetLAMJumperSettings" HREF="#SECDGetLAMJumperSettings">GetLAMJumperSettings</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetLAMJumperSettings</SAMP>
+</DT>
+<DD>
+Returns the status of the internal jumpers for LAM enabling/disabling (R(i)=1 if CH(i)=enabled). [F(1) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 GetLAMJumperSettings
+<BR><BR>[Reply Message Format]<BR>@GetLAMJumperSettings <I>Ok: Value</I><ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;number decimal(>=0)</li></ol>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetLAMJumperSettings
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetLAMJumperSettings Ok: 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECReset" HREF="#SECDReset">Reset</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Reset</SAMP>
+</DT>
+<DD>
+Resets the module (All the scales and the internal LAM are set to 0. The LAM line is disabled). [F(9) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 Reset
+<BR><BR>[Reply Message Format]<BR>@Reset <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 Reset
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @Reset Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECResetValueLAM" HREF="#SECDResetValueLAM">ResetValueLAM</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>ResetValueLAM</SAMP>
+</DT>
+<DD>
+Clears LAM. [F(10) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 ResetValueLAM
+<BR><BR>[Reply Message Format]<BR>@ResetLAM <I>Ok:</I>(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 ResetValueLAM
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @ResetValueLAM Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetLAMEnable" HREF="#SECDSetLAMEnable">SetLAMEnable</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetLAMEnable</SAMP>
+</DT>
+<DD>
+Disables or Enables the LAM line. [F(24 or 26) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 SetLAMEnable 0 | 1<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;(when Disables)</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;(when Enables)</li></ul>
+<BR>[Reply Message Format]<BR>@SetLAMEnable 1 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(LAM line enabled)
+<BR>@SetLAMEnable 0 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(LAM line disabled)
+<BR>@SetLAMEnable <I>other Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 SetLAMEnable 1
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @SetLAMEnable 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetLAMIsBusy" HREF="#SECDGetLAMIsBusy">GetLAMIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetLAMIsBusy</SAMP>
+</DT>
+<DD>
+Tests the LAM Line and Returns the LAM status is on or not. [F(8) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 GetLAMIsBusy
+<BR><BR>[Reply Message Format]<BR>@GetLAMIsBusy <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is on)
+<BR>@GetLAMIsBusy <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is off)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetLAMIsBusy
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetLAMIsBusy Ok: 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueInternalLAM" HREF="#SECDGetValueInternalLAM">GetValueInternalLAM</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueInternalLAM</SAMP>
+</DT>
+<DD>
+Tests the internal LAM. and returns the LAM status is on or not. [F(27) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 GetValueInternalLAM
+<BR><BR>[Reply Message Format]<BR>@GetValueInternalLAM <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is on)
+<BR>@GetValueInternalLAM <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is off)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetValueInternalLAM
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetValueInternalLAM Ok: 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetInhibitIsBusy" HREF="#SECDGetInhibitIsBusy">GetInhibitIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetInhibitIsBusy</SAMP>
+</DT>
+<DD>
+Returns if the input is inhibited or not.
+<BR><BR>[Usage]<BR>caenc111c.c257 GetInhibitIsBusy
+<BR><BR>[Reply Message Format]<BR>@GetInhibitIsBusy <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When the input is inhibited)
+<BR>@GetInhibitIsBusy <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When the input is not inhibited)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetInhibitIsBusy
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest @GetInhibitIsBusy Ok: 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECRunTestSignal" HREF="#SECDRunTestSignal">RunTestSignal</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>RunTestSignal</SAMP>
+</DT>
+<DD>
+Tests the counters (same as the Test Input signal). At the S2 time all the channels are increased (valid only in single channel configuration). [F(27) A(0)]
+<BR><BR>[Usage]<BR>caenc111c.c257 RunTestSignal
+<BR><BR>[Reply Message Format]<BR>@RunTestSignal<I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c.c257 GetValue 0
+<BR>caenc111c.c257 RunTestSignal
+<BR>caenc111c.c257 GetValue 0
+<BR>(Receive messages)
+<BR>caenc111c.c257&gttest GetValue 0 Ok: 0
+<BR>caenc111c.c257&gttest @RunTestSignal Ok:
+<BR>caenc111c.c257&gttest GetValue 0 Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECEvent Message List" HREF="#SECDEvent Message List">Event Message List</A></H2>
+<H3><A NAME="SEC_ChangedInhibitIsBusy" HREF="#SECD_ChangedInhibitIsBusy">_ChangedInhibitIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>_ChangedInhibitIsBusy</SAMP>
+</DT>
+<DD>
+Send by C257 controller when C257 Inhibit status has been changed, or '<A HREF="#SECflushdata">flushdata</A>','<A HREF="#SECflushdatatome">flushdatatome</A>' command executed.
+<BR><BR>[Event Message Format]<BR>_ChangedInhibitIsBusy <I>1</I>&nbsp;&nbsp;(when C257 input line has been inhibited)
+<BR>_ChangedInhibitIsBusy <I>0</I>&nbsp;&nbsp;(when C257 input line inhibit has been cleared)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEC_ChangedLAMIsBusy" HREF="#SECD_ChangedLAMIsBusy">_ChangedLAMIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>_ChangedLAMIsBusy</SAMP>
+</DT>
+<DD>
+Send by C257 controller when LAM Line busy status has been changed, or '<A HREF="#SECflushdata">flushdata</A>','<A HREF="#SECflushdatatome">flushdatatome</A>' command executed.
+<BR><BR>[Event Message Format]<BR>_ChangedLAMIsBusy <I>1</I>&nbsp;&nbsp;(when LAM status is on)
+<BR>_ChangedLAMIsBusy <I>0</I>&nbsp;&nbsp;(when LAM status is off)
+<BR></DL>
+
+</BODY></HTML>

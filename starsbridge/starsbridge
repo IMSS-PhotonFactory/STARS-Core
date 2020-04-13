@@ -1,0 +1,158 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+#################################################################
+# starsbridge
+# 2010-01-19 Takashi Kosuge.
+$::Version  = '$Revision: 2.0 $';
+$::Version .= '$Date: 2014/08/07 00:00:00 $';
+#
+$::Version =~ s/\$//g;
+## Updated
+# Date      Ver Description
+#2014.08.07 2.0 A. Mano
+#    * Support configuration file 'config.pl' 
+#    * STARS Command to ($::Nodename|$::NodeName2) behaves as command to 'System'.
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'stbr';        #Default node name.
+$::NodeName2  = 'stbr2';       #Default node name2.
+$::Server     = 'localhost';   #Default stars server.
+$::Server2    = 'localhost';   #Default stars Server2
+$::Port		  = 6057;          #Default stars server port.
+$::Port2 	  = 6057;          #Default stars server port2.
+
+
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+### Check version and 
+if(-f 'config.pl'){
+	require 'config.pl';
+}
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'node2=s' => \$::NodeName2,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server,$::Port)
+	or die "Could not connect Stars server";
+
+$::tak2 = stars->new($::NodeName2, $::Server2,$::Port2)
+	or die "Could not connect Stars server 2";
+
+
+
+$::tak->addcallback(\&handler);
+$::tak->addcallback(\&handler2, $::tak2->gethandle());
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h] [-d] [-node MyNodeName] [StarsServer]
+       -h   Show this help.
+       -d   Run with debug mode.
+__USAGE__
+
+exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+	## Handle received messges ##
+	if( $to eq $::NodeName ){
+		$to .= '.System';
+	}
+	if($from eq 'System'){
+		$from="$::NodeName2";
+	}else{
+		$from="$::NodeName2\.$from";
+	}
+	if($to =~ s/^$::NodeName\.(.*)/$1/){
+
+		$::tak2->Send("$from>$to $mess");
+		if($::Debug){
+			print "STARS2 SND: $from>$to $mess\n";
+		}
+		return;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}
+}
+
+
+# Command handler from Stars server 2 ------------------------
+sub handler2{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	if($::Debug){
+		print "STARS2 RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+	if( $to eq $::NodeName2 ){
+		$to .= '.System';
+	}
+	if($from eq 'System'){
+		$from = "$::NodeName";
+	}else{
+		$from="$::NodeName.$from";
+	}
+	if($to =~ s/^$::NodeName2\.(.*)/$1/){
+		$::tak->Send("$from>$to $mess");
+		if($::Debug){
+			print "STARS SND: $from>$to $mess\n";
+		}
+		return;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$::tak2->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS2 SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}
+}

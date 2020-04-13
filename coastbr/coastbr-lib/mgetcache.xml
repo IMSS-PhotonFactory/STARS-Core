@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<Message Mtype="Execute" IOC="#IOCNAME#">
+   <Command TimeStamp="#TIME#" Expand="True">
+      <FromDevice>
+         <NodeDefinition ID="#TERMFROM#" ClientWinNo="#TERMFROM#-W1"/>
+      </FromDevice>
+      <ToDevice DeviceID="#DEVICETO#.#NODETO#">
+         <NodeDefinition ID="*">
+           <DeviceProperty PropertyID="#P1#"/>
+         </NodeDefinition>
+         <DeviceMethod MethodID="GetCache"/>
+      </ToDevice>
+   </Command>
+</Message>
