@@ -1,6 +1,8 @@
 # STARS Core
 
-STARS Kernel and Clients
+STARS Kernel and Clients library
+
+See wiki pages about descriptions and tutorials for STARS.
 
 ## Contents
 
