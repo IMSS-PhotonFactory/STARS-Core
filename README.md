@@ -16,6 +16,7 @@ See wiki pages about descriptions and tutorials for STARS.
 - starsclib : C library for stars client.
 - samples : Sample programs.
 - newplclient : Perl STARS Client development wizard.
+- newpyclient : Python3 STARS Client development wizard.
 - newvbclient : Visual Basic 6 STARS Client development wizard.
 - winformcs_template_VS2012/winformcs_template : Visual Studio 2012 C# project template for windows form (Also Work on VS2015). Builded application with the template runs on windows and Mono.
 - winformvb_template_VS2012/winformvb_template : Visual Studio 2012 Visual Basic project template for windows form (Also Work on VS2015). Builded application with the template runs on windows and Mono.
