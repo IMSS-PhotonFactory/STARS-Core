@@ -22,10 +22,10 @@ class <<client_name>>():
         #self.st.setdebug(True)
 
     # Functions =================================================
-    def GetValue(self):
+    def _get_value(self):
         return "Ok:"
 
-    def SetValue(self, sval):
+    def _set_value(self, sval):
         if sval == '':
             return "Er: Bad parameter."
         return "Ok: " + sval
@@ -57,10 +57,10 @@ class <<client_name>>():
                 rt = "hello help GetValue SetValue"
 
             elif mess.message == 'GetValue':
-                rt = self.GetValue()
+                rt = self._get_value()
 
             elif mess.command == 'SetValue':
-                rt = self.SetValue(mess.parameters)
+                rt = self._set_value(mess.parameters)
 
             else:
                 rt = " Er: Bad command or parameter."
