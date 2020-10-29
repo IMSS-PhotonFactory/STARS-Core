@@ -63,7 +63,7 @@ class <<client_name>>():
                 rt = self._set_value(mess.parameters)
 
             else:
-                rt = " Er: Bad command or parameter."
+                rt = "Er: Bad command or parameter."
 
             self.st.send(mess.nodefrom, "@{} {}".format(mess.command, rt))
 
