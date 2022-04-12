@@ -1,0 +1,103 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use Time::HiRes qw(gettimeofday);
+#################################################################
+# syslogger: STARS SYSTEM LOGGER
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'Debugger';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::LogDir     = './';               #Default log directory
+use constant LOGPREFIX => 'slog';
+use constant LOGSUFFIX => '.txt';
+use constant LOGHEADLEN => 24;
+#################################################################
+$::Echo   = '';   #For echo mode.
+$::Nolog  = '';   #Flag for suppress output to log file.
+$::RECLEN = '';   #Default output all message. >0 Trim by record length
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'e'      => \$::Echo,
+'nolog'  => \$::Nolog,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+'dir=s'  => \$::LogDir,
+'reclen=s' => \$::RECLEN
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+unless($::LogDir =~ /[\/\\]$/){$::LogDir .= '/';}
+
+if($::Echo){$|=1;}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+my $fh = $::tak->gethandle();
+
+#Calc RecordLength
+$::RECLEN=$::RECLEN - LOGHEADLEN;
+
+$::tak->addcallback(\&handler, $fh, 'Lf');
+stars->Mainloop();
+close(LOG);
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: syslogger [-h] [-dir Directory] [-node MyNodeName] [-reclen StarsMessageLength] [StarsServer]\n";
+  print "       -h     Show this help.\n";
+  print "       -e     Turn on echo mode. If this switch will be configured, all messages\n";
+  print "             from STARS server will appear on the screen.\n";
+  print "       -nolog     Supress output of log file.\n";
+  print "       -dir Direcotory     Set directory of logfile. Default is \"./\".\n";
+  print "       -reclen RecordLength    Trim LogMessage by RecordLength.\n";
+  exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+	my $mess = shift;
+	my $ctime;
+	my $cdate;
+
+	$cdate = $ctime = ksg_localtime();
+	$cdate =~ s/ \d\d:\d\d:\d\d.\d\d\d//;
+
+	if(($::RECLEN>0) and (length($mess)>$::RECLEN)){
+		$mess=pack("A".$::RECLEN,$mess);
+	}
+	unless($::Nolog){
+		if($cdate ne $::odate){
+			open_logfile($cdate);
+			$::odate=$cdate;
+		}
+		print LOG "$ctime $mess\n";
+	}
+	if($::Echo){print "$ctime $mess\n";}
+}
+
+#Same as logger
+#-- Refresh log file ---------------------------------------------
+sub open_logfile{
+	my $d=shift;
+	my $filename = $::LogDir.LOGPREFIX.$d.LOGSUFFIX;
+	open(LOG, ">>$filename");
+	select(LOG);$|=1;select(STDOUT);
+	print LOG ksg_localtime()." System logger started.\n";
+}
+
+#Same as logger
+#-- Get "yyyy-mm-dd hh:mm:ss" style date -------------------------
+sub ksg_localtime{
+my ($sec, $mcsec) = gettimeofday;
+my @tt = localtime($sec);
+return(sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d",
+$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0],int($mcsec/1000)));
+}

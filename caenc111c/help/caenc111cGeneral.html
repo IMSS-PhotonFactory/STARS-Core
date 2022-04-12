@@ -1,0 +1,101 @@
+<HTML>
+<HEAD>
+</HEAD>
+<BODY>
+<H1>Stars Program Reference&nbsp;- General Guide for caenc111c</H1>
+<P>
+<UL>
+<LI><A NAME="SECDINTRODUCTION" HREF="#SECINTRODUCTION">INTRODUCTION</A></LI>
+<LI><A NAME="SECDNAME" HREF="#SECNAME">NAME</A></LI>
+<LI><A NAME="SECDSYNOPSIS" HREF="#SECSYNOPSIS">SYNOPSIS</A>
+<UL>
+    <LI><A NAME="SECDSetup and Configuration" HREF="#SECSetup and Configuration">SETUP and CONFIGURATION</A></LI>
+    <LI><A NAME="SECDCommand List" HREF="#SECCommand List">COMMAND LIST</A></LI>
+    <LI><A NAME="SECDSample" HREF="#SECSample">SAMPLE CODE</A></LI>
+</UL>
+</LI>
+<LI><A NAME="SECDProgram Files" HREF="#SECProgram Files">PROGRAM FILE LIST</A></LI>
+<LI><A NAME="SECDDocumentation Files" HREF="#SECDocumentation Files">DOCUMENTATION FILE LIST</A></LI></UL>
+
+<HR>
+<H2><A NAME="SECINTRODUCTION" HREF="#SECINTRODUCTION">INTRODUCTION</A></H2>
+<DL COMPACT>
+  <DD><strong>'caenc111c</strong>' is the Stars I/O Client Program, which is developped to control the CAEN CAMAC Controller Model C111C (C111C).</DD>
+  <dt>&nbsp;	</dt>
+  <dd>Slot module controls  via C111C are also available, for Kenetic Systems Model 3655-L1A and CAEN Module C257. </dd>
+</DL>
+<HR>
+<H2><A NAME="SECNAME" HREF="#SECDNAME">NAME</A></H2>
+<DL COMPACT><DD><strong>caenc111c</strong>&nbsp;&nbsp;&nbsp;&nbsp; - Stars I/O Client Program for CAEN CAMAC Controller Model C111C</DD>
+</DL>
+<HR>
+<H2><A NAME="SECSYNOPSIS" HREF="#SECDSYNOPSIS">SYNOPSIS</A></H2><P>
+<DL COMPACT><DT><DD><strong>perl caenc111c [StarsNodeName] [-d] [-h]</strong>
+  <DL><dt><DD>
+    <P>
+StarsNodeName&nbsp;&nbsp;&nbsp;&nbsp;'caenc111c' is the default value.<BR>
+-d&nbsp;&nbsp;&nbsp;&nbsp;option debug: Show debug messages to the display.<BR>
+-h&nbsp;&nbsp;&nbsp;&nbsp;option help:Show command line help.</DD></DL>
+</DD>
+</DL>
+</DT></DL>
+  </DL></DT></DL>
+  <H3><A NAME="SECSetup and Configuration" HREF="#SECDSetup and Configuration">SETUP and CONFIGURATION</A></H3>
+  <DL COMPACT>
+    <DT>
+    <DD>  Setup and Configuration Manual => See '<A NAME="SECcaenc111cSetupGuide.html" HREF="caenc111cSetupGuide.html">caenc111cSetupGuide.html</A>' </DD>
+</DL>
+  </DT></DL>
+<H3><A NAME="SECCommand List" HREF="#SECDCommand List">COMMAND LIST</A></H3>
+<DL COMPACT><DT>
+<DD>
+  Command List for use
+    <TABLE BORDER=1 cellspacing=0 cellpadding=1>
+<TR><TD>Filename</TD><TD>Description</TD></TR><TR><TD><A NAME="SECc111cCommandReference.html" HREF="c111cCommandReference.html">c111cCommandReference.html</A></TD><TD>Command Reference for CAEN CAMAC Controller Model C111C</TD></TR><TR><TD><A NAME="SECc257CommandReference.html" HREF="c257CommandReference.html">c257CommandReference.html</A></TD>
+<TD>Command Reference for CAEN Module C257 - Controller commands </TD>
+</TR><TR><TD><A NAME="SECc257CounterCommandReference.html" HREF="c257CounterCommandReference.html">c257CounterCommandReference.html</A></TD>
+<TD>Command Reference for CAEN Module C257 - Counter commands </TD>
+</TR><TR>
+  <TD><A NAME="SECks3655CommandReference.html" HREF="ks3655CommandReference.html">ks3655CommandReference.html</A></TD>
+  <TD>Command Reference for Kenetic Systems Model 3655-L1A</TD>
+</TR></TABLE>
+</LI></UL>
+</DD></DT></DL>
+
+<H3><A NAME="SECSample" HREF="#SECDSample">SAMPLE CODE</A></H3>
+<DL COMPACT>
+  <DD> Sample Code using 'caenc111c' => See '<A NAME="SECcaenc111cSampleCode.html" HREF="caenc111cSampleCode.html">caenc111cSampleCode.html</A>' </DD>
+</DL>
+<HR>
+<H2><A NAME="SECProgram Files" HREF="#SECDProgram Files">PROGRAM FILE LIST</A><BR>
+</H2>
+<DL COMPACT><DT><DD>
+<TABLE BORDER=1 cellspacing=0 cellpadding=1><TR>
+  <TH>Filename</TH>
+  <TH>Description</TH>
+  <TH>File type </TH>
+</TR><TR><TD><A NAME="SECcaenc111c">caenc111c</A></TD>
+<TD>'caenc111c' Main Program File</TD>
+<TD><div align="center">perl</div></TD>
+</TR><TR><TD><A NAME="SECstars.pm">stars.pm</A></TD><TD>Library of Stars Interface</TD>
+  <TD><div align="center">perl</div></TD>
+</TR><TR><TD><A NAME="SECcaenc111clib.pm">caenc111clib.pm</A></TD><TD>Library of CAEN CAMAC Controller Model C111C Interface</TD>
+  <TD><div align="center">perl</div></TD>
+</TR><TR><TD><A NAME="SECcaenc111cmod.pl">caenc111cmod.pl</A></TD>
+  <TD><p>Sub Program - CAEN CAMAC Controller Model C111C for command transaction</p>
+    </TD>
+  <TD><div align="center">perl</div></TD>
+</TR><TR><TD><A NAME="SECcaenc257mod.pl">caenc257mod.pl</A></TD>
+  <TD>Sub Program - CAEN Module C257 for command transaction</TD>
+  <TD><div align="center">perl</div></TD>
+</TR><TR><TD><A NAME="SECks3655l1amod.pl">ks3655l1amod.pl</A></TD>
+  <TD>Sub Program - Kenetic Systems Model 3655-L1A for command transaction</TD>
+  <TD><div align="center">perl</div></TD>
+</TR><TR><TD><A NAME="SECcaenc111c.key">caenc111c.key</A></TD>
+  <TD>Star's keyfile for 'caenc111c' Program </TD>
+  <TD><div align="center">text</div></TD>
+</TR><TR><TD><A NAME="SECconfig.pl">config.pl</A></TD>
+  <TD>User Configuration File for 'caenc111c' Program</TD>
+  <TD><div align="center">perl</div></TD>
+</TR></TABLE></DD></DT></DL>
+</BODY></HTML>

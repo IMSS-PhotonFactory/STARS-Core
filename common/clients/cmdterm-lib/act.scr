@@ -1,0 +1,9 @@
+#send and receive
+#? send command and receve result
+#? Usage: act tonode command [parameter1] [parameter2..]
+#?        act fromnode>tonode cammand [parameter1] [parameter2..]
+
+my $buf=join(" ",@_);
+
+return(act("$buf"));
+

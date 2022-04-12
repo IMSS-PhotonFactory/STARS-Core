@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<Message Mtype="Execute" IOC="#IOCNAME#">
+   <Command TimeStamp="#P1# #P2#" StopAnswerBack="True" LogFlg="1">
+      <FromDevice>
+         <NodeDefinition ID="#TERMFROM#" ClientWinNo="#TERMFROM#-W1"/>
+      </FromDevice>
+      <ToDevice>
+         <NodeDefinition ID="Beamline.#P3#">
+            <DeviceProperty PropertyID="#P4#">
+               <PropertyValue Value="#P5#"/>
+            </DeviceProperty>
+         </NodeDefinition>
+         <DeviceMethod MethodID="SetCache"/>
+      </ToDevice>
+   </Command>
+</Message>

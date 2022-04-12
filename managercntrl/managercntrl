@@ -1,0 +1,103 @@
+#! /usr/bin/perl
+
+use Tk;
+use stars;
+
+$ManagerName='';
+$DeviceName='';
+$StarsServer     = 'localhost';        #Default stars server.
+
+if($_ = shift(@ARGV)){$StarsServer = $_;}
+
+$sv = stars->new('manager-cntrl', $StarsServer) or die;
+
+$mw = MainWindow->new();
+$mw->title("STARS Device Manager");
+$lb1 = $mw->Listbox()->pack(-side => 'left');
+$wi = $lb1->Scrolled('Listbox', -scrollbars => 'oe')->pack;
+
+$l0 = $mw->Label(-text => 'Manager:', -anchor => 'w')->pack(-side => 'top', -fill => 'x');
+$l1 = $mw->Label(-text => 'Device:', -anchor => 'w')->pack(-side => 'top', -fill => 'x');
+$l2 = $mw->Label(-text => 'Status:', -anchor => 'w')->pack(-side => 'top', -fill => 'x');
+$l3 = $mw->Label(-text => '', -anchor => 'w')->pack(-side => 'bottom', -fill => 'both');
+$b1 = $mw->Button(-text => 'Execute', -command => \&h_execute)->pack(-side => 'top', -fill => 'x');
+$b2 = $mw->Button(-text => 'Terminate', -command => \&h_terminate)->pack(-side => 'top', -fill => 'x');
+
+($from,$to,$mess) = $sv->act("System listnodes");
+@managers = grep(/^manager-(?!cntrl$)/, split(" ", $mess));
+
+foreach $manager (@managers){
+	unless($manager =~ /^manager-([a-zA-z0-9\-]+)/){next;}
+	$mname=$1;
+	($from,$to,$mess) = $sv->act("$manager listnodes");
+	if($mess =~ /Er:/){next;}
+	$mess =~ s/ / $mname:/g;
+	$mess =~ s/\@\w+ //;
+	$wi->insert('end', split(" ", $mess));
+}
+
+$wi->bind("<Button-1>", \&h_selected );
+
+
+MainLoop;
+exit;
+
+sub h_execute{
+	my ($from, $to, $mess);
+	if($ManagerName and $DeviceName){
+		($from, $to, $mess) = $sv->act("$ManagerName execute $DeviceName");
+		$l3->configure(-text => "$mess");
+		GetPIDStatus();
+	}else{
+		$l3->configure(-text => '');
+	}
+}
+
+sub h_terminate{
+	my ($from, $to, $mess);
+	if($ManagerName and $DeviceName){
+		($from, $to, $mess) = $sv->act("$ManagerName terminate $DeviceName");
+		$l3->configure(-text => "$mess");
+		GetPIDStatus();
+	}else{
+		$l3->configure(-text => '');
+	}
+}
+
+sub h_selected{
+	my ($sl) = $wi->curselection();
+	my ($from,$to,$mess);
+
+	my $buf = $wi->get($sl);
+	my ($manager, $device) = split(":", $buf);
+	$manager = "manager-".$manager;
+
+	$l0->configure(-text => "Manager: $manager");
+	$ManagerName=$manager;
+	
+	$l1->configure(-text => "Device: $device");
+	$DeviceName=$device;
+
+	GetPIDStatus();
+	$l3->configure(-text => '');
+}
+
+sub GetPIDStatus{
+	my ($from, $to, $mess);
+	my $buf;
+	my @buf;
+
+	unless($ManagerName and $DeviceName){return;}
+	($from,$to,$mess) = $sv->act("$ManagerName getpid $DeviceName");
+	if($mess =~ /Er:/){
+		$l3->configure(-text => "$mess");
+		return;
+	}
+	@buf = split(" ", $mess);
+	if($buf[1]){
+		$buf = "Status: Running PID=$buf[1]";
+	}else{
+		$buf = "Status: Terminated";
+	}
+	$l2->configure(-text => "$buf");
+}

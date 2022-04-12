@@ -1,0 +1,47 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  This program is sample script. Scalar is used for return value
+of stSetParam() and hash is used in the script.
+';
+#####################################################
+
+require 'scriptlib.pl';
+
+stLoadParam();
+stSetParam('Prefix_of_data_file Display_terminal_name Start End Step',@ARGV);
+stSaveParam();
+
+$::DataFile = $::Param{'Prefix_of_data_file'};
+stAddSuffixDataFile();
+
+
+stPrint("Start sample script.\n");
+stWriteFile( "#Start ".stGetLocaltime()."\n" );
+
+my $rt = stSendCommand("System hello");
+stPrint("$rt\n");
+
+my $lp;
+
+for($lp = $::Param{'Start'}; $lp <= $::Param{'End'}; $lp += $::Param{'Step'}){
+	stFprintf("%d %d\n", $lp, $lp*2+rand(100));
+	stSendEvent("$::Param{'Display_terminal_name'} _ChangedValue $lp");
+	stSleep(0.5);
+}
+
+
+$::TimeOut = 1;
+
+$rt = stWait("_Ok", "$::Param{'Display_terminal_name'}");
+
+if($rt eq ''){
+	stPrint("Timeout!\n");
+}else{
+	stPrint("$rt\n");
+}
+
+stWriteFile( "#End ".stGetLocaltime()."\n" );

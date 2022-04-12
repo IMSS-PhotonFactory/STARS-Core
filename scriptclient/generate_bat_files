@@ -1,0 +1,67 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  Bat files are generated to run script programs.
+Only 1 bat file will be generated if file name will be set
+from command option.
+This program should be used for Windows.
+';
+#####################################################
+$::Offline= 1;
+$::Param = 'File_Name';
+require 'scriptlib.pl';
+
+my $tmplt = '';
+while(<DATA>){$tmplt .= $_;}
+
+my $filename = '';
+if(@ARGV){
+	($filename) = stSetParam();
+}
+
+## Get program list.
+my @allfiles;
+if($filename){
+	unless(-e $filename){die "Error: $filename does not exist.\n";}
+	if(-d $filename){die "Error: $filename is a directory.\n";}
+	push(@allfiles, $filename);
+}else{
+	opendir(DIR, "./") or die $!;
+	@allfiles = readdir(DIR);
+	closedir(DIR);
+}
+
+my @files = ();
+my $f;
+for $f (@allfiles){
+	if($f =~ /\./){next;}
+	if(-d $f){next;}
+	push(@files, $f);
+}
+
+my $filecount = @files;
+unless($filename){
+	stYesNo("$filecount bat file(s) will be generated. Ok?") or die "Cancelled.\n";
+}
+
+my $outbuf;
+
+for $f (@files){
+	$outbuf = $tmplt;
+
+	$outbuf =~ s/<<SCRIPTNAME>>/$f/g;
+
+	open(BUF, ">$f.bat") or die "Writing bat file: $!";
+	print BUF $outbuf;
+	close(BUF);
+}
+
+print "Done. Notice: \"delete_bat_files\" is used for deleting bat files.\n";
+
+
+__DATA__
+@ECHO OFF
+perl <<SCRIPTNAME>> %*

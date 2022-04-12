@@ -1,0 +1,958 @@
+#! /usr/bin/perl
+#################################################################
+# sc200,400 STARS client
+# 2005-12-01 Ver 1.0 Yasuko Nagatani
+#----------------------------------------------------------------
+# 2013-08-20 Ver 1.1  Add limitstatusenable optional function by Y.Nagatani
+# 2014-02-09 Ver 1.11 Bugfix limitstatusenable optional function by Y.Nagatani
+#################################################################
+# Version 1.0: SC200 Ver.997 Verified
+# Version 1.1: Add LimitStatusRead Command and option.
+# Version 1.11: Bugfix of LimitStatusRead
+#################################################################
+use strict;
+use Getopt::Long;
+use stars;
+#################################################################
+## ToDo: Set parameters here.
+$::Server     = 'localhost';        #Default stars server.
+$::Debug      = '';
+#################################################################
+@::MotorPositionFMT = qw(1 1 1 1);
+@::EncoderPositionFMT = qw(1 1 1 1);
+@::DefaultSpeedTblNo = qw(0 0 0 0);
+$::FLG_EASYMODE_ENABLE    = 0;
+$::FLG_LIMITSTATUS_ENABLE = 0;
+$::FLG_RAW_ENABLE = 0;
+@::DefaultAccMode=();# SYS8
+@::DefaultBacklashMode=(); #SYS22
+@::DefaultEncoderCorrectMode=(); #SYS29
+@::DefaultOrgMode=();# SYS9
+$::Remote=1;
+#################################################################
+use constant INTERVAL_STOP  => 2000;
+use constant INTERVAL_RUN   => 200;
+use constant REFRESH_RUN    => 600;
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'        => \$::Debug,
+'h'        => \&usage,
+'limitstatusenable'=>\$::FLG_LIMITSTATUS_ENABLE,
+'rawenable'=>\$::FLG_RAW_ENABLE,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+
+require 'config.pl';
+################################################################
+# Interface library
+# Prease include your own interface library.
+# "device_read", "device_write" and "device_init" must be included
+# in the library.
+require 'nportsvr.pl';    #For nport Server
+#require 'win232c.pl';    #For Windows COM
+################################################################
+if($::Debug){print "Started with debug mode.\n";}
+
+## Init device
+device_init();
+
+## Save Number Of Axis And Version
+$::NumberOfSysNum=52;
+$_=sendcmd('IDN');	#Read Machine_Type And Version
+unless(/^C\tIDN.*\t([2|4|8])([01]0)\s+(\d+)$/){ #Version 1.0 sc200 Verified.
+	die "Machine Type Unknown.\n";
+}
+if($2=~/^0/){
+	$::NumberOfSysNum=47;
+}
+$::DEVNAME="$1$2";
+$::NumberOfAxis=$1;
+$::NumberOfMotor=$1-1;
+$::Version = $3;
+@::Flg_Busy=();
+@::Position=();
+@::Encoder=();
+
+#print $::NumberOfAxis,"=\n";
+my $i;
+my $rt;
+for($i=0; $i<$::NumberOfAxis; $i++){
+	$::MotorName{$::MotorName[$i]}=$i;
+	$::EncoderName{$::EncoderName[$i]}=$i;
+	$::Flg_LimitStatus[$i]=0;
+	push(@::DefaultAccMode,"");
+	push(@::DefaultBacklashMode,"");
+	push(@::DefaultEncoderCorrectMode,"");
+	push(@::DefaultOrgMode,"");
+	push(@::Flg_Busy,"");
+	push(@::Position,"");
+	push(@::Encoder,"");
+	$rt = sc_getsysinfo($i,8,8,1);   if($rt eq ""){die "$::Error";}
+	$::DefaultBacklashMode[$i]=$rt;# SYS8
+	$rt = sc_getsysinfo($i,22,22,1); if($rt eq ""){die "$::Error";}
+	$::DefaultAccMode[$i]=$rt;# SYS22
+	$rt = sc_getsysinfo($i,29,29,1); if($rt eq ""){die "$::Error";}
+	$::DefaultEncoderCorrectMode[$i]=$rt;# SYS29
+	$rt = sc_getsysinfo($i,9,9,1);   if($rt eq ""){die "$::Error";}
+	$::DefaultOrgMode[$i]=$rt;# SYS9
+}
+
+$::SyncRunTimes=undef;
+$::SyncMPSCommand=undef;
+reset_syncrun();
+
+#%::helpcntrl=();
+$|=1;
+##set_help_list();
+
+$::Interval_Time = INTERVAL_STOP;
+$::Buf_Interval = int(REFRESH_RUN/INTERVAL_RUN);
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+$::tak->addcallback(\&handler);
+if(sc_flushdata() eq ''){die $::Error;}
+stars->Mainloop(\&interval, \$::Interval_Time);
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: $0 [-h] [-d] [-limitstatusenable] NodeName\n";
+  exit(0);
+}
+#############################################################
+## handler called by Stars Server
+#############################################################
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+	my ($from, $to, $mess) = @_;
+	my $rt='';
+
+	if($::Debug){print "STARS RCV: $from>$to $mess\n";}
+##Ignore Event/Reply Messages ##
+	if($mess=~/^[_@]/){
+		return;
+	}
+## Motor Commands ##
+	if($to=~/^$::NodeName\.([^\.\s]+)$/){
+	 	$_=mname2mn($1);
+	 	unless($_ eq ''){
+	 		$rt = Motor_handler($from, $to, $_, $mess);
+	 	}else{
+	 		$_=ename2mn($1);
+	 		unless($_ eq ''){
+	 			$rt = Encoder_handler($from, $to, $_, $mess);
+			}else{
+				$::tak->Send("\@$mess Er: $to is down.", $from);
+				return;
+			}
+	 	}
+## Controller Commands ##
+	}elsif($to=~/^$::NodeName$/){
+		$rt = Ctl_handler($from, $to, $mess);
+## Bad Device Name ##
+	}else{
+		$::tak->Send("\@$mess Er: $to is down.", $from);
+		return;
+	}
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){print "STARS SND: $to>$from \@$mess Er: $::Error\n";}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){print "STARS SND: $to>$from \@$mess $rt\n";}
+	}
+	return;
+}
+#############################################################
+## Ctl_handler called by handler
+#############################################################
+sub Ctl_handler{
+	my ($from, $to, $mess) = @_;
+	my $rt='';
+	my($mn,$cmd);
+
+
+	if($::Debug){print "ENTER Ctl_handler:$from,$to,$mess\n";}
+## Controller commands ##
+	if($mess eq 'hello')			{$rt = 'nice to meet you.';
+	}elsif($mess=~/^GetRomVersion$/){$rt = sc_sendcmd("sc_idn","IDN","^C\tIDN[^\t]+\t(.+)","\$1");
+	}elsif($mess=~/^Get(Machine|Controller|Device)Name$/){$rt = "SC".$::DEVNAME;
+	}elsif($mess=~/^GetVersion$/)	{$rt = sprintf("%.3lf",$::Version/1000);
+	}elsif($mess=~/^GetMotorList$/)	{$rt = join(" ", @::MotorName);
+	}elsif($mess=~/^GetEncoderList$/)	{$rt = join(" ", @::EncoderName);
+	}elsif($mess=~/^GetMotorName\s([0-$::NumberOfMotor])$/){$rt = mn2mname($1);
+	}elsif($mess=~/^GetEncoderName\s([0-$::NumberOfMotor])$/){$rt = mn2ename($1);
+	}elsif($mess=~/^flushdata$/)	{$rt = sc_flushdata();
+	}elsif($mess=~/^flushdatatome$/)	{$rt = sc_flushdata($from);
+	}elsif($mess=~/^Stop$/)         {$rt = sc_stop(-1,0);
+	}elsif($mess=~/^StopEmergency$/){$rt = sc_stop(-1,1);
+	}elsif($mess=~/^Standby$/)		{$rt = ctl_standby(1);
+	}elsif($mess=~/^Standby\s([0|1])$/){$rt = ctl_standby($1);
+	}elsif($mess=~/^SyncRun$/)		{$rt = sc_syncrun();;
+	}elsif($mess=~/^GetFunction$/)  {$rt = $::Remote;
+	}elsif($mess=~/^SetFunction\s([0|1])$/)  {$rt = "Ok:";
+	}elsif($::FLG_RAW_ENABLE and $mess=~/^SendRawCommand\s+(\S+)$/)		{$rt = sendcmd($1);
+	}elsif($mess=~/^sc\s+(.+)$/)	{$rt = sendcmd($1);
+	}elsif($mess=~/^(\S+)\s(\S+)\s*(.*)$/){
+		$cmd="$1 $3";
+		$mn=mname2mn($2);
+		unless($mn eq ''){
+			$cmd=~s/(.+)\s+$/$1/;
+			$rt = Motor_handler($from, $to, $mn, $cmd);
+		}else{
+			$mn=ename2mn($2);
+			unless($mn eq ''){
+				$cmd=~s/(.+)\s+$/$1/;
+				$rt = Encoder_handler($from, $to, $mn, $cmd);
+			}else{
+				$mn=axisno2mn($2);
+				unless($mn eq ''){
+					$cmd=~s/(.+)\s+$/$1/;
+					$rt = Motor_handler($from, $to, $mn, $cmd);
+				}else{
+					$::Error="Bad command or parameter";
+				}
+			}
+		}
+	}else{
+		$::Error = "Bad command or parameter";
+	}
+	if($::Debug){print "ENTER Ctl_handler:$from,$to,$mess,#$rt#\n";}
+	return($rt);
+}
+#############################################################
+## Motor_handler called by handler
+#############################################################
+sub Motor_handler{
+	my ($from, $to, $mn, $cmd) = @_;
+	my $rt='';
+	my $p='';
+	my $linkparm="[1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-6]";#Using In exp.SetLink
+
+	if($::Debug){print "ENTER Motor_handler:$from,$to,".mn2mname($mn) .",#$cmd#\n";}
+#--------------------------------------------------
+# Motor_Commands
+#--------------------------------------------------
+	if($cmd=~/^IsBusy$/)          	{$rt = sc_isbusy($mn);
+	}elsif($cmd=~/^Stop$/)          	{$rt = sc_stop($mn,0);
+	}elsif($cmd=~/^StopEmergency$/) 	{$rt = sc_stop($mn,1);
+	}elsif($cmd=~/^Preset\s(-*\d+)$/)  	{$rt = sc_setpreset($mn,$1,"P");
+		unless($rt eq ""){
+#			$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedValue ".sc_getvalue($mn,"P",$::MotorPositionFMT[$mn]));
+			$p=sc_getvalue($mn,"P",$::MotorPositionFMT[$mn]);
+			$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedValue ".$p);
+			$::Position[$mn]=$p;
+		}
+	}elsif($cmd=~/^SetOffset\s(-*\d+)$/){$rt = sc_setoffset($mn,$1);
+	}elsif($cmd=~/^GetAxisNumber$/)		{$rt = mn2axisno($mn);
+	}elsif($cmd=~/^GetStatus$/)			{$rt = sc_getstatus(mn2axisno($mn),'');
+	}elsif($cmd=~/^GetOffset$/)  		{$rt = sc_getoffset($mn);
+	}elsif($cmd=~/^GetSpeedTblInfo\s([1-9]|10|11)$/){$rt=sc_getspdtblinfo($mn,$1);
+	}elsif($cmd=~/^SetSysTblInfoASI\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)$/){
+		$rt = sc_setspdtblinfosysasimsi($mn,'ASI',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11);
+	}elsif($cmd=~/^SetSpeedTblInfo\s([1-9]|10|11)\s(\d+)\s(\d+)\s(\d+)\s(\d+)$/){
+		$rt = sc_setspdtblinfo($mn,$1,$2,$3,$4,$5);
+#--------------------------------------------------
+# Motor_Proxy_Commands
+#--------------------------------------------------
+	}elsif($cmd=~/^GetSpeedTblNoSelected$/)					{$rt = $::DefaultSpeedTblNo[$mn];
+	}elsif($cmd=~/^GetHomePositionCorrectModeSelected$/)	{$rt = $::DefaultOrgMode[$mn];
+	}elsif($cmd=~/^GetEncoderCorrectModeSelected$/)			{$rt = $::DefaultEncoderCorrectMode[$mn];
+	}elsif($cmd=~/^GetAccModeSelected$/)					{$rt = $::DefaultAccMode[$mn];
+	}elsif($cmd=~/^GetBacklashModeSelected$/)				{$rt = $::DefaultBacklashMode[$mn];
+	}elsif($cmd=~/^SpeedTblNoSelect\s([0-9])$/)				{$::DefaultSpeedTblNo[$mn]=$1;$rt='Ok:';
+	}elsif($cmd=~/^HomePositionCorrectModeSelect\s([1-9]|1[0123467])$/)	{$::DefaultOrgMode[$mn]=$1;$rt='Ok:';
+	}elsif($cmd=~/^EncoderCorrectModeSelect\s([0-2])$/)		{$::DefaultEncoderCorrectMode[$mn]=$1;$rt='Ok:';
+	}elsif($cmd=~/^AccModeSelect\s([1-5])$/)				{$::DefaultAccMode[$mn]=$1;$rt='Ok:';
+	}elsif($cmd=~/^BacklashModeSelect\s([0-$::NumberOfAxis])$/)			{$::DefaultBacklashMode[$mn]=$1;$rt='Ok:';
+#--------------------------------------------------
+# Motor_Command GetSysInfo SysNoFrom-To/SysNo/Omit
+#--------------------------------------------------
+	}elsif($::NumberOfSysNum>47 and $cmd=~/^GetSysInfo\s([1-9]|[123]\d|4[0-7])-([1-9]|[1234]\d|5[0-2])$/){
+		$rt = sc_getsysinfo($mn,$1,$2);
+	}elsif($::NumberOfSysNum>47 and $cmd=~/^GetSysInfo\s([1-9]|[1234]\d|5[0-2])$/){
+		$rt = sc_getsysinfo($mn,$1,$1);
+	}elsif($cmd=~/^GetSysInfo\s([1-9]|[123]\d|4[0-7])-([1-9]|[123]\d|4[0-7])$/){
+		$rt = sc_getsysinfo($mn,$1,$2);
+	}elsif($cmd=~/^GetSysInfo\s([1-9]|[123]\d|4[0-7])$/){
+		$rt = sc_getsysinfo($mn,$1,$1);
+	}elsif($cmd=~/^GetSysInfo$/){$rt = sc_getsysinfo($mn,1,$::NumberOfSysNum);
+#--------------------------------------------------
+# Motor_Command SetLink motorname/axisno Supported
+#--------------------------------------------------
+	}elsif(($cmd=~/^SetLink\s(\S+)\s($linkparm)\s(\S+)\s($linkparm)$/) and $::NumberOfAxis>=4) {
+		unless(mname2mn($1) eq '' or mname2mn($3) eq ''){
+			$rt=sc_setlink($mn,mname2mn($1),$2,mname2mn($3),$4);}
+	}elsif($cmd=~/^SetLink\s(\S+)\s($linkparm)$/) {
+		unless(mname2mn($1) eq ''){$rt=sc_setlink($mn,mname2mn($1),$2,'','');}
+#--------------------------------------------------
+# GetValue/SetValue/SetValueREL/ScanHome Full Args
+#--------------------------------------------------
+	}elsif($cmd=~/^GetValue\s([0-3])$/){$rt = sc_getvalue($mn,"P",$1);#Read
+	}elsif($cmd=~/^SetValue\s(-*\d+)\s([1-5])\s([01])\s([0-9])\s([0-4])\s([0-2])$/){#Ac,Lnk,Spd,Bc,Ec
+		$rt = sc_setvalue($mn,$1,$2,$3,$4,$5,$6);if($rt eq ''){reset_syncrun();}
+	}elsif($cmd=~/^SetValueREL\s(-*\d+)\s([1-5])\s([01])\s([0-9])\s([0-4])\s([0-2])$/){#Ac,Lnk,Spd,Bc,Ec
+		$rt = sc_setvalueREL($mn,$1,$2,$3,$4,$5,$6);if($rt eq ''){reset_syncrun();}
+	}elsif($cmd=~/^ScanHome\s([1-9]|1[0-4])\s([1-5])\s([01])\s([0-9])$/){
+		$rt = sc_scanhome($mn,$2,$3,$4,$1);#AC,Lnk,Spd,Org
+#--------------------------------------------------
+# Ver 1.1 SetSpeedNo GetValue/SetValue/SetValueREL/ScanHome Simple args
+#         GetLimitStatus
+#--------------------------------------------------
+	}elsif($cmd=~/^GetValue$/){$rt = sc_getvalue($mn,"P",$::MotorPositionFMT[$mn]);#Read
+	}elsif($cmd=~/^GetLimitStatus$/){$rt = sc_getlimitstatus($mn);#Read
+	}elsif(!$::FLG_EASYMODE_ENABLE and $cmd=~/^SetValue\s(-*\d+)$/){ #Registry
+		$rt = sc_setvalue($mn,$1,$::DefaultAccMode[$mn],0
+			,$::DefaultSpeedTblNo[$mn]
+			,$::DefaultBacklashMode[$mn]
+			,$::DefaultEncoderCorrectMode[$mn]);
+		if($rt eq ''){reset_syncrun();}
+	}elsif(!$::FLG_EASYMODE_ENABLE and $cmd=~/^SetValueREL\s(-*\d+)$/){#Easy Mode
+		$rt = sc_setvalueREL($mn,$1,$::DefaultAccMode[$mn],0
+			,$::DefaultSpeedTblNo[$mn]
+			,$::DefaultBacklashMode[$mn]
+			,$::DefaultEncoderCorrectMode[$mn]);
+		if($rt eq ''){reset_syncrun();}
+	}elsif(!$::FLG_EASYMODE_ENABLE and $cmd=~/^ScanHome$/){
+		$rt = sc_scanhome($mn,$::DefaultAccMode[$mn],0
+			,$::DefaultSpeedTblNo[$mn]
+			,$::DefaultOrgMode[$mn]);
+		if($rt eq ''){reset_syncrun();}
+#--------------------------------------------------
+# Bad Format.
+#--------------------------------------------------
+	}else{
+		$::Error = "Bad command or parameter";
+	}
+	if($::Debug){print "EXIT  Motor_handler:$from,$to,".mn2mname($mn) .",#$cmd#,#$rt#\n";}
+	return($rt);
+}
+#############################################################
+## Encoder_handler called by handler
+#############################################################
+sub Encoder_handler{
+	my ($from, $to, $mn, $cmd) = @_;
+	my $rt='';
+	my $e='';
+	if($::Debug){print "ENTER Encoder_handler:$from,$to,".mn2ename($mn) .",#$cmd#\n";}
+	if($cmd=~/^GetAxisNumber$/)			{$rt = mn2axisno($mn);
+	}elsif($cmd=~/^GetValue\s([0-3])$/) {$rt = sc_getvalue($mn,"E",$1);#Read
+	}elsif($cmd=~/^Preset\s(-*\d+)$/)  	{$rt = sc_setpreset($mn,$1,"E");
+		unless($rt eq ""){
+#			$::tak->Send("$::NodeName.".mn2ename($mn).">System _ChangedValue ".sc_getvalue($mn,"E",$::EncoderPositionFMT[$mn]));
+			$e=sc_getvalue($mn,"E",$::EncoderPositionFMT[$mn]);
+			$::tak->Send("$::NodeName.".mn2ename($mn).">System _ChangedValue ".$e);
+			$::Encoder[$mn] = $e;
+		}
+#--------------------------------------------------
+# Ver 1.1 GetValue Simple args
+#--------------------------------------------------
+	}elsif($cmd=~/^GetValue$/){$rt = sc_getvalue($mn,"E",$::EncoderPositionFMT[$mn]);#Read
+	}else{
+		$::Error = "Bad command or parameter";
+	}
+	if($::Debug){print "EXIT  Encoder_handler:$from,$to,".mn2mname($mn) .",#$cmd#,#$rt#\n";}
+	return($rt);
+}
+##################################################################
+## Check & Convert motor/encoder/axisno <-> number/name Functions
+##################################################################
+sub axisno2mname{
+	my $axisno=shift;my $mn=axisno2mn($axisno);
+	unless($mn eq ''){return(mn2mname($mn));}return('');
+}
+sub axisno2ename{
+	my $axisno=shift;my $mn=axisno2mn($axisno);
+	unless($mn eq ''){return(mn2ename($mn));}return('');
+}
+sub axisno2mn{
+	my $axisno=shift;
+	if(1 <= $axisno and $axisno <= $::NumberOfAxis){return($axisno-1);}
+	$::Error = "Bad Axis Number.";return('');
+}
+sub mn2axisno{
+	my $mn=shift;
+	if(0 <= $mn and $mn < $::NumberOfAxis){return($mn+1);}
+	$::Error = "Bad Motor Number.";return('');
+}
+sub mn2mname{
+	my $mn=shift;
+	if(0 <= $mn and $mn < $::NumberOfAxis){return($::MotorName[$mn]);}
+	$::Error = "Bad Motor Number.";return('');
+}
+sub mn2ename{
+	my $mn=shift;
+	if(0 <= $mn and $mn < $::NumberOfAxis){return($::EncoderName[$mn]);}
+	$::Error = "Bad Encoder Number.";return('');
+}
+sub mname2mn{
+	my $mname=shift;
+	if(defined($::MotorName{$mname})){return($::MotorName{$mname});}
+	$::Error = "Bad Motor Name.";return('');
+}
+sub ename2mn{
+	my $ename=shift;
+	if(defined($::EncoderName{$ename})){return($::EncoderName{$ename});}
+	$::Error = "Bad Encoder Name.";return('');
+}
+##################################################################
+## ValueCheck Functions
+##################################################################
+sub checkpulse{
+	my($pulse,$type)=@_;
+	if(($pulse < -68108813)||($pulse > 68108813)){
+		$::Error="$type out of range.";return('');
+	}
+	return("Ok:");
+}
+sub checkbusyoff{
+	my($mn)=@_;
+	$_=sc_isbusy($mn);
+	if($_ eq ''){return($_);}elsif($_ eq '1'){$::Error = "Busy.";return('');}
+	return("Ok:");
+}
+sub checkstandbyoff{
+	if($::SyncRunTimes >= 0){$::Error = "Standby On.";return('');}
+	return("Ok:");
+}
+##################################################################
+## SyncRun Functions
+##################################################################
+sub reset_syncrun{ $::SyncRunTimes = -1; $::SyncMPSCommand = ''; return('Ok:');}
+
+sub ctl_standby{
+	my($mode)=@_;
+	if($mode eq '1'){
+		if(checkstandbyoff() eq ''){return('');} $::SyncRunTimes=0;return('Ok:');
+	}else{
+		return(reset_syncrun());
+	}
+}
+sub sc_syncrun{
+	my($rt,$cm)=('','MPS');
+
+	if($::SyncRunTimes < 0){ $::Error = "Standby Off.";
+	}elsif($::SyncRunTimes eq 0){ $::Error = "SetValue Not Executed.";
+	}elsif($::SyncRunTimes eq 1){ $::Error = "SetValue 1 Time Executed.";
+	}else{
+		$rt=sc_sendcmd("sc_syncrun","$cm$::SyncMPSCommand/1","^C\t$cm.*","Ok:");
+		if($rt eq 'Ok:'){
+			if($::SyncMPSCommand=~/^(\d)\/-*\d+\/(\d)\/-*\d+\/(\d)\/-*\d+\/(\d)\/-*\d+$/){
+				$::Flg_Busy[$1-1]=1;$::Flg_Busy[$2-1]=1;$::Flg_Busy[$3-1]=1;$::Flg_Busy[$4-1]=1;
+				# SyncRunMode
+				$::tak->Send("$::NodeName.".mn2mname($1-1).">System _ChangedIsBusy 1");
+				$::tak->Send("$::NodeName.".mn2mname($2-1).">System _ChangedIsBusy 1");
+				$::tak->Send("$::NodeName.".mn2mname($3-1).">System _ChangedIsBusy 1");
+				$::tak->Send("$::NodeName.".mn2mname($4-1).">System _ChangedIsBusy 1");
+				$::Interval_Time = INTERVAL_RUN;
+
+			}elsif($::SyncMPSCommand=~/^(\d)\/-*\d+\/(\d)\/-*\d+\/(\d)\/-*\d+$/){
+				$::Flg_Busy[$1-1]=1;$::Flg_Busy[$2-1]=1;$::Flg_Busy[$3-1]=1;
+				# SyncRunMode
+				$::tak->Send("$::NodeName.".mn2mname($1-1).">System _ChangedIsBusy 1");
+				$::tak->Send("$::NodeName.".mn2mname($2-1).">System _ChangedIsBusy 1");
+				$::tak->Send("$::NodeName.".mn2mname($3-1).">System _ChangedIsBusy 1");
+				$::Interval_Time = INTERVAL_RUN;
+			}elsif($::SyncMPSCommand=~/^(\d)\/-*\d+\/(\d)\/-*\d+$/){
+				$::Flg_Busy[$1-1]=1;$::Flg_Busy[$2-1]=1;
+				# SyncRunMode
+				$::tak->Send("$::NodeName.".mn2mname($1-1).">System _ChangedIsBusy 1");
+				$::tak->Send("$::NodeName.".mn2mname($2-1).">System _ChangedIsBusy 1");
+				$::Interval_Time = INTERVAL_RUN;
+			}else{
+				for($_=0; $_<$::NumberOfAxis; $_++){
+					$::Flg_Busy[$_]=sc_isbusy($_);
+				}
+			}
+			$::Interval_Time = INTERVAL_RUN;
+		}elsif($rt ne ''){
+			$::Error = "SYS #$rt# IN sc_syncrun";$rt='';
+		}
+	}
+	reset_syncrun();
+	return($rt);
+}
+##################################################################
+## SC Functions
+##################################################################
+#============sc_sendcmd==========================
+sub sc_sendcmd{
+	my($func,$cmd,$cond,$ret)=@_;
+	my $rt=sendcmd($cmd);if($rt eq ''){return($rt);}
+	my $rt_bak=$rt;
+	my $buf="\$rt=~s/$cond/$ret/";
+	eval $buf;
+	if($@ eq ''){
+		if($rt eq $rt_bak){
+			if($rt=~/^E\t/){
+				$rt=~/\t(\d+)$/;
+				$::Error = "E $1";
+			}elsif($rt=~/^W\t/){
+				$rt=~/\t(\d+)$/;
+				return("W $1");
+			}else{
+				$::Error = "SYS #$rt# IN $func COMMAND $cmd";
+			}
+			return('');
+		}
+		return($rt);
+	}else{
+		$::Error = "SYS #$rt# IN $func COMMAND $cmd";
+		return('');
+	}
+}
+#================================================
+sub sc_setvalue{
+	my ($mn,$pulse,$acdcceleration,$syncmode,$speedtableno,$backlashcorretion,$encodercorretion) = @_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $parm;
+	
+	if(checkbusyoff($mn) eq ''){return('');}
+	if(checkpulse($pulse,"Data") eq ''){return('');}
+
+	if($::SyncRunTimes >= 0){
+		if($::SyncRunTimes>=$::NumberOfAxis){$::Error="SetValue Executed Over Max.";return('');}
+		elsif($::SyncRunTimes>=$::NumberOfAxis){$::Error="SetValue Executed Over Max.";return('');}
+		elsif($::SyncRunTimes eq 0){$::SyncMPSCommand = "$axisno\/$pulse";}
+		else{
+			$parm=$::SyncMPSCommand;
+			for(my $i=0;$i<$::SyncRunTimes;$i++){
+				unless($parm=~s/^\/?([^\/]+)\/([^\/]+)//){
+					$::Error="Invalid syncrun param $parm.";return('');
+				}
+				if($1 eq $axisno){
+					$::Error="Motor ".mn2mname($mn)." is already assigned to syncrun.";return('');
+				}
+			}
+			$::SyncMPSCommand = "$::SyncMPSCommand\/$axisno\/$pulse";
+		}
+		$parm="$acdcceleration/$syncmode/$speedtableno/?/$backlashcorretion/$encodercorretion/1";
+		$::SyncRunTimes++;
+#		return('Ok:');
+	}else{
+		$parm="$acdcceleration/$syncmode/$speedtableno/$pulse/$backlashcorretion/$encodercorretion/1";
+	}
+
+	my $cm="APS";
+	my $rt=sc_sendcmd("sc_setvalue","$cm$axisno\/$parm","^C\t$cm$axisno.*","Ok:");
+	if($rt eq 'Ok:'){
+		unless($::SyncRunTimes >= 0){
+			# SyncRunMode
+			$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedIsBusy 1");
+			$::Flg_Busy[$mn]=1;
+			$::Interval_Time = INTERVAL_RUN;
+		}
+		return($rt);
+	}elsif($rt=~/^W 1$/){	# position same current
+		unless($::SyncRunTimes >= 0){
+			$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedIsBusy 1");
+			$::Flg_Busy[$mn]=1;
+			$::Interval_Time = INTERVAL_RUN;
+		}
+		return('Ok:');
+	}elsif($rt ne ''){
+		$::Error = "SYS #$rt# IN sc_setvalue";
+	}
+	return('');
+}
+#============sc_setvalueREL======================
+sub sc_setvalueREL{
+	my ($mn,$pulse,$acdcceleration,$syncmode,$speedtableno
+		,$backlashcorretion,$encodercorretion) = @_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $parm;
+
+	if(checkbusyoff($mn) eq ''){return('');}
+#	if(checkstandbyoff() eq ''){return('');}
+	if(checkpulse($pulse,"Data") eq ''){return('');}
+
+	my $cm="RPS";
+	if($::SyncRunTimes >= 0){
+		$cm="APS";
+		if($::SyncRunTimes>=$::NumberOfAxis){$::Error="SetValue Executed Over Max.";return('');}
+		elsif($::SyncRunTimes>=$::NumberOfAxis){$::Error="SetValue Executed Over Max.";return('');}
+		elsif($::SyncRunTimes eq 0){
+#			my $c=sc_getvalue($mn,"P",$::MotorPositionFMT[$mn]);#Read
+			my $c=sc_getvalue($mn,"P",0);#Read
+			if($c eq ''){return('');}
+			if(checkpulse($pulse+$c,"Data") eq ''){return('');}
+			$pulse=$pulse+$c;
+#			print "REL :$pulse \n";
+			$::SyncMPSCommand = "$axisno\/$pulse";
+		}else{
+			$parm=$::SyncMPSCommand;
+#			my $c=sc_getvalue($mn,"P",$::MotorPositionFMT[$mn]);#Read
+			my $c=sc_getvalue($mn,"P",0);#Read
+			if($c eq ''){return('');}
+			if(checkpulse($pulse+$c,"Data") eq ''){return('');}
+			$pulse=$pulse+$c;
+#			print "REL :$pulse \n";
+			for(my $i=0;$i<$::SyncRunTimes;$i++){
+				unless($parm=~s/^\/?([^\/]+)\/([^\/]+)//){
+					$::Error="Invalid syncrun param $parm.";return('');
+				}
+				if($1 eq $axisno){
+					$::Error="Motor ".mn2mname($mn)." is already assigned to syncrun.";return('');
+				}
+			}
+			$::SyncMPSCommand = "$::SyncMPSCommand\/$axisno\/$pulse";
+		}
+		$parm="$acdcceleration/$syncmode/$speedtableno/?/$backlashcorretion/$encodercorretion/1";
+		$::SyncRunTimes++;
+#		return('Ok:');
+	}else{
+		$parm="$acdcceleration/$syncmode/$speedtableno/$pulse/$backlashcorretion/$encodercorretion/1";
+	}
+
+	my $rt=sc_sendcmd("sc_setvalueREL","$cm$axisno\/$parm","^C\t$cm$axisno.*","Ok:");
+	if($rt eq 'Ok:'){
+		unless($::SyncRunTimes >= 0){
+			# SyncRunMode
+			$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedIsBusy 1");
+			$::Flg_Busy[$mn]=1;
+			$::Interval_Time = INTERVAL_RUN;
+		}
+		return($rt);
+	}elsif($rt=~/^W 1$/){	# position same current
+		unless($::SyncRunTimes >= 0){
+			# SyncRunMode
+			$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedIsBusy 1");
+			$::Flg_Busy[$mn]=1;
+			$::Interval_Time = INTERVAL_RUN;
+		}
+		return('Ok:');
+	}elsif($rt ne ''){
+		$::Error = "SYS #$rt# IN sc_setvalueREL";$rt='';
+	}
+	return('');
+}
+#============sc_setoffset========================
+sub sc_setoffset{
+	my($mn,$offset)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	if(checkbusyoff($mn) eq ''){return('');}
+	if(checkstandbyoff() eq ''){return('');}
+	if(checkpulse($offset,"Offset") eq ''){return('');}
+	my $cm='WRO';
+	return(sc_sendcmd("sc_setoffset","$cm$axisno\/$offset","^C\t$cm$axisno.*","Ok:"));
+}
+#============sc_setpreset========================
+sub sc_setpreset{
+	my($mn,$preset,$target)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	if(checkbusyoff($mn) eq ''){return('');}
+	if(checkstandbyoff() eq ''){return('');}
+	if(checkpulse($preset,"Preset") eq ''){return('');}
+	my $cm="WR$target";
+	return(sc_sendcmd("sc_setpreset","$cm$axisno\/$preset","^C\t$cm$axisno.*","Ok:"));
+}
+#============sc_scanhome=========================
+sub sc_scanhome{
+	my($mn,$acdcceleration,$syncmode,$speedtableno,$orgmode)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	if(checkbusyoff($mn) eq ''){return('');}
+	if(checkstandbyoff() eq ''){return('');}
+	my $cm='ORG';
+	my $rt=sc_sendcmd("sc_scanhome","$cm$axisno\/$acdcceleration/$syncmode/$speedtableno/$orgmode/1"
+	                  ,"^C\t$cm$axisno.*","Ok:");
+	unless($rt eq ''){
+		$::tak->Send("$::NodeName.".mn2mname($mn).">System _ChangedIsBusy 1");
+		$::Flg_Busy[$mn]=1;
+		$::Interval_Time = INTERVAL_RUN;
+	}
+	return($rt);
+}
+#============sc_setlink==========================
+sub sc_setlink{
+	my($mn,$smn1,$ratio1,$smn2,$ratio2)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $saxisno1=mn2axisno($smn1);if($saxisno1 eq ''){return('');}
+	my $rt;
+	my $cm='LNK';
+	if(checkbusyoff($mn) eq ''){return('');}
+	if(checkstandbyoff() eq ''){return('');}
+	if($smn2 eq ''){
+		$rt=sc_sendcmd("sc_setlink","$cm$axisno\/$saxisno1\/$ratio1"
+	                  ,"^C\t$cm$axisno.*","Ok:");
+	}else{
+		my $saxisno2=mn2axisno($smn2);if($saxisno2 eq ''){return('');}
+		$rt=sc_sendcmd("sc_setlink","$cm$axisno\/$saxisno1\/$ratio1\/$saxisno2\/$ratio2"
+	                  ,"^C\t$cm$axisno.*","Ok:");
+	}
+	return($rt);
+}
+#============sc_stop=============================
+sub sc_stop{
+	my($mn,$stopmode)=@_;
+	my $axisno;
+	if($mn eq -1){$axisno = 0;}
+	else{$axisno=mn2axisno($mn);if($axisno eq ''){return('');}}
+	my $cm='STP';
+	return(sc_sendcmd("sc_stop","$cm$axisno\/$stopmode","^C\t$cm$axisno.*","Ok:"));
+}
+#============sc_getsysinfo=======================
+sub sc_getspdtblinfo{
+	my($mn,$tblno)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $cm;
+	if($tblno eq '0'){
+		$cm='RMS';
+		$_=sc_sendcmd("sc_getspdtblinfo","$cm$axisno","^C\t$cm$axisno\t(.*)","\$1");
+		~/^(\S+)\t(\S+)\t(\S+)\t(\S+)\t(.+)/;
+		$cm="- $1 $2 $3 $4";
+		$_=$5;
+		~/\t(\S+)\t(\S+)$/;
+		$cm=$cm." $1 $2";
+		return($cm);
+	}else{
+		$cm='RTB';
+		$_=sc_sendcmd("sc_getspdtblinfo","$cm$axisno/$tblno","^C\t$cm$axisno\t$tblno\t(.*)","\$1");
+		~s/\t/ /g;
+		return($_);
+	}
+}
+#============sc_getsysinfo=======================
+sub sc_setspdtblinfo{
+	my($mn,$tblno,$stspd,$maxspd,$actime,$dctime)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $cm;
+	$cm='WTB';
+	$_=sc_sendcmd("sc_setspdtblinfo","$cm$axisno/$tblno/$stspd/$maxspd/$actime/$dctime","^C\t$cm$axisno\t$tblno","Ok:");
+	~s/\t/ /g;
+	return($_);
+}
+#============sc_getsysinfo=======================
+sub sc_setspdtblinfosysasimsi{
+	my($mn,$cm,$stspd,$maxspd,$actime,$dctime,$orgpreset,$prescale,$backlash,$pulsem,$pulsec,$pulseround,$limitstop)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+#	my $cm;
+#	$cm='ASI';
+	$_=sc_sendcmd("sc_setspdtblinfo","$cm$axisno/$stspd/$maxspd/$actime/$dctime/$orgpreset/$prescale/$backlash/$pulsem/$pulsec/0/0/$pulseround/$limitstop","^C\t$cm$axisno","Ok:");
+	~s/\t/ /g;
+	return($_);
+}
+#============sc_getsysinfo=======================
+sub sc_getsysinfo{
+	my($mn,$frmsysno,$endsysno,$vflg)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $sysno;
+	my $sysinfo='';
+	my $cm='RSY';
+	for($sysno=$frmsysno;$sysno<=$endsysno;$sysno++){
+		$_=sc_sendcmd("sc_getsysinfo","$cm$axisno/$sysno","^C\t$cm$axisno\t$sysno\t(.+)","\$1");
+		if($_ eq ''){return($_);}
+		~s/\t/ /g;
+		if($vflg){
+			$sysinfo="$sysinfo,$_";
+		}else{
+			$sysinfo="$sysinfo,$sysno $_";
+		}
+	}
+	$sysinfo=~s/^,(.+)/$1/;
+	return($sysinfo);
+}
+#============sc_getvalue=========================
+sub sc_getvalue{
+	my($mn,$target,$retformat)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $cm="RD$target"; #P:Motor or E:Encoder
+	my $rt=sc_sendcmd("sc_getvalue","$cm$axisno\/$retformat","^C\t$cm$axisno\t(-*\\d+)","\$1");
+	return($rt);
+}
+#============sc_getoffset========================
+sub sc_getoffset{
+	my($mn)=@_;
+	my $axisno=mn2axisno($mn);if($axisno eq ''){return('');}
+	my $cm='RDO';
+	return(sc_sendcmd("sc_getoffset","$cm$axisno","^C\t$cm$axisno\t(-*\\d+)","\$1"));
+}
+#================================================
+sub sc_getstatus{
+	my $axisno=shift;
+	my $reqst=shift;
+	my $cm='STR';	# command
+	my $mode=1;		# command argument constant Ok.
+	my $rt='';
+	my($buf,$reqst_pl)=($reqst,"\$1 \$2 \$3 \$4 \$5 \$6 \$7");
+	
+	unless($buf eq ''){
+		$reqst_pl='';
+		while($buf=~s/^([A|B|C|D|E|F|G])(.*)/$2/){
+			$_=ord($1)-ord('A')+1;
+			$reqst_pl="$reqst_pl \$".$_;
+		}
+		unless($buf eq ''){
+			$::Error = "SYS #$reqst# IN sc_getstatus";
+			return($rt);
+		}
+		$reqst_pl=~s/^ //;
+	}
+	$rt = sendcmd("$cm$mode\/$axisno");
+	if($rt eq ''){
+		return($rt);
+	}
+	$buf="\$rt=~s/C\t$cm$axisno\t$mode\t(\\S+)\t(\\S+)\t(\\S+)\t(\\S+)\t(\\S+)\t(\\S+)\t(\\S+)/".$reqst_pl."/";
+	eval $buf;
+	if($@ eq ''){
+		return($rt);
+	}else{
+		$::Error = "SYS #$rt# IN sc_getstatus";
+		return('');
+	}
+}
+#============sc_getlimitstatus===========================
+sub sc_getlimitstatus{
+	my $mn=shift;
+	my $rt=sc_isbusy($mn);
+	unless($rt eq ''){
+		return($::Flg_LimitStatus[$mn]);
+	}
+	return($rt);
+}
+#============sc_isbusy===========================
+sub sc_isbusy{
+	my $mn=shift;
+	my $axisno=mn2axisno($mn);
+	if($axisno eq ''){return('');}
+#	my $rt=sc_getstatus($axisno,'A');
+	my $rt=sc_getstatus($axisno,'ADE');
+	if($rt=~s/^(\S+)\s(\S+)\s(\S+)/$1/){
+		my $cwls=$2;
+		my $ccwls=$3;
+		$rt=$1;
+		my $ls=$cwls+$ccwls*2;
+		if($::Flg_LimitStatus[$mn] ne $ls){
+			if($::FLG_LIMITSTATUS_ENABLE){
+				$::tak->Send("$::NodeName.".axisno2mname($axisno).">System _ChangedLimitStatus ".$ls);
+			}
+			$::Flg_LimitStatus[$mn] = $ls;
+		}
+	}
+	if($rt=~/^0$/){return(0); #NotBusy
+	}elsif($rt =~/^[1|2|3]$/){return(1); #Busy
+	}else{return('');}
+}
+#================================================
+sub sc_flushdata{
+	my $from =shift;
+	my $rt;
+	my $i;
+	unless($from){$from = 'System';}
+	$::tak->Send("$::NodeName>$from _ChangedFunction $::Remote");
+	for($i=0; $i<$::NumberOfAxis; $i++){
+		$rt=sc_isbusy($i);
+#		print "$::FLG_LIMITSTATUS_ENABLE $i->$rt\n";
+		if($rt eq ''){return($rt);}
+#		print "$i->"."$::NodeName.".mn2mname($i).">$from _ChangedIsBusy $rt\n";
+		$::tak->Send("$::NodeName.".mn2mname($i).">$from _ChangedIsBusy $rt");
+		$::Flg_Busy[$i] = $rt;
+		if($::FLG_LIMITSTATUS_ENABLE){
+			$::tak->Send("$::NodeName.".mn2mname($i).">$from _ChangedLimitStatus ".$::Flg_LimitStatus[$i]);
+		}
+		my $p=sc_getvalue($i,"P",$::MotorPositionFMT[$i]);
+		my $e=sc_getvalue($i,"E",$::EncoderPositionFMT[$i]);
+		$::tak->Send("$::NodeName.".mn2mname($i).">$from _ChangedValue ".$p);
+		$::tak->Send("$::NodeName.".mn2ename($i).">$from _ChangedValue ".$e);
+		$::Position[$i]=$p;
+		$::Encoder[$i]=$e;
+	}
+	return('Ok:');
+}
+#============Interval============================
+sub interval{
+	my $i;
+	my $busynum=0;
+	my $p="";
+	my $e="";
+	
+	if($::Interval_Time == INTERVAL_STOP){
+		for($i=0; $i<$::NumberOfAxis; $i++){
+			$_=sc_isbusy($i);
+			if($_ eq '1'){ # Busy
+				$::tak->Send("$::NodeName.".mn2mname($i).">System _ChangedIsBusy 1");
+				$::Flg_Busy[$i]=1;
+				$::Interval_Time = INTERVAL_RUN;
+			}elsif($_ ne '0'){ # Fatal Error
+				print "$::Error\n";
+				exit(1);
+			}
+		}
+		$::Buf_Interval --;
+		if($::Buf_Interval <= 1){
+			for($i=0; $i<$::NumberOfAxis; $i++){
+				$p=sc_getvalue($i,"P",$::MotorPositionFMT[$i]);
+				$e=sc_getvalue($i,"E",$::EncoderPositionFMT[$i]);
+				if($p ne $::Position[$i]){
+					$::tak->Send("$::NodeName.".mn2mname($i).">System _ChangedValue ".$p);
+					$::Position[$i]=$p;
+				}
+				if($e ne $::Encoder[$i]){
+					$::tak->Send("$::NodeName.".mn2ename($i).">System _ChangedValue ".$e);
+					$::Encoder[$i]=$e;
+				}
+			}
+			$::Buf_Interval = int(REFRESH_RUN/INTERVAL_RUN);
+		}
+		return;
+	}
+
+	$::Buf_Interval --;
+	if($::Buf_Interval <= 0){
+		for($i=0; $i<$::NumberOfAxis; $i++){
+			if($::Flg_Busy[$i] eq 1){
+				$p=sc_getvalue($i,"P",$::MotorPositionFMT[$i]);
+				$e=sc_getvalue($i,"E",$::EncoderPositionFMT[$i]);
+				$::tak->Send("$::NodeName.".mn2mname($i).">System _ChangedValue ".$p);
+				$::tak->Send("$::NodeName.".mn2ename($i).">System _ChangedValue ".$e);
+				$::Position[$i]=$p;
+				$::Encoder[$i]=$e;
+			}
+		}
+		$::Buf_Interval = int(REFRESH_RUN/INTERVAL_RUN);
+	}
+	for($i=0; $i<$::NumberOfAxis; $i++){
+		if($::Flg_Busy[$i] eq 1){
+			$busynum++;
+		}
+	}
+	for($i=0; $i<$::NumberOfAxis; $i++){
+		if($::Flg_Busy[$i] eq 1){
+			$_=sc_isbusy($i);
+			if($_ eq '0'){ # Not Busy
+				if($busynum eq 1){
+					$::Interval_Time = INTERVAL_STOP;
+				}
+				$p=sc_getvalue($i,"P",$::MotorPositionFMT[$i]);
+				$e=sc_getvalue($i,"E",$::EncoderPositionFMT[$i]);
+				$::tak->Send("$::NodeName.".mn2mname($i).">System _ChangedValue ".$p);
+				$::tak->Send("$::NodeName.".mn2ename($i).">System _ChangedValue ".$e);
+				$::Position[$i]=$p;
+				$::Encoder[$i]=$e;
+				$::tak->Send("$::NodeName.".mn2mname($i).">System _ChangedIsBusy 0");
+				$::Flg_Busy[$i] = 0;
+				$busynum--;
+			}elsif($_ ne '1'){ # Fatal Error
+				print "$::Error\n";
+				exit(1);
+			}
+		}
+	}
+}
+#================================================
+sub sendcmd{
+	my $cmd=shift;
+    $_ = sprintf("%c$cmd",0x02);
+	device_write($_);
+	my $rt=device_read();
+	return($rt);
+}

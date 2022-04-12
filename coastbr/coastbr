@@ -1,0 +1,378 @@
+#! /usr/bin/perl
+
+###############################################################
+#  COACK Bridge Ver.2.1
+#  Takashi Kosuge 2003-09-05
+###############################################################
+use constant INIFILE  => $0.'-lib/coastbr.cfg';
+use constant DEBUGLEVEL => 0;
+###############################################################
+use IO::Socket;
+use strict;
+use Symbol;
+use XML::Parser;
+use stars;
+use sigtrap 'handler' => \&system_terminate, 'normal-signals';
+
+
+my $buf;    #buffer input and output
+my $readable;
+my $ready;
+my $s;
+my $p;       #xml buffer
+$::el='';    #element name of XML
+%::XVar=();  #XML variable
+%::DefV=();  #Definition
+%::XML=();   #Template XML
+%::TXT=();   #Template Text
+$::Terms=''; #Online terminal list
+%::Hbuf=();  #file handle buffer
+$::FlgTerminate = 0;  # terminate flag;
+
+system_getdefs();
+system_loadtemplate();
+
+
+
+###Open stars---------------------------------------
+
+$::st = stars->new($::DefV{IOCName}
+						,$::DefV{SlHost}
+						,$::DefV{SlPort}
+						,$::DefV{SlKeyFile}) or die;
+
+
+###Open COACK --------------------------------------------------
+$::ck =
+new IO::Socket::INET(PeerAddr=>$::DefV{CkHost}, PeerPort=>$::DefV{CkPort}, Proto=>'tcp')
+||die "Socket: $!\n";
+binmode($::ck);
+select($::ck);$|=1;select(STDOUT);
+
+
+
+###Setup XML parser -------------------------------------------
+$::p = new XML::Parser(Handlers => {Start => \&handle_start,
+				End => \&handle_end});
+
+
+### Main loop ------------------------------------------------
+$::st->addcallback(\&sl_handle);
+$::st->addcallback(\&ck_handle, $::ck, 'Lf');
+
+stars->Mainloop(\&system_timer, 1000);
+
+exit(1);
+
+
+
+##Handle strings from coack ------------------------------------
+sub ck_handle{
+	my($buf)=@_;
+	my $tp;
+	my $nodeto;
+	my $nodefrom;
+	my $l;
+	my $iocname = $::DefV{IOCName};
+	$::el='';
+	%::XVar=();
+#
+if(DEBUGLEVEL){print "Receive: $buf\n";}
+
+	unless($buf =~ /<\?xml version='1\.0'\?>/){
+		return('');
+	}
+	eval('$::p->parse($buf)');
+	if($@ and DEBUGLEVEL){print "Parse Error:$@\n $buf\n";}
+
+	if($::XVar{':Command.IsResponse'} eq 'True'){
+		$nodeto = $::XVar{':Command:FromDevice:NodeDefinition.ID'};
+		$nodeto =~ s/^$iocname\.//;
+		unless($::Terms =~ / $nodeto /){
+			return('');
+		}
+		$nodefrom = $::XVar{':Command:ToDevice:NodeDefinition.ID'};
+		if(
+		$::XVar{':Command:ToDevice:DeviceMethod.MethodID'}
+		eq 'WatchDataChanged'){
+			$tp = $::TXT{changed};
+		}else{
+			$tp = $::TXT{response};
+		}
+	}else{
+		$nodeto = $::XVar{':Command:ToDevice:NodeDefinition.ID'};
+		$nodeto =~ s/^$iocname\.//;
+		unless($::Terms =~ / $nodeto /){
+			return('');
+		}
+		$nodefrom = $::XVar{':Command:FromDevice:NodeDefinition.ID'};
+		$tp = $::TXT{receive};
+	}
+
+	foreach $l (keys(%::XVar)){
+		$tp =~ s/$l/$::XVar{$l}/g;
+	}
+	$::st->Send("$iocname.$nodefrom>$nodeto $tp");
+}
+
+sub handle_start{
+	my ($xx,$element,@in) = @_;
+	my $k;
+	my $v;
+	
+	$::el .= ":$element";
+	while(1){
+		unless($k = shift(@in)){last;}
+		$v=shift(@in);
+		$::XVar{"$::el.$k"}=$v;
+	}
+}
+
+sub handle_end{
+	my ($xx,$element) = @_;
+	$::el =~ s/:$element$//;
+}
+
+
+##Handle strings form stars ------------------------------
+sub sl_handle{
+	my ($fromdev, $todevs, $buf) = @_;
+	my $todev;
+	
+	if($fromdev eq 'System'){return();}
+	$todev = $todevs;
+	$todev =~ s/^[0-9A-Za-z\-]+\.//;
+	if($buf eq 'create'){
+		sl_create($fromdev,$todev,$todevs);
+		$::st->Send("$todevs>$fromdev \@create Session $fromdev "
+			."has been created.");
+		return(1);
+	}elsif($buf eq 'remove'){
+		sl_remove($fromdev,$todev,$todevs);
+		$::st->Send( "$todevs>$fromdev \@remove Session $fromdev "
+		."has been removed.");
+		return(1);
+	}elsif($buf eq '_Disconnected'){
+		sl_remove($fromdev,$todev,$todevs);
+	}elsif($buf eq 'reloadsetting'){
+		system_loadtemplate();
+		$::st->Send("$todevs>$fromdev \@reloadsetting "
+				."Template has been reloaded.");
+		return(1);
+	}elsif($buf eq 'quit'){
+		$::st->Send("$todevs>$fromdev \@quit terminate coastbr.");
+		system_terminate();
+		system_timer();
+	}elsif($todev){
+		return(sl_command($fromdev,$todev,$todevs,"$buf"));
+	}
+}
+
+sub sl_command{
+	my($fromdev,$todev,$todevs,$buf)=@_;
+	my($cm,@pr)=split(/\s+/,$buf);
+	my $xbuf;
+	my $l;
+	my $pn =0;
+	my $iocname = $::DefV{IOCName};
+	my $time;
+	my $coackdev;
+	my $coacknode;
+
+	
+	unless($::Terms =~ / $fromdev /){
+		if($cm =~ /^[_@]/){return('');}
+		$::st->Send("$todevs>$fromdev \@$cm Er: Session is not created.");
+		return('');
+	}
+	if(!defined $::XML{$cm}){
+		if($cm =~ /^[_@]/){return('');}
+		$::st->Send("$todevs>$fromdev \@$cm Er: Command is not found.");
+		return('');
+	}
+
+	$coackdev = $todev;
+	$coackdev =~ s/\.([0-9A-Za-z\-]+)$//;
+	$coacknode = $1;
+
+	$time = ksg_localtime();
+	$xbuf = $::XML{$cm};
+	$xbuf =~ s/#TIME#/$time/g;
+	$xbuf =~ s/#IOCNAME#/$iocname/g;
+	$xbuf =~ s/#TERMFROM#/$iocname.$fromdev/g;
+	$xbuf =~ s/#TERMTO#/$todev/g;
+	$xbuf =~ s/#DEVICETO#/$coackdev/g;
+	$xbuf =~ s/#NODETO#/$coacknode/g;
+
+	foreach $l (@pr){
+		$pn++;
+		$xbuf =~ s/#P$pn#/$l/g;
+	}
+	if($xbuf =~ /#\w+#/){
+		$::st->Send("$todevs>$fromdev \@$cm Er: Parameter is not enough.");
+		return('');
+	}
+#
+if(DEBUGLEVEL){print "Send: $xbuf\n";}
+	print $::ck "$xbuf\n";
+#	if($::DefV{CkInterval}){select(undef,undef,undef,$::DefV{CkInterval});}
+	if(defined($::DefV{CkInterval})){
+		$::st->Sleep($::DefV{CkInterval});
+	}
+	return(1);
+}
+
+sub sl_create{
+	my($fromdev,$todev,$todevs)=@_;
+	my $buf;
+	my $iocname = $::DefV{IOCName};
+
+	if($::Terms =~ / $fromdev /){
+		$::st->Send("$todevs>$fromdev \@create Er: Session $fromdev ".
+			"already exists.");
+		return('');
+	}
+	$::Terms .= " $fromdev ";
+
+	$buf=$::XML{create};
+	$buf =~ s/#IOCNAME#/$iocname/g;
+	$buf =~ s/#TERMFROM#/$iocname.$fromdev/g;
+	print $::ck "$buf\n";
+#	if($::DefV{CkInterval}){select(undef,undef,undef,$::DefV{CkInterval});}
+	if(defined($::DefV{CkInterval})){
+		$::st->Sleep($::DefV{CkInterval});
+	}
+	$::st->Send("System flgon $fromdev");
+}
+
+
+sub sl_remove{
+	my($fromdev,$todev,$todevs)=@_;
+	my $buf;
+	my $iocname = $::DefV{IOCName};
+
+	unless($::Terms =~ / $fromdev /){
+		$::st->Send("$todevs>$fromdev \@remove Er: Session $fromdev "
+			."does not exist.");
+		return('');
+	}
+	$::Terms =~ s/ $fromdev //;
+
+	$buf=$::XML{remove};
+	$buf =~ s/#IOCNAME#/$iocname/g;
+	$buf =~ s/#TERMFROM#/$iocname.$fromdev/g;
+	print $::ck "$buf\n";
+#	if($::DefV{CkInterval}){select(undef,undef,undef,$::DefV{CkInterval});}
+	if(defined($::DefV{CkInterval})){
+		$::st->Sleep($::DefV{CkInterval});
+	}
+	$::st->Send("System flgoff $fromdev");
+}
+
+sub system_timer{
+	if($::FlgTerminate){
+		undef($::st);
+		close($::ck);
+		exit(0);
+	}
+}
+
+## Terminate program ---------------------------------
+sub system_terminate{
+	$::FlgTerminate=1;
+}
+
+##Load template-------------------------------------------------
+sub system_loadtemplate{
+	my $l;
+	my $buf;
+	my $cn;
+	my @files;
+	my $RD = gensym();
+
+#set XML templates.
+	opendir($RD,$::DefV{DevFile}) or return('');
+	@files = grep(/.xml$/,readdir($RD));
+	closedir($RD);
+	%::XML=();
+	foreach $l (@files){
+		$buf='';
+		$cn=$l;
+		$cn =~ s/\.xml$//;
+		open($RD,$::DefV{DevFile}."/$l");
+		while(<$RD>){
+			chomp;s/\r//;
+			s/^\s+//;
+			if($_ eq ''){next;}
+			if(/^#/){next;}
+			$buf .= "$_";
+		}
+		close($RD);
+		$::XML{$cn} = $buf;
+	}
+
+#set receive templete
+	%::TXT=();
+	open($RD,$::DefV{DevFile}."/receive.txt");
+	$buf='';
+	while(<$RD>){
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		if(/^#/){next;}
+		$buf .= "$_";
+	}
+	close($RD);
+	$::TXT{receive} = $buf;
+
+#set response templete
+	open($RD,$::DefV{DevFile}."/response.txt");
+	$buf='';
+	while(<$RD>){
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		if(/^#/){next;}
+		$buf .= "$_";
+	}
+	close($RD);
+	$::TXT{response} = $buf;
+
+
+#set changed templete
+	open($RD,$::DefV{DevFile}."/changed.txt");
+	$buf='';
+	while(<$RD>){
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		if(/^#/){next;}
+		$buf .= "$_";
+	}
+	close($RD);
+	$::TXT{changed} = $buf;
+
+}
+
+##Get defs---------------------------------------------------
+sub system_getdefs{
+	my $RD;
+	my ($k,$v);
+	$RD = gensym();
+	open($RD,INIFILE) or die "Config: $!\n";
+	while(<$RD>){
+		if(/^#/){next;}
+		chomp;s/\r//;
+		($k,$v)=split('=',$_);
+		$k=~s/^\s+//; $k=~s/\s+$//;
+		$v=~s/^\s+//; $v=~s/\s+$//;
+		$::DefV{"$k"}="$v";
+	}
+}
+
+#-- Get "yyyy-mm-dd hh:mm:ss" style date -------------------------
+sub ksg_localtime{
+my $tm = shift(@_);
+if($tm eq ''){$tm=time();}
+my @tt = localtime($tm);
+return(sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+

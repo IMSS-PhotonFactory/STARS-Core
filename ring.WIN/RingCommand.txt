@@ -1,0 +1,36 @@
+＜STARSのコマンド＞
+・書式：Ring.<Property> GetValue
+・Property
+=>
+Status
+Message
+DCCT
+Energy
+Vacuum
+Lifetime
+IDGAP
+--------------------------------------------
+＜PFRING情報表示画面の項目とSTARSコマンドの対応＞
+Mode=>	Ring.Status GetValue
+Message=>	Ring.Message GetValue
+
+Beam Current=>	Ring.DCCT GetValue
+Beam Energy=>	Ring.Energy GetValue
+Beam PAV=>	Ring.Vacuum GetValue
+Beam Life=>	Ring.Lifetime GetValue
+IDGAP=>	Ring.IDGap GetValue
+
+日時=>	Ring.DATETIME GetValue
+--------------------------------------------
+＜日時について＞
+・サーバ側でRing情報を取り込んだ日時。
+
+・日時の値=>1970年1月1日0：00からの経過秒数
+Ring.DATETIME @GetValue 1381288105.000000000000
+
+・表示プログラム側で日付の書式変換が必要
+＜Perlプログラムでの例＞
+my($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst)=localtime($datevalue);
+$::TimeStr=sprintf("updated %04d-%02d-%02d %02d:%02d:%02d",$year+1900,$mon+1,$mday,$hour,$min,$sec); 
+--------------------------------------------
+

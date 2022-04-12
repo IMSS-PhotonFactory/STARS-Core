@@ -1,0 +1,13 @@
+#listnodes
+#? List nodes on takaserv
+#? Usage: listnodes
+
+
+my $rt = act("System listnodes");
+my ($fromto,$result,@nodes)=split(/\s+/,$rt);
+foreach (sort(@nodes)){
+	print "$_\t";
+}
+print "\n";
+return('DEFAULT');
+

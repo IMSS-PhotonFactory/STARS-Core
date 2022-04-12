@@ -1,0 +1,184 @@
+#! /usr/bin/perl
+
+#use testnwpf_utime; #Use Time()
+use testnwpf_htime; #Use Time::HiRes
+
+use strict;
+use Getopt::Long;
+use IO::Socket;
+#use Time::HiRes qw( usleep ualarm gettimeofday tv_interval );
+											#High level Time Module
+
+#################################################################
+# pfcalc
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'testnwpf';        #Default node name.
+$::Server     = 'localhost';     #Default stars server.
+$::Port = 6057;
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+$::LoopMode   = '';
+$::LogFile    = '';
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+'lp'     => \$::LoopMode,
+'lf=s'   => \$::LogFile
+); # or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+if($_ = shift(@ARGV)){$::Port = $_;}
+
+if($::Debug){
+	print "STARS Connect:$::NodeName to $::Server\n";
+}
+
+## Open Stars $SERVER. $SERVER is SERVER IO.
+
+my $SERVER = new IO::Socket::INET(PeerAddr=>$::Server, PeerPort=>$::Port, Proto=>'tcp')
+ or die "Could not connect Stars $::Server";
+
+$|=1;
+select($SERVER);$|=1;select(STDOUT);
+
+$_=<$SERVER>;chop($_);s/\r//;
+print "Key number is $_. Enter IDKey\n";
+
+$_=<STDIN>;
+chomp($_);s/\r//;
+
+print $SERVER "$::NodeName $_\n";
+$_=<$SERVER>;chop($_);s/\r//;
+unless($_ =~ /Ok:$/){
+	close($SERVER);
+	die "$_\n";
+}
+
+my $tm;
+my $start_bytes;
+my $end_bytes;
+my $step;
+
+my $add_text;
+
+my $len=length($::NodeName)*2+2+1; # "$::NodeName>$::Nodename \n"
+my $i;
+my $j;
+my $oldtime;
+my $newtime;
+my @chklp;
+
+if($::LoopMode){
+	print "start bytes(minimum = $len, default = $len bytes)\n";
+	$_=<STDIN>;
+	chomp($_);$_=~s/\r//;
+	if($_ eq "" or $_ < $len) { $start_bytes = $len;} else { $start_bytes = $_ + 0; }
+
+	print "end bytes(default = $start_bytes bytes)\n";
+	$_=<STDIN>;
+	chomp($_);$_=~s/\r//;
+	if($_ eq "") { $end_bytes = $start_bytes;} else { $end_bytes = $_ + 0; }
+
+	print "step number(default = 10)\n";
+	$_=<STDIN>;
+	chomp($_);$_=~s/\r//;
+	if($_ eq "") { $step = 10;} else { $step = $_ + 0; }
+	if($step <= 0) { $step = 2; }
+
+	print "Repeat times(default = 10times)\n";
+	$_=<STDIN>;
+	chomp($_);$_=~s/\r//;
+	if($_ eq "") { $tm = 10;} else { $tm = $_ + 0; }
+
+	for($j=$start_bytes; $j<=$end_bytes; $j+=$step) {
+		push(@chklp, $j);
+	}
+
+}else{
+	for($j=32; $j<=131072; $j*=2) {
+		push(@chklp, $j);
+	}
+	$tm = 1000;
+}
+
+printf("#Start: repeat %d(times) start %d(bytes) end %d(bytes) step %d\n",$tm,$start_bytes,$end_bytes,$step);
+
+if($::LogFile){
+	open(LOGBUF, ">$::LogFile") or die "Could not open logfile: $!";
+	select(LOGBUF);$|=1;select(STDOUT);
+	print LOGBUF "#STARS Performance test.\n";
+	print LOGBUF "#".ksg_localtime()."\n";
+	print LOGBUF sprintf("#Repeat %d(times) start %d(bytes) end %d(bytes) step %d\n",$tm,$start_bytes,$end_bytes,$step);
+	print LOGBUF "#Data_length(bytes)\t#Elapsed_time(msec)\t#Speed(bytes/second)\t#Cycle(msec/command)\n";
+}
+
+my $sndbuf;
+my $oldtime;
+my $newtime;
+
+for $j (@chklp) {
+	$sndbuf = sprintf("$::NodeName>$::NodeName %s\n", "a" x ($j-$len) );
+	printf("%d bytes,", $j);
+
+	$oldtime = testnwpf_time->l_time();	# High level time set
+	for($i=0; $i<$tm; $i++) { #repeat
+		print $SERVER $sndbuf;
+		$_=<$SERVER>;
+	}
+	$newtime = testnwpf_time->l_time();	# High level time set
+
+	$_ = testnwpf_time->calc_time($oldtime, $newtime);
+	printf(" %.6f msec, %.6f bytes/second, %.6f msec/command\n",
+		$_*1000, ($j*$tm)/$_, $_/$tm*1000);
+	if($::LogFile){
+		print LOGBUF sprintf("%d\t%.6f\t%.6f\t%.6f\n", $j, $_*1000, ($j*$tm)/$_, $_/$tm*1000);
+	}
+}
+
+close(LOGBUF);
+close($SERVER);
+exit(1);
+
+sub usage {
+	print <<__USAGE__;
+STARS performance checker.
+Usage: $0 [-node <Stars_Client_Name>] [-lf <File_Name>] [-d] [-h] [-lp] <Server_Name> <Port>
+    -node <Stars_Client_Name>
+          Set client name of tester. "$::NodeName" is used by default.
+    -d    Debugmode.
+    -h    Show this help.
+    -lp   Set for loop mode.
+    -lf <File_Name>
+          Out put log to "File_Name".
+
+__USAGE__
+
+
+	exit(1);
+}
+sub l_time {
+#	return [gettimeofday];
+#	return time();
+}
+sub calc_time {
+	$oldtime = shift;
+	$newtime = shift;
+#	return tv_interval($oldtime, $newtime);
+#	return $newtime - $oldtime;
+}
+
+#-- Get "yyyy-mm-dd hh:mm:ss" style date -------------------------
+sub ksg_localtime{
+my $tm = shift(@_);
+if($tm eq ''){$tm=time();}
+my @tt = localtime($tm);
+return(sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+

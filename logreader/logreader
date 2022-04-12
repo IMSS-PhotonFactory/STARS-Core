@@ -1,0 +1,262 @@
+#! /usr/bin/perl
+
+# STARS LOG READER
+
+use strict;
+use Time::Local;
+use Getopt::Long;
+use stars;
+
+#################################################################
+# logreader 2002-01-28 Takashi Kosuge
+#################################################################
+$::NodeName   = 'logreader';
+$::Server     = 'localhost';
+$::LogDir     = '../log/';
+$::LogPrefix  = 'log';
+$::LogSuffix  = '.txt';
+#################################################################
+GetOptions(
+'node=s' => \$::NodeName,
+'log=s'  => \$::LogDir,
+'h'      => \&::usage,
+) or die;
+
+unless($::LogDir =~ /\/$/){$::LogDir .= '/';}
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+
+$::tak = stars->new($::NodeName, $::Server) or die;
+$::tak->addcallback(\&handler);
+stars->Mainloop();
+close(LOG);
+
+exit(1);
+
+sub usage{
+	print 'Usage: logreader [-h] [-log LogDir] [-node MyNodeName]';
+	exit(0);
+}
+
+sub handler{
+	my ($from, $to, $mess) = @_;
+	my $ctime;
+	my $cdate;
+	if($mess eq 'hello'){
+		$::tak->Send("\@hello nice to meet you.",$from);
+	}elsif($mess =~ s/^getlog\s+//){
+		$::tak->Send("\@getlog ". join("\t", get_log($mess)), $from);
+	}elsif($mess eq 'getloglist'){
+		$::tak->Send("\@getloglist ". join("\t", get_loglist()), $from);
+	}elsif($mess eq 'help'){
+		$::tak->Send("\@help getlog getloglist hello", $from);
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::tak->Send("\@$mess Er: Bad command or parameter", "$from");
+	}
+}
+
+#----Get log list
+sub get_loglist{
+	my $prf = $::LogPrefix;
+	my $suf = $::LogSuffix;
+	opendir(BUFDIR, $::LogDir) or return('');
+	my @files = grep(s/$prf(\d{4}-\d\d-\d\d)$suf/$1/, readdir(BUFDIR));
+	closedir(BUFDIR);
+	return(@files);
+}
+#----Get log data-----------------------------------------------------
+sub get_log{
+	my $smess = shift(@_);
+	my ($st, $fn, $mes1, $mes2);
+	my $buf;
+	unless(($st, $fn, $mes1, $mes2) = decode_msg($smess)){return(undef);}
+	my @files = get_lognames($st, $fn);
+	my $fmax = @files;
+	my $i;
+	my @result=();
+	unless($fmax){return(undef);}
+	$fmax--;
+	for($i = 0; $i <= $fmax; $i++){
+		open(BUFIN, $files[$i]) or next;
+		if($i == 0){
+			while($buf = <BUFIN>){
+				eval "unless(\$buf =~ /$mes1/){next;}";
+				unless(skip_before($buf, $st)){last;}
+			}
+		}
+		if($i == $fmax){
+			while($buf=<BUFIN>){
+				chomp($buf); $buf =~ s/\r//;
+				eval "unless(\$buf =~ /$mes1/){next;}else{push(\@result, \"$mes2\");}";
+				if($i == $fmax and skip_after($buf, $fn)){last;}
+			}
+		}else{
+			while($buf=<BUFIN>){
+				chomp($buf); $buf =~ s/\r//;
+				eval "if(\$buf =~ /$mes1/){push(\@result, \"$mes2\");}";
+			}
+		}
+		close(BUFIN);
+		if($@ ne ''){return(undef);}
+	}
+	return(@result);
+}
+
+#sub get_log{
+#	my $smess = shift(@_);
+#	my ($st, $fn, $mes1, $mes2);
+#	my $buf;
+#	unless(($st, $fn, $mes1, $mes2) = decode_msg($smess)){return(undef);}
+#print "get_log[$st][$fn]\n";
+#	my @files = get_lognames($st, $fn);
+#	my $fmax = @files;
+#	my $i;
+#	my @result=();
+#	unless($fmax){return(undef);}
+#	$fmax--;
+#	for($i = 0; $i <= $fmax; $i++){
+#		open(BUFIN, $files[$i]) or next;
+#		if($i == 0){
+#			while($buf = <BUFIN>){
+#				unless(skip_before($buf, $st)){last;}
+#			}
+#		}else{
+#			$buf = <BUFIN>;
+#		}
+#		if($mes2){
+#			if($i == $fmax){
+#				while($buf){
+#					chomp($buf); $buf =~ s/\r//;
+#					if($i == $fmax and skip_after($buf, $fn)){last;}
+#					eval "if(\$buf =~ /$mes1/){push(\@result, \"$mes2\");}";
+#					if($@ ne ''){return(undef);}
+#					$buf = <BUFIN>;
+#				}
+#			}else{
+#				while($buf){
+#					chomp($buf); $buf =~ s/\r//;
+#					eval "if(\$buf =~ /$mes1/){push(\@result, \"$mes2\");}";
+#					if($@ ne ''){return(undef);}
+#					$buf = <BUFIN>;
+#				}
+#			}
+#		}else{
+#			if($i == $fmax){
+#				while($buf){
+#					chomp($buf); $buf =~ s/\r//;
+#					if($i == $fmax and skip_after($buf, $fn)){last;}
+#					eval "if(\$buf =~ /$mes1/){push(\@result, \$buf);}";
+#					if($@ ne ''){return(undef);}
+#					$buf = <BUFIN>;
+#				}
+#			}else{
+#				while($buf){
+#					chomp($buf); $buf =~ s/\r//;
+#					eval "if(\$buf =~ /$mes1/){push(\@result, \$buf);}";
+#					if($@ ne ''){return(undef);}
+#					$buf = <BUFIN>;
+#				}
+#			}
+#
+#		}
+#		close(BUFIN);
+#	}
+#	return(@result);
+#}
+
+sub skip_before{
+	my($mess,$d)=@_;
+#-----	5/19 Edit Start	-----
+	unless($mess =~ /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d.\d\d\d) /){
+#	unless($mess =~ /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) /){
+#-----	5/19 Edit End	-----
+		return(1);
+	}
+	if(ksg_timelocal($1) < $d){return(1);}
+	return(0);
+}
+
+sub skip_after{
+	my($mess,$d)=@_;
+#-----	5/19 Edit Start	-----
+	unless($mess =~ /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d.\d\d\d) /){
+#	unless($mess =~ /^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) /){
+#-----	5/19 Edit End	-----
+		return(1);
+	}
+	if(ksg_timelocal($1) > $d){return(1);}
+	return(0);
+}
+
+sub decode_msg{
+	my $msg = shift(@_);
+	my $from;
+	my $to;
+	if($msg =~ s/^(\d+)\t+(\d+)\t+//){
+		return($1, $2, $msg);
+	}
+	if($msg =~ s/^([^\t]+)\t+([^\t]+)\t+//){
+		$from = $1;
+		$to   = $2;
+		$from = ksg_timelocal($from);
+		$to   = ksg_timelocal($to);
+		if( ($from < 0) or ($to < 0) ){return(());}
+		return($from, $to, split(/\t+/, $msg));
+	}
+	return(());
+}
+
+sub get_lognames{
+	my $dfrom = shift(@_);
+	my $dto   = shift(@_);
+	my @files = ();
+	my $i;
+	my $fname;
+	for($i = $dfrom; $i <= $dto; $i += 86400){
+		push(@files, $::LogDir.$::LogPrefix.get_datepart($i).$::LogSuffix);
+		$fname = get_datepart($i);
+	}
+	return(@files);
+}
+
+sub get_datepart{
+	my $tm=shift(@_);
+	my @tt = localtime($tm);
+	return(sprintf("%04d-%02d-%02d",$tt[5]+1900,$tt[4]+1,$tt[3]));
+}
+
+#-- Get seconds from 1970-01-01 00:00:00 (GMT) -------------------
+sub ksg_timelocal{
+my $bf=shift(@_);
+#-----	5/19 Edit Start	-----
+my($msec,$sec,$min,$hours,$mday,$mon,$year);
+#my($sec,$min,$hours,$mday,$mon,$year);
+#-----	5/19 Edit End	-----
+if($bf=~/^(\d\d\d\d)[\-\/](\d+)[\-\/](\d+)\s+(\d+):(\d+)$/){
+#-----	6/7 Edit Start	-----
+$msec = 0; $sec = 0; $min = $5; $hours = $4;
+#$sec = 0; $min = $5; $hours = $4;
+#-----	6/7 Edit End	-----
+}elsif($bf=~/^(\d\d\d\d)[\-\/](\d+)[\-\/](\d+)$/){
+#-----	6/7 Edit Start	-----
+$msec = 0; $sec = 0; $min = 0; $hours = 0;
+#$sec = 0; $min = 0; $hours = 0;
+#-----	6/7 Edit End	-----
+}elsif($bf=~/^(\d\d\d\d)[\-\/](\d+)[\-\/](\d+)\s+(\d+):(\d+):(\d+)$/){
+#-----	6/7 Edit Start	-----
+$msec = 0; $sec = $6; $min = $5; $hours = $4;
+#$sec = $6; $min = $5; $hours = $4;
+#-----	6/7 Edit End	-----
+#-----	5/19 Add Start	-----
+}elsif($bf=~/^(\d\d\d\d)[\-\/](\d+)[\-\/](\d+)\s+(\d+):(\d+):(\d+).(\d+)$/){
+$msec = $7; $sec = $6; $min = $5; $hours = $4;
+#-----	5/19 Add End	-----
+}else{return(-1);}
+$mday = $3; $mon = $2-1; $year = $1-1900;
+#-----	5/19 Edit Start	-----
+return(timelocal($sec,$min,$hours,$mday,$mon,$year) + $msec/1000);
+#return(timelocal($sec,$min,$hours,$mday,$mon,$year));
+#-----	5/19 Edit End	-----
+}

@@ -1,0 +1,35 @@
+#! /usr/bin/perl
+
+use IO::Socket;
+
+my $host='localhost';
+my $port=6057;
+
+my $server =
+new IO::Socket::INET(PeerAddr=>$host, PeerPort=>$port, Proto=>'tcp')
+||die "Socket: $!\n";
+
+$|=1;
+
+
+select($server);$|=1;select(STDOUT);
+
+$buf=<$server>;
+print $server "Block takashi\n";
+$buf=<$server>;chop($buf);s/\r//;
+unless($buf =~ /Ok:$/){
+	close($server);
+	die "$buf\n";
+}
+
+print "$buf\n";
+
+while(1){
+	print "Input buffer is being blocked. ([Enter]=Read single line. q[Enter]=end)";
+	$tm=<STDIN>;chomp($tm);
+	if($tm eq 'q'){last;}
+	$buf=<$server>;
+	print "$buf\n";
+}
+
+close($server);

@@ -1,0 +1,264 @@
+#################################################################
+# File Name	:msystem.mct										#
+#===============================================================#
+# Macro Table Title:											#
+#	Mcdirec Proguram System Command Table						#
+#																#
+#							Create by	Yuji.Miyama (ICube)		#
+#===============================================================#
+# History														#
+#	2004/06/24:	Ver.0.1	New Release								#
+#	0000/00/00:													#
+#################################################################
+#########################
+#	Control Command		#
+#########################
+#================================================
+#Init
+[init sg4311]
+\$::tak->act("sg4311drv set STDS");
+
+#Output
+[output sg4311]
+\$::tak->act("sg4311drv set O1");
+
+#Ampl
+[ampl sg4311 (\d+)]
+\$::tak->act("sg4311drv set AMPL $1 MV");
+[ampl sg4311 (\S+)]
+\$::tak->act("sg4311drv set AMPL $1 MV");
+
+#Freq
+[freq sg4311 (\d+)]
+\$::tak->act("sg4311drv set FREQ $1 HZ");
+[freq sg4311 (\S+)]
+\$::tak->act("sg4311drv set FREQ $1 HZ");
+
+#Getdata
+[getdata m2000 (\S+)]
+$1 = \$::tak->act("m2000drv getdata");
+
+#Acvolt
+[acvolt m2000]
+\$::tak->act("m2000drv set :CONF:VOLT:AC");
+#================================================
+
+#########################
+#	Function Command	#
+#########################
+#================================================
+#Timer
+[localtime (\S+)]
+$1 = ksg_localtime2();
+[sleep (\d+)]
+sleep($1);
+#================================================
+
+#########################
+#	Client Command		#
+#########################
+#================================================
+#Log
+[log (\S+) (\S+) (\S+)]
+\$rt = \$::tak->act("logger record $1 $2 $3");
+#[log (\S+) (\S+)]
+#\$rt = \$::tak->act("logger record $1 $2");
+[log (\S+)]
+\$rt = \$::tak->act("logger record $1");
+
+#Monitor
+[monitor(\d+) (\S+) (\S+) (\S+)]
+\$rt = \$::tak->Send("mcmonit$1 $2  $3  $4");
+#[monitor(\d+) (\S+) (\S+)]
+#\$rt = \$::tak->Send("mcmonit$1 $1  $2");
+#[monitor(\d+) (\S+)]
+#\$rt = \$::tak->Send("mcmonit$1 $1");
+#================================================
+
+#########################
+#	Syntax Command		#
+#########################
+#================================================
+#Declaration
+
+#Control structure
+[loop (\S+) (\d+) (\d+) ([0-9\+]+)]
+for ($1 = $2; $1 <= $3; $1 += $4) \{
+[loop (\d+) (\d+) ([0-9\+]+)]
+for (\$i = $1; \$i <= $2; \$i += $3) \{
+[loop (\d+) (\d+)]
+for (\$i = $1; \$i <= $2; \$i++) \{
+[endloop]
+\}
+
+#[if (.+)]
+#if ($1) \{
+#[elsif (.+)]
+#elsif ($1) \{
+#[else]
+#\} else \{
+#[endif]
+#\}
+
+#[print (.+)]
+#print $1;
+
+[del (\S+) (.+)]
+$1 =~ s\/$2\/\/;
+
+[check_cancel]
+\$::BreakFlg{all}==1 or \$::BreakFlg{\$from} == 1 or \$::BreakFlg{\$::BGFromNode{\$from}} == 1
+[cancel_return]
+if(\$::BreakFlg{all}==1 or \$::BreakFlg{\$from} == 1 or \$::BreakFlg{\$::BGFromNode{\$from}} == 1){return;}
+#[break]
+#if(\$::BreakFlg{all} == 1) {last;}
+
+#================================================
+#\$::tak->Send("\$from ".$1);
+
+[send_error_msg (.+)]
+if(\$from_flg eq 1) {\$from_rt = send_return_msg("\$from",$1,'err');} else {\$from_rt = send_return_msg("\$from",$1,'err');\$\_ = $1;}
+
+[send_normal_msg (.+)]
+if(\$from_flg eq 1) {\$from_rt = send_return_msg("\$from",$1,'ok'); } else {\$\_ = $1;}
+
+[push_argv (.+)]
+\@ARGV = $1;
+
+[pop_argv (.+)]
+$1 = \@ARGV;
+
+[pop_send_msg (.+)]
+$1 = \$_;
+
+[snd (.+)]
+\$::tak->Send($1);
+
+[rcv (\$\S+)]
+$1 = \$::tak->Read(10);
+
+[rcv (\d+) (\$\S+)]
+$2 = \$::tak->Read($1\/1000);
+
+[act (\$\S+) (.+)]
+$1 = \$::tak->act($2);
+
+[get_from (\$\S+)]
+$1 = \$from;
+
+[DoEvents]
+stars->DoEvents();
+
+[wait_for (\$\S+) \/(.+)\/]
+while(1){
+	while(1){if($1 = \$::tak->Read(20)){last;}}
+	if($1 =~ \/$2\/){last;}
+	unless($1 =~ s\/^([a-zA-Z0-9\\-_.]+)>([a-zA-Z0-9\\-_.]+) +\/\/){
+		$1='';
+		last;
+	}
+	handler(\$1, \$2, $1);
+	if(\$::BreakFlg{'all'}==1 or \$::BreakFlg{\$from} == 1 or \$::BreakFlg{\$::BGFromNode{\$from}} == 1){
+	$1='';
+	\$::Error = 'Break';
+	last;
+	}
+}
+
+
+[scan (\$\S+) (\S+) (\S+) (\S+)]
+{
+my \$scan_initial;
+my \$scan_final;
+my \$scan_step;
+my \$scan_rangev;
+my \$scan_lp;
+\$scan_rangev=0;
+while(int($2*(10**\$scan_rangev)) != $2*(10**\$scan_rangev)){\$scan_rangev++;}
+while(int($3*(10**\$scan_rangev)) != $3*(10**\$scan_rangev)){\$scan_rangev++;}
+while(int($4*(10**\$scan_rangev)) != $4*(10**\$scan_rangev)){\$scan_rangev++;}
+\$scan_initial = $2*(10**\$scan_rangev);
+\$scan_final = $3*(10**\$scan_rangev);
+\$scan_step = $4*(10**\$scan_rangev);
+for(\$scan_lp=\$scan_initial; (\$scan_step>=0 and \$scan_lp<=\$scan_final) or (\$scan_step<0 and \$scan_lp>=\$scan_final); \$scan_lp += \$scan_step){
+$1=\$scan_lp\/(10**\$scan_rangev);
+
+
+[endscan]
+}}
+
+
+
+[timerx (\S+) (\S+) (\$\S+)]
+{
+my (\$timer_sec, \$timer_microsec) = gettimeofday;
+my \$timer_until = \$timer_sec+(\$timer_microsec\/1000000)+$1;
+my \$timer_current;
+my \$timer_interval_last = \$timer_sec+(\$timer_microsec\/1000000);
+my \$timer_sleep;
+my \$timer_buffer_from;
+my \$timer_buffer_to;
+my \$timer_buffer_message;
+if($1>4){
+ \$timer_sleep = 0.04;
+}else{
+ \$timer_sleep = $1\/200;
+}
+while(1){
+ (\$timer_sec, \$timer_microsec) = gettimeofday;
+ \$timer_current = \$timer_sec+(\$timer_microsec\/1000000);
+ if(\$timer_current >= \$timer_until){last;}
+ while(1){
+  (\$timer_buffer_from, \$timer_buffer_to, \$timer_buffer_message)=\$::tak->Read(0.001);
+  if(\$timer_buffer_from eq ''){last;}
+  handler(\$timer_buffer_from, \$timer_buffer_to, \$timer_buffer_message);
+ }
+ if(\$::BreakFlg{'all'}==1 or \$::BreakFlg{\$from} == 1 or \$::BreakFlg{\$::BGFromNode{\$from}} == 1){
+  \$::Error = 'Break';
+  last;
+ }
+ select(undef,undef,undef,\$timer_sleep);
+ if((\$timer_interval_last + $2) > \$timer_current){next;}
+ \$timer_interval_last = \$timer_current;
+ $3=int(\$timer_until-\$timer_current+0.5);
+
+
+
+[timer (\S+) (\S+)]
+{
+my (\$timer_sec, \$timer_microsec) = gettimeofday;
+my \$timer_until = \$timer_sec+(\$timer_microsec\/1000000)+$1;
+my \$timer_current;
+my \$timer_interval_last = \$timer_sec+(\$timer_microsec\/1000000);
+my \$timer_sleep;
+my \$timer_buffer_from;
+my \$timer_buffer_to;
+my \$timer_buffer_message;
+if($1>4){
+ \$timer_sleep = 0.04;
+}else{
+ \$timer_sleep = $1\/200;
+}
+while(1){
+ (\$timer_sec, \$timer_microsec) = gettimeofday;
+ \$timer_current = \$timer_sec+(\$timer_microsec\/1000000);
+ if(\$timer_current >= \$timer_until){last;}
+ while(1){
+  (\$timer_buffer_from, \$timer_buffer_to, \$timer_buffer_message)=\$::tak->Read(0.001);
+  if(\$timer_buffer_from eq ''){last;}
+  handler(\$timer_buffer_from, \$timer_buffer_to, \$timer_buffer_message);
+ }
+ if(\$::BreakFlg{'all'}==1 or \$::BreakFlg{\$from} == 1 or \$::BreakFlg{\$::BGFromNode{\$from}} == 1){
+  \$::Error = 'Break';
+  last;
+ }
+ select(undef,undef,undef,\$timer_sleep);
+ if((\$timer_interval_last + $2) > \$timer_current){next;}
+ \$timer_interval_last = \$timer_current;
+
+
+
+
+[endtimer]
+}}
+

@@ -1,0 +1,18 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2011-02-17 02:47:30 $';
+$::Author  = '';
+$::Description = '
+  "listnodes"
+';
+#####################################################
+## Settings ##
+$srcdev  = 'System';   # Node name of motor etc.:q
+##===================================================
+
+require 'scriptlib.pl';
+
+my $rt = stSendCommand("System listnodes");
+
+stPrint("$rt\n");

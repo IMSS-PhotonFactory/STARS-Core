@@ -1,0 +1,43 @@
+#! /usr/bin/perl
+
+use IO::Socket;
+
+my $host='localhost';
+my $port=<<DefaultPort>>;
+
+$|=1;
+
+my $server =
+new IO::Socket::INET(PeerAddr=>$host, PeerPort=>$port, Proto=>'tcp')
+||die "Socket: $!\n";
+
+select($server);$|=1;select(STDOUT);
+
+$buf=<$server>;
+print $server "Dev1 takashi\n";
+$buf=<$server>;chop($buf);s/\r//;
+unless($buf =~ /Ok:$/){
+	close($server);
+	die "$buf\n";
+}
+
+print "$buf\n";
+
+print "Please enter destination: ";
+$ds=<STDIN>;
+chomp($ds);
+
+print "Please enter commands: ";
+$cm=<STDIN>;
+chomp($cm);
+
+while(1){
+	print "Please enter times(0=end): ";
+	$tm=<STDIN>;chomp($tm);
+	unless($tm){last;}
+	for($lp=1; $lp<=$tm ;$lp++){
+		print $server "$ds $cm $lp\n";
+	}
+}
+
+close($server);

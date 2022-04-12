@@ -1,0 +1,818 @@
+<HTML>
+<HEAD>
+<style type="text/css">
+UL  {list-style-type:none}
+</style>
+</HEAD>
+<BODY>
+<H1>Stars Program Reference <BR>&nbsp;&nbsp;&nbsp;&nbsp;- CAEN CAMAC Controller Model C111C Commands.</H1><P><UL><LI>Comamnd List<UL><LI><A NAME="SECDGeneral" HREF="#SECGeneral">General</A></LI><UL><LI><A NAME="SECDStars destination client name of CAEN CAMAC Controller Model C111C" HREF="#SECStars destination client name of CAEN CAMAC Controller Model C111C">Stars  client name of CAEN CAMAC Controller Model C111C</A>
+<LI><A NAME="SECDHow to execute the Stars Command of CAEN CAMAC Controller Model C111C" HREF="#SECHow to execute the Stars Command of CAEN CAMAC Controller Model C111C">How to execute the Stars Command of CAEN CAMAC Controller Model C111C</A><LI><A NAME="SECDError General" HREF="#SECError General">Error General</A></UL><LI><A NAME="SECDStars Information Command" HREF="#SECStars Information Command">Stars Information Command</A></LI><UL><LI><A NAME="SECDhello" HREF="#SEChello">hello</A><LI><A NAME="SECDhelp" HREF="#SEChelp">help</A><LI><A NAME="SECDhelp" HREF="#SEChelp">help</A><LI><A NAME="SECDGetNodeNameList" HREF="#SECGetNodeNameList">GetNodeNameList</A><LI><A NAME="SECDGetSlotNumber" HREF="#SECGetSlotNumber">GetSlotNumber</A></UL><LI><A NAME="SECDStars Event Information Command" HREF="#SECStars Event Information Command">Stars Event Information Command</A></LI><UL><LI><A NAME="SECDflushdatatome" HREF="#SECflushdatatome">flushdatatome</A><LI><A NAME="SECDflushdata" HREF="#SECflushdata">flushdata</A></UL><LI><A NAME="SECDAccess Camac Crate Controller." HREF="#SECAccess Camac Crate Controller.">Access Camac Crate Controller.</A></LI><UL><LI><A NAME="SECDRunDatawayInit" HREF="#SECRunDatawayInit">RunDatawayInit</A><LI><A NAME="SECDRunCrateClear" HREF="#SECRunCrateClear">RunCrateClear</A><LI><A NAME="SECDSetInhibit" HREF="#SECSetInhibit">SetInhibit</A><LI><A NAME="SECDGetInhibitIsBusy" HREF="#SECGetInhibitIsBusy">GetInhibitIsBusy</A><LI><A NAME="SECDGetLAMIsBusy" HREF="#SECGetLAMIsBusy">GetLAMIsBusy</A><LI><A NAME="SECDGetLAMRegister" HREF="#SECGetLAMRegister">GetLAMRegister</A><LI><A NAME="SECDGetValueNIMInAll" HREF="#SECGetValueNIMInAll">GetValueNIMInAll</A><LI><A NAME="SECDGetValueNIMIn" HREF="#SECGetValueNIMIn">GetValueNIMIn</A><LI><A NAME="SECDGetValueNIMInEventCounter" HREF="#SECGetValueNIMInEventCounter">GetValueNIMInEventCounter</A><LI><A NAME="SECDResetNIMInEventCounter" HREF="#SECResetNIMInEventCounter">ResetNIMInEventCounter</A><LI><A NAME="SECDGetValueNIMOutAll" HREF="#SECGetValueNIMOutAll">GetValueNIMOutAll</A><LI><A NAME="SECDGetValueNIMOut" HREF="#SECGetValueNIMOut">GetValueNIMOut</A><LI><A NAME="SECDSetValueNIMOutAll" HREF="#SECSetValueNIMOutAll">SetValueNIMOutAll</A><LI><A NAME="SECDSetValueNIMOut" HREF="#SECSetValueNIMOut">SetValueNIMOut</A><LI><A NAME="SECDRunPulseGenerator" HREF="#SECRunPulseGenerator">RunPulseGenerator</A><LI><A NAME="SECDStopPulseGenerator" HREF="#SECStopPulseGenerator">StopPulseGenerator</A><LI><A NAME="SECDResetCombo" HREF="#SECResetCombo">ResetCombo</A><LI><A NAME="SECDGetComboIsBusy" HREF="#SECGetComboIsBusy">GetComboIsBusy</A><LI><A NAME="SECDGetValueComboEventCounter" HREF="#SECGetValueComboEventCounter">GetValueComboEventCounter</A><LI><A NAME="SECDResetComboEventCounter" HREF="#SECResetComboEventCounter">ResetComboEventCounter</A></UL><LI><A NAME="SECDCommand Like CAMAC" HREF="#SECCommand Like CAMAC">Command Like CAMAC</A></LI><UL><LI><A NAME="SECDCCCZ" HREF="#SECCCCZ">CCCZ</A>
+<LI><A NAME="SECDCCCC" HREF="#SECCCCC">CCCC</A><LI><A NAME="SECDCCCI" HREF="#SECCCCI">CCCI</A><LI><A NAME="SECDCTCI" HREF="#SECCTCI">CTCI</A><LI><A NAME="SECDCTLM" HREF="#SECCTLM">CTLM</A><LI><A NAME="SECDCLMR" HREF="#SECCLMR">CLMR</A><LI><A NAME="SECDLACK" HREF="#SECLACK">LACK</A><LI><A NAME="SECDCSCAN" HREF="#SECCSCAN">CSCAN</A>
+<LI><A NAME="SECDCSSA" HREF="#SECCSSA">CSSA</A>
+<LI><A NAME="SECDCFSA" HREF="#SECCFSA">CFSA</A>
+<LI><A NAME="SECDBLKBUFFS" HREF="#SECBLKBUFFS">BLKBUFFS</A>
+<LI><A NAME="SECDBLKBUFFG" HREF="#SECBLKBUFFG">BLKBUFFG</A>
+<LI><A NAME="SECDBLKSS" HREF="#SECBLKSS">BLKSS</A>
+<LI><A NAME="SECDBLKSR" HREF="#SECBLKSR">BLKSR</A>
+<LI><A NAME="SECDBLKSA" HREF="#SECBLKSA">BLKSA</A>
+<LI><A NAME="SECDBLKFS" HREF="#SECBLKFS">BLKFS</A>
+<LI><A NAME="SECDBLKFR" HREF="#SECBLKFR">BLKFR</A>
+<LI><A NAME="SECDBLKFA" HREF="#SECBLKFA">BLKFA</A>
+</UL>
+<LI><A NAME="SECDTEST CAMAC Crate Controller" HREF="#SECTEST CAMAC Crate Controller">TEST CAMAC Crate Controller</A></LI><UL><LI><A NAME="SECDTEXTTERM" HREF="#SECTEXTTERM">TEXTTERM</A></UL><LI><A NAME="SECDEvent Message List" HREF="#SECEvent Message List">Event Message List</A></LI><UL><LI><A NAME="SECD_ChangedInhibitIsBusy" HREF="#SEC_ChangedInhibitIsBusy">_ChangedInhibitIsBusy</A></UL></UL></LI></UL><HR><H2><A NAME="SECGeneral" HREF="#SECDGeneral">General</A></H2>
+<H3><A NAME="SECStars destination client name of CAEN CAMAC Controller Model C111C" HREF="#SECDStars destination client name of CAEN CAMAC Controller Model C111C">Stars client name of CAEN CAMAC Controller Model C111C</A><BR>
+</H3>
+<P>
+<DL COMPACT><DT><SAMP>Stars client name of CAEN CAMAC Controller Model C111C</SAMP>
+</DT>
+<DD>
+In this Manual, '<B>caenc111c</B>' is used for the client name of CAEN C111C.
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECHow to execute the Stars Command of CAEN CAMAC Controller Model C111C" HREF="#SECDHow to execute the Stars Command of CAEN CAMAC Controller Model C111C">How to execute the Stars Command of CAEN CAMAC Controller Model C111C</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>How to execute the Stars Command of CAEN CAMAC Controller Model C111C</SAMP>
+</DT>
+<DD>
+<BR>Send the Stars message as following format<BR>
+<BR>caenc111c <I>CAEN_C111C_Stars_Command</I> <I>Command_Parameters</I>
+<BR><UL>
+<BR><LI>'caenc111c' is the Stars client name for CAEN CAMAC Controller Model C111C.</LI>
+<BR><LI><I>CAEN_C111C_Stars_Command</I></LI>
+<BR><LI><I>Command_Parameters</I>&nbsp;&nbsp;&nbsp;&nbsp;(Only necessary)</LI>
+<BR></UL>
+<BR>Then reply arrives as following<BR>
+<BR>caenc111c&gt;<I>test</I> <I>@CAEN_C111C_Stars_Command</I> <I>Command_Parameters</I> <I>Command_Message</I>
+<BR><UL>
+<BR><LI>'<I>test</I>' is used, in this manual, as the Stars client name that sends the Stars message.</LI>
+<BR><LI><I>Command_Message</I><UL><LI>starts with 'Ok: ' : the Stars command executed with success.</LI>
+<BR><LI>starts with 'Er: ' : the Stars command did not executed because of command nonexistent, command paramarer invalid, etc.</LI>
+<BR><LI>starts with 'Ng: ' : the Stars command executed but failed.</LI>
+<BR></UL></LI></UL>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECError General" HREF="#SECDError General">Error General</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>Error General</SAMP>
+</DT>
+<DD>
+<OL>
+<BR><LI>Destination client name nonexistent :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111 hello<BR>(reply)&nbsp;&nbsp;System&gt;test @hello <I>Er: caenc111 is down.</I></LI></UL></LI>
+<BR><LI>Command nonexistent :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111c RunDataWayInit<BR>(reply)&nbsp;&nbsp;caenc111c&gt;test @RunDataWayInit <I>Er: Bad Command.</I></LI></UL></LI>
+<BR><LI>Command parameter missing or invalid :
+<BR><UL><LI>(send)&nbsp;&nbsp;caenc111 RunDatawayInit 1<BR>(reply)&nbsp;&nbsp;caenc111c&gt;test @RunDatawayInit 1 <I>Er: Bad Parameter.</I></LI></UL></LI>
+<BR>
+<LI>Command executed but network error occured :<br>
+  (Usually not happens. But if it's happened, stop 'caenc111c' Program, restart CAMAC Controller CAEN C111C. then start 'caenc111c')<BR>
+<UL><LI>(send)&nbsp;&nbsp;caenc111c RunDatawayInit<BR>
+(reply)&nbsp;&nbsp;caenc111c&gt;test @RunDatawayInit <I>Er: -4</I></LI>
+</UL></LI>
+</OL>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECStars Information Command" HREF="#SECDStars Information Command">Stars Information Command</A></H2>
+<H3><A NAME="SEChello" HREF="#SECDhello">hello</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>hello</SAMP>
+</DT>
+<DD>
+Returns 'nice to meet you.'
+<BR><BR>[Usage]<BR>caenc111c hello
+<BR><BR>[Reply Message Format]<BR>@hello <I>nice to meet you.</I>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c hello
+<BR>(Receive messages)
+<BR>caenc111c&gttest @hello nice to meet you.
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SEChelp" HREF="#SECDhelp">help</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>help</SAMP>
+</DT>
+<DD>
+Show StarsCommand list.
+<BR><BR>[Usage]<BR>caenc111c help
+<BR><BR>[Reply Message Format]<BR>@help <I>command1 command2 ... commandN</I>&nbsp;&nbsp;&nbsp;&nbsp;(each command separated by a space)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c help
+<BR>(Receive messages)
+<BR>caenc111c&gttest @help CCCC CCCI CCCZ CFSA CLMR CSCAN CSSA CTCI CTLM GetComboIsBu
+<BR>sy GetInhibitIsBusy GetLAMIsBusy GetLAMRegister GetNodeNameList GetSlotNumber Ge
+<BR>tValueComboEventCounter GetValueNIMIn GetValueNIMInAll GetValueNIMInEventCounter
+<BR> GetValueNIMOut GetValueNIMOutAll LACK ResetCombo ResetComboEventCounter ResetNI
+<BR>MInEventCounter RunCrateClear RunDatawayInit RunPulseGenerator SetInhibit SetVal
+<BR>ueNIMOut SetValueNIMOutAll StopPulseGenerator TEXTTERM flushdata flushdatatome h
+<BR>ello help
+</Tt></DL>
+<HR>
+<H3><A NAME="SEChelp" HREF="#SECDhelp">help</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>help</SAMP>
+</DT>
+<DD>
+Show command help.
+<BR><BR>[Usage]<BR>caenc111c help <I>StarsCommand</I>
+<BR><BR>[Reply Message Format]<BR>@help <I>StarsCommand</I> <I>helpText</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@help <I>StarsCommand</I> <I>Ng: Bad Command.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified <I>StarsCommand</I> invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c help GetLAMIsBusy
+<BR>(Receive messages)
+<BR>caenc111c&gttest @help GetLAMIsBusy args:1-23(Slot No) =&gtCAMAC test LAM on specif
+<BR>ied slotno and returns a LAM status 1(on) or 0(off).
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetNodeNameList" HREF="#SECDGetNodeNameList">GetNodeNameList</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetNodeNameList</SAMP>
+</DT>
+<DD>
+Returns list of the all valid stars nodename in this program.
+<BR><BR>[Usage]<BR>caenc111c GetNodeNameList
+<BR><BR>[Reply Message Format]<BR>@GetNodeNameList <I>Ok: name1 name2...nameN</I>&nbsp;&nbsp;&nbsp;&nbsp;(each name separated by a space)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetNodeNameList
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetNodeNameList Ok: caenc111c caenc111c.ks3655 caenc111c.c257 caenc111c.C01 caenc111c.C02 caenc111c.C03 caenc111c.C04 caenc111c.C05 caenc111c.C06 caenc111c.C07 caenc111c.C08 caenc111c.C09 caenc111c.C10 caenc111c.C11 caenc111c.C12 caenc111c.C13 caenc111c.C14 caenc111c.C15 caenc111c.C16
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetSlotNumber" HREF="#SECDGetSlotNumber">GetSlotNumber</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetSlotNumber</SAMP>
+</DT>
+<DD>
+Returns the slot number of the stars nodename.
+<BR><BR>[Usage]<BR>caenc111c GetSlotNumber <I>StarsNodeName</I>
+<BR><BR>[Reply Message Format]<BR>@GetSlotNumber <I>StarsNodeName Ok: SlotNumber</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)<ol><li>SlotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li></ol>
+<BR>@GetSlotNumber <I>StarsNodeName Ng: Nodename invalid.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetSlotNumber caenc111c.ks3655
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetSlotNumber caenc111c.ks3655 Ok: 23
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECStars Event Information Command" HREF="#SECDStars Event Information Command">Stars Event Information Command</A></H2>
+<H3><A NAME="SECflushdatatome" HREF="#SECDflushdatatome">flushdatatome</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>flushdatatome</SAMP>
+</DT>
+<DD>
+Send caenc111c event messages to fromnode. See caenc111c <A HREF="#SECEvent Message List">Event Message List</A>.
+<BR><BR>[Usage]<BR>caenc111c flushdatatome
+<BR><BR>[Reply Message Format]<BR>@flushdatatome <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c flushdatatome
+<BR>(Receive messages)
+<BR>caenc111c&gttest _ChangedInhibitIsBusy 0
+<BR>caenc111c&gttest @flushdatatome Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECflushdata" HREF="#SECDflushdata">flushdata</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>flushdata</SAMP>
+</DT>
+<DD>
+Send caenc111c event messages to System. See caenc111c <A HREF="#SECEvent Message List">Event Message List</A>.
+<BR><BR>[Usage]<BR>caenc111c flushdata
+<BR><BR>[Reply Message Format]<BR>@flushdata <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>System flgon caenc111c
+<BR>caenc111c flushdata
+<BR>(Receive messages)
+<BR>caenc111c&gttest _ChangedInhibitIsBusy 0
+<BR>caenc111c&gttest @flushdata Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECAccess Camac Crate Controller." HREF="#SECDAccess Camac Crate Controller.">Access Camac Crate Controller.</A></H2>
+<H3><A NAME="SECRunDatawayInit" HREF="#SECDRunDatawayInit">RunDatawayInit</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>RunDatawayInit</SAMP>
+</DT>
+<DD>
+Generate the Dataway initialize.
+<BR><BR>[Usage]<BR>caenc111c RunDatawayInit
+<BR><BR>[Reply Message Format]<BR>@RunDatawayInit <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c RunDatawayinit
+<BR>(Receive messages)
+<BR>caenc111c&gttest @RunDatawayinit Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECRunCrateClear" HREF="#SECDRunCrateClear">RunCrateClear</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>RunCrateClear</SAMP>
+</DT>
+<DD>
+Generate crate clear.
+<BR><BR>[Usage]<BR>caenc111c RunCrateClear
+<BR><BR>[Reply Message Format]<BR>@RunCrateClear <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c RunCrateClear
+<BR>(Receive messages)
+<BR>caenc111c&gttest @RunCrateClear Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetInhibit" HREF="#SECDSetInhibit">SetInhibit</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetInhibit</SAMP>
+</DT>
+<DD>
+Set the Dataway inhibit reset or set.
+<BR><BR>[Usage]<BR>caenc111c SetInhibit 0 | 1<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;reset</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;set</li></ul>
+<BR>[Reply Message Format]<BR>@SetInhibit 1 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When set inhibit)
+<BR>@SetInhibit 0 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When reset inhibit)
+<BR>@SetInhibit <I>other Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c SetInhibit 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @SetInhibit 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetInhibitIsBusy" HREF="#SECDGetInhibitIsBusy">GetInhibitIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetInhibitIsBusy</SAMP>
+</DT>
+<DD>
+Returns the Dataway inhibit status: busy or not busy.
+<BR><BR>[Usage]<BR>caenc111c GetInhibitIsBusy
+<BR><BR>[Reply Message Format]<BR>@GetInhibitIsBusy <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When inhibit status is busy)
+<BR>@GetInhibitIsBusy <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When inhibit status is not busy)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetInhibitIsBusy
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetInhibitIsBusy Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetLAMIsBusy" HREF="#SECDGetLAMIsBusy">GetLAMIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetLAMIsBusy</SAMP>
+</DT>
+<DD>
+CAMAC test LAM on specified slotno and returns a LAM status on or off.
+<BR><BR>[Usage]<BR>caenc111c GetLAMIsBusy <I>SlotNumber</I><ol><li>SlotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li></ol>
+<BR>[Reply Message Format]<BR>@GetLAMIsBusy <I>slotNumber</I> <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is on of a specifed Slot Number)
+<BR>@GetLAMIsBusy <I>slotNumber</I> <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is off of a specifed Slot Number)
+<BR>@GetLAMIsBusy <I>slotNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed parameter invalid)<BR>
+<BR>If a specified slot is empty, it returns the status off(=0).
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetLAMIsBusy 23
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetLAMIsBusy 23 Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetLAMRegister" HREF="#SECDGetLAMRegister">GetLAMRegister</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetLAMRegister</SAMP>
+</DT>
+<DD>
+Returns a current decimal value of LAM register(23-bit).
+<BR><BR>[Usage]<BR>caenc111c GetLAMRegister
+<BR><BR>[Reply Message Format]<BR>@GetLAMregister <I>Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 8388607&nbsp;&nbsp;(decimal)
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;Value consists of 23-Bit. Bit position(1,2..23) is used to select the slot number, and bit value '1' shows the LAM on.</li></ol>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetLAMRegister
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetLAMRegister Ok: 1&nbsp;&nbsp;&nbsp;&nbsp;(when only Slot 1 LAM is Busy)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueNIMInAll" HREF="#SECDGetValueNIMInAll">GetValueNIMInAll</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueNIMInAll</SAMP>
+</DT>
+<DD>
+Returns current values of all NIM inputs.
+<BR><BR>[Usage]<BR>caenc111c GetValueNIMInAll
+<BR><BR>[Reply Message Format]<BR>@GetValueNIMInAll <I>Ok: NIMInput1Value NIMInput2Value NIMInput3Value NIMInput4Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ul><li>1 - 4.&nbsp;&nbsp;NIMInput<I>N</I>Value<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;LO</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;HI</li></ul></li></ul>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetValueNIMInAll
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetValueNIMInAll Ok: 0 0 0 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueNIMIn" HREF="#SECDGetValueNIMIn">GetValueNIMIn</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueNIMIn</SAMP>
+</DT>
+<DD>
+Returns a single value of a specified NIM input.
+<BR><BR>[Usage]<BR>caenc111c GetValueNIMIn <I>NIMInputNumber</I><ol><li>NIMInputNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 4</li></ol>
+<BR>[Reply Message Format]<BR>@GetValueNIMIn <I>NIMInputNumber</I> <I>Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol><li>Value<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;LO</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;HI</li></ul></li></ol>
+<BR>@GetValueNIMIn <I>NIMInputNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetValueNIMIn 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetValueNIMIn 1 Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueNIMInEventCounter" HREF="#SECDGetValueNIMInEventCounter">GetValueNIMInEventCounter</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueNIMInEventCounter</SAMP>
+</DT>
+<DD>
+Returns a current event counter value of a specified NIM input.
+<BR><BR>[Usage]<BR>caenc111c GetValueNIMInEventCounter <I>NIMInputNumber</I><ol><li>NIMInputNumber&nbsp;&nbsp;&nbsp;&nbsp;1 | 3</li></ol>
+<BR>[Reply Message Format]<BR>@GetValueNIMInEventCounter <I>NIMInputNumber</I> <I>Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 65535</li></ol>
+<BR>@GetValueNIMInEventCounter <I>NIMInputNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified paramater invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetValueNIMInEventCounter 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetValueNIMInEventCounter 1 Ok: 3000
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECResetNIMInEventCounter" HREF="#SECDResetNIMInEventCounter">ResetNIMInEventCounter</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>ResetNIMInEventCounter</SAMP>
+</DT>
+<DD>
+Reset a event counter of a specified NIM input.
+<BR><BR>[Usage]<BR>caenc111c ResetNIMInEventCounter <I>NIMInputNumber</I><ol><li>NIMInputNumber&nbsp;&nbsp;&nbsp;&nbsp;1 | 3</li></ol>
+<BR>[Reply Message Format]<BR>@ResetNIMInEventCounter <I>NIMInputNumber Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@ResetNIMInEventCounter <I>NIMInputNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed paramater invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c ResetNIMInEventCounter 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @ResetNIMInEventCounter 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueNIMOutAll" HREF="#SECDGetValueNIMOutAll">GetValueNIMOutAll</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueNIMOutAll</SAMP>
+</DT>
+<DD>
+Returns current values of all NIM outputs.
+<BR><BR>[Usage]<BR>caenc111c GetValueNIMOutAll
+<BR><BR>[Reply Message Format]<BR>@GetValueNIMOutAll <I>Ok: NIMOutput1Value NIMOutput2Value NIMOutput3Value NIMOutput4Value</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)<ul><li>1 - 4.&nbsp;&nbsp;NIMOutput<I>N</I>Value<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;LO</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;HI</li></ul></li></ul>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetValueNIMOutAll
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetValueNIMOutAll Ok: 1 0 0 0
+<BR>
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueNIMOut" HREF="#SECDGetValueNIMOut">GetValueNIMOut</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueNIMOut</SAMP>
+</DT>
+<DD>
+Returns a current value of a specified NIM output.
+<BR><BR>[Usage]<BR>caenc111c GetValueNIMOut <I>NIMOutputNumber</I><ol><li>NIMOutputNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 4</li></ol>
+<BR>[Reply Message Format]<BR>@GetValueNIMOut <I>NIMOutputNumber</I> <I>Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol><li>Value<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;LO</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;HI</li></ul></li></ol>
+<BR>@GetValueNIMOut <I>NIMOutputNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetValueNIMOut 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetValueNIMOut 1 Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetValueNIMOutAll" HREF="#SECDSetValueNIMOutAll">SetValueNIMOutAll</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetValueNIMOutAll</SAMP>
+</DT>
+<DD>
+Set values of all NIM outputs.
+<BR><BR>[Usage]<BR>caenc111c SetValueNIMOutAll <I>NIMOutput1value NIMOutput2value NIMOutput3value NIMOutput4value</I><ul><li>1 - 4.&nbsp;&nbsp;NIMOutput<I>N</I>Value<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;LO</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;HI</li></ul></li></ul>
+<BR>[Reply Message Format]<BR>@SetValueNIMOutAll <I>NIMOutput1value NIMOutput2value NIMOutput3value NIMOutput4value</I> <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@SetValueNIMOutAll <I>NIMOutput1value NIMOutput2value NIMOutput3value NIMOutput4value Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When any of the specified parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c SetValueNIMOutAll 0 0 0 0
+<BR>(Receive messages)
+<BR>caenc111c&gttest @SetValueNIMOutAll Ok: 0 0 0 0
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECSetValueNIMOut" HREF="#SECDSetValueNIMOut">SetValueNIMOut</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>SetValueNIMOut</SAMP>
+</DT>
+<DD>
+Set a single value of a specified NIM output.
+<BR><BR>[Usage]<BR>caenc111c SetValueNIMOut <I>NIMOutputNumber Value</I><ol><li>NIMOutputNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 4</li><li>Value<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;LO</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;HI</li></ul></li></ol>
+<BR>[Reply Message Format]<BR>@SetValueNIMOut <I>NIMOutputNumber Value</I> <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@SetValueNIMOut <I>NIMOutputNumber Value Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When any of the specified parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c SetValueNIMOut 1 0
+<BR>(Receive messages)
+<BR>caenc111c&gttest @SetValueNIMOut 1 0 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECRunPulseGenerator" HREF="#SECDRunPulseGenerator">RunPulseGenerator</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>RunPulseGenerator</SAMP>
+</DT>
+<DD>
+Set the NIM Output As Pulse generator and Run it continuously.
+<BR><BR>[Usage]<BR>caenc111c RunPulseGenerator <I>PValue WValue Polarity</I><ol>
+<BR><li>PValue&nbsp;&nbsp;&nbsp;&nbsp;1 - 1023
+<BR>Period : (<I>PValue</I> + 1 ) * 93.1 (&#181;s)
+<BR></li>
+<BR><li>WValue&nbsp;&nbsp;&nbsp;&nbsp;1 - 7
+<BR>Width : (<I>WValue</I>) * 88 (ns)
+<BR></li>
+<BR><li>Polarity<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;Direct</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;Reverse</li></ul></li>
+<BR></ul>
+<BR>[Reply Message Format]<BR>@RunPulseGenerator <I>PValue WValue Polarity</I> <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@RunPulseGenerator <I>PValue WValue Polarity Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When any of the specified parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c RunPulseGenerator 1 1 0
+<BR>(Receive messages)
+<BR>caenc111c&gttest @RunPulseGenerator 1 1 0 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECStopPulseGenerator" HREF="#SECDStopPulseGenerator">StopPulseGenerator</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>StopPulseGenerator</SAMP>
+</DT>
+<DD>
+Stop Pulse Generator (using NIM Output 1).
+<BR><BR>[Usage]<BR>caenc111c StopPulseGenerator
+<BR><BR>[Reply Message Format]<BR>@StopPulseGenerator Ok:&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c StopPulseGenerator
+<BR>(Receive messages)
+<BR>caenc111c&gttest @StopPulseGenerator Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECResetCombo" HREF="#SECDResetCombo">ResetCombo</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>ResetCombo</SAMP>
+</DT>
+<DD>
+Reset COMBO FF of a specified COMBO I/O.
+<BR><BR>[Usage]<BR>caenc111c ResetCombo <I>ComboI/ONumber</I><ol><li>ComboI/ONumber&nbsp;&nbsp;&nbsp;&nbsp;1 | 2</li></ol>
+<BR>[Reply Message Format]<BR>@ResetCombo <I>ComboI/ONumber Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@ResetCombo <I>ComboI/ONumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c ResetCombo 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @ResetCombo 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetComboIsBusy" HREF="#SECDGetComboIsBusy">GetComboIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetComboIsBusy</SAMP>
+</DT>
+<DD>
+Returns a COMBO BUSY status busy or not busy of a specified COMBO I/O.
+<BR><BR>[Usage]<BR>caenc111c GetComboIsBusy <I>ComboI/ONumber</I><ol><li>ComboI/ONumber&nbsp;&nbsp;&nbsp;&nbsp;1 | 2</li></ol>
+<BR>[Reply Message Format]<BR>@GetComboIsBusy <I>ComboI/ONumber</I> <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When COMBO BUSY status is busy)
+<BR>@GetComboIsBusy <I>ComboI/ONumber</I> <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When COMBO BUSY status is not busy)
+<BR>@GetComboIsBusy <I>ComboI/ONumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetComboIsBusy 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetComboIsBusy 1 Ok: 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECGetValueComboEventCounter" HREF="#SECDGetValueComboEventCounter">GetValueComboEventCounter</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>GetValueComboEventCounter</SAMP>
+</DT>
+<DD>
+Returns a current event counter value of a specified COMBO I/O.
+<BR><BR>[Usage]<BR>caenc111c GetValueComboEventCounter <I>ComboI/ONumber</I><ol><li>ComboI/ONumber&nbsp;&nbsp;&nbsp;&nbsp;1 | 2</li></ol>
+<BR>[Reply Message Format]<BR>@GetValueComboEventCounter <I>ComboI/ONumber Ok: Value</I><ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;(>=0)</li></ol>
+<BR>@GetValueComboEventCounter <I>ComboI/ONumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c GetValueComboEventCounter 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @GetValueComboEventCounter 1 Ok: 1000
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECResetComboEventCounter" HREF="#SECDResetComboEventCounter">ResetComboEventCounter</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>ResetComboEventCounter</SAMP>
+</DT>
+<DD>
+Returns a event counter value of a specified COMBO I/O.
+<BR><BR>[Usage]<BR>caenc111c ResetComboEventCounter <I>ComboI/ONumber</I><ol><li>ComboI/ONumber&nbsp;&nbsp;&nbsp;&nbsp;1 | 2</li></ol>
+<BR>[Reply Message Format]<BR>@ResetComboEventCounter <I>ComboI/ONumber Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>@ResetComboEventCounter <I>ComboI/ONumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c ResetComboEventCounter 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @ResetComboEventCounter 1 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECCommand Like CAMAC" HREF="#SECDCommand Like CAMAC">Command Like CAMAC</A></H2>
+<H3><A NAME="SECCCCZ" HREF="#SECDCCCZ">CCCZ</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CCCZ</SAMP>
+</DT>
+<DD>
+Generate the Dataway initialize. `<A HREF="#SECRunDatawayInit">RunDatawayInit</A>` command is the same functon.
+<BR><BR>[Usage]<BR>caenc111c CCCZ
+<BR><BR>[Reply Message Format]<BR>@CCCZ <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCCCC" HREF="#SECDCCCC">CCCC</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CCCC</SAMP>
+</DT>
+<DD>
+Generate crate clear. `<A HREF="#SECRunCrateClear">RunCrateClear</A>` command is the same functon.
+<BR><BR>[Usage]<BR>caenc111c CCCC
+<BR><BR>[Reply Message Format]<BR>@CCCC <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCCCI" HREF="#SECDCCCI">CCCI</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CCCI</SAMP>
+</DT>
+<DD>
+Set the Dataway inhibit reset or set. `<A HREF="#SECSetInhibit">SetInhibit</A>` command is the same functon.
+<BR><BR>[Usage]<BR>caenc111c CCCI 0 | 1<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;reset</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;set</li></ul>
+<BR>[Reply Message Format]<BR><BR><BR>[Reply Message Format]<BR>@CCCI 1 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When set inhibit)
+<BR>@CCCI 0 <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When reset inhibit)
+<BR>@CCCI <I>other Er: Bad Parameter.</I> &nbsp;&nbsp;&nbsp;&nbsp;(When a specified parameter invalid)
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCTCI" HREF="#SECDCTCI">CTCI</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CTCI</SAMP>
+</DT>
+<DD>
+Get the Dataway inhibit status: busy or not busy. `<A HREF="#SECGetInhibitIsBusy">GetInhibitIsBusy</A>` command is the same functon.
+<BR><BR>[Usage]<BR>caenc111c CTCI
+<BR><BR>[Reply Message Format]<BR>@CTCI <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When inhibit status is busy)
+<BR>@CTCI <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When inhibit status is not busy)
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCTLM" HREF="#SECDCTLM">CTLM</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CTLM</SAMP>
+</DT>
+<DD>
+CAMAC test LAM on specified slotno and returns a LAM status on or off. `<A HREF="#SECGetLAMIsBusy">GetLAMIsBusy</A>` command is the same functon.
+<BR><BR>[Usage]<BR>caenc111c GTLM <I>SlotNumber</I><ol><li>SlotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li></ol>
+<BR>[Reply Message Format]<BR>@CTLM <I>SlotNumber</I> <I>Ok: 1</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is on of a specifed Slot Number)
+<BR>@CTLM <I>SlotNumber</I> <I>Ok: 0</I>&nbsp;&nbsp;&nbsp;&nbsp;(When LAM status is off of a specifed Slot Number)
+<BR>@CTLM <I>SlotNumber Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed <I>slotNumber</I> invalid)<BR>
+<BR>If a specified slot is empty, it returns the status off(=0).
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCLMR" HREF="#SECDCLMR">CLMR</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CLMR</SAMP>
+</DT>
+<DD>
+Returns a current decimal value of LAM register(23-bit). `<A HREF="#SECGetLAMRegister">GetLAMRegister</A>` command is the same functon.
+<BR><BR>[Usage]<BR>caenc111c CLMR
+<BR><BR>[Reply Message Format]<BR>@CLMR <I>Ok: Value</I>&nbsp;&nbsp;&nbsp;&nbsp(When command executed successfully)<ol><li>Value&nbsp;&nbsp;&nbsp;&nbsp;0 - 8388607&nbsp;&nbsp;(decimal)
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;Value consists of 23-Bit. Bit position(1,2..23) is used to select the slot number, and bit value '1' shows the LAM on.</li></ol>
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECLACK" HREF="#SECDLACK">LACK</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>LACK</SAMP>
+</DT>
+<DD>
+LAM Acknowledge.
+<BR><BR>[Usage]<BR>caenc111c LACK
+<BR><BR>[Reply Message Format]<BR>@LACK <I>Ok:</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c LACK
+<BR>(Receive messages)
+<BR>caenc111c&gttest @LACK Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCSCAN" HREF="#SECDCSCAN">CSCAN</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CSCAN</SAMP>
+</DT>
+<DD>
+Start Slot Scanning and returns status inserted(1) or empty(0) of all slots(1 to 23).
+<BR><BR>[Usage]<BR>caenc111c CSCAN
+<BR><BR>[Reply Message Format]<BR>@CSCAN <I>Ok: slot1Value slot2Value slot3Value slot23Value</I>&nbsp;&nbsp;&nbsp;&nbsp;(When command executed successfully)
+<BR><ul><li>slotNValue<ul><li>0&nbsp;&nbsp;&nbsp;&nbsp;empty</li><li>1&nbsp;&nbsp;&nbsp;&nbsp;inserted</li></ul></li></ul>
+<BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c CSCAN
+<BR>(Receive messages)
+<BR>caenc111c&gttest @RunSlotScan Ok: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCSSA" HREF="#SECDCSSA">CSSA</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CSSA</SAMP>
+</DT>
+<DD>
+Execute CAMAC command with 16-bit data.
+<BR><BR>[Usage]<BR>caenc111c CSSA <I>F N A data</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>N slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>A address&nbsp;&nbsp;&nbsp;decimal number</li><li>data&nbsp;&nbsp;&nbsp;&nbsp;0 - 65535 (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@CSSA <I>F N A data Ok:</I> <I>Q</I> <I>X</I> <I>replyData</I><ol><li>Q&nbsp;&nbsp;&nbsp;&nbsp;0 or 1</li><li>X&nbsp;&nbsp;&nbsp;&nbsp;0 or 1</li><li>replyData&nbsp;&nbsp;&nbsp;&nbsp;0 - 65535 (decimal number)</li></ol>
+<BR>@CSSA <I>F N A data Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When any of specifed parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c CSSA 0 21 0 0
+<BR>(Receive messages)
+<BR>caenc111c&gttest @CSSA 0 21 0 0 Ok: 0 1 5380
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECCFSA" HREF="#SECDCFSA">CFSA</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>CFSA</SAMP>
+</DT>
+<DD>
+Execute CAMAC command with 24-bit data.
+<BR><BR>[Usage]<BR>caenc111c CFSA <I>F N A data</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>N slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>A address&nbsp;&nbsp;&nbsp;decimal number</li><li>data&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215 (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@CFSA <I>F N A data Ok:</I> <I>Q</I> <I>X</I> <I>replyData</I><ol><li>Q&nbsp;&nbsp;&nbsp;&nbsp;0 or 1</li><li>X&nbsp;&nbsp;&nbsp;&nbsp;0 or 1</li><li>replyData&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215 (decimal number)</li></ol>
+<BR>@CFSA <I>F N A data Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When any of specifed parameters invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c CFSA 0 21 0 0
+<BR>(Receive messages)
+<BR>caenc111c&gttest @CFSA 0 21 0 0 Ok: 0 1 5380
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKBUFFS" HREF="#SECDBLKBUFFS">BLKBUFFS</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKBUFFS</SAMP>
+</DT>
+<DD>
+Set the current block transfer buffer size.
+<BR><BR>[Usage]<BR>caenc111c BLKBUFFS <I>buffer_size</I><ol><li>buffer_size&nbsp;&nbsp;&nbsp;decimal number</li></ol>
+<BR>[Reply Message Format]<BR>@BLKBUFFS <I>buffer_size Ok:</I>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKBUFFS 16
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKBUFFS 16 Ok:
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKBUFFG" HREF="#SECDBLKBUFFG">BLKBUFFG</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKBUFFG</SAMP>
+</DT>
+<DD>
+Get the current block transfer buffer size.
+<BR><BR>[Usage]<BR>caenc111c BLKBUFFG</li></ol>
+<BR>[Reply Message Format]<BR>@BLKBUFFS <I>Ok: buffer_size</I><ol><li>buffer_size&nbsp;&nbsp;&nbsp; decimal number</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKBUFFG
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKBUFFG Ok: 16
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKSS" HREF="#SECDBLKSS">BLKSS</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKSS</SAMP>
+</DT>
+<DD>
+Block transfer command, 16-bit data and Q-stop mode.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR><BR>[Usage]<BR>caenc111c BLKSS <I>F N A maxsize</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>N slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>A address&nbsp;&nbsp;&nbsp;decimal number</li><li>maxsize&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@BLKSS <I>F N A maxsize Ok:</I> <I>replyDatas</I><ol><li>replyDatas (Two or more data using delimiter ',')&nbsp;&nbsp;&nbsp;&nbsp;0 - 65535 (decimal number)</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKSS 0 21 0 2
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKSS 0 21 0 2 Ok: 213,213
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKSR" HREF="#SECDBLKSR">BLKSR</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKSR</SAMP>
+</DT>
+<DD>
+Block transfer command, 16-bit data and Q-repeat mode.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR><BR>[Usage]<BR>caenc111c BLKSR <I>F N A maxsize timeout</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>N slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>A address&nbsp;&nbsp;&nbsp;decimal number</li><li>maxsize&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li><li>timeout&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@BLKSS <I>F N A maxsize timeout Ok:</I> <I>replyDatas</I><ol><li>replyDatas (Two or more data using delimiter ',')&nbsp;&nbsp;&nbsp;&nbsp;0 - 65535 (decimal number)</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKSR 0 21 0 2 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKSR 0 21 0 2 1 Ok: 213,213
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKSA" HREF="#SECDBLKSA">BLKSA</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKSA</SAMP>
+</DT>
+<DD>
+Block transfer command, 16-bit data and address scan mode.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR><BR>[Usage]<BR>caenc111c BLKSA <I>F Nstart maxsize</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>Nstart slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>maxsize&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@BLKSA <I>F Nstart maxsize Ok:</I> <I>replyDatas</I><ol><li>replyDatas (Two or more data using delimiter ',')&nbsp;&nbsp;&nbsp;&nbsp;0 - 65535 (decimal number)</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKSA 0 21 16
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKSA 0 21 16 Ok: 213,0,12,3,90,2,0,2,1,43,3,2,1,5,6,7
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKFS" HREF="#SECDBLKFS">BLKFS</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKFS</SAMP>
+</DT>
+<DD>
+Block transfer command, 24-bit data and Q-stop mode.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR><BR>[Usage]<BR>caenc111c BLKFS <I>F N A maxsize</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>N slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>A address&nbsp;&nbsp;&nbsp;decimal number</li><li>maxsize&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@BLKFS <I>F N A maxsize Ok:</I> <I>replyDatas</I><ol><li>replyDatas (Two or more data using delimiter ',')&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215 (decimal number)</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKFS 0 21 0 2
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKFS 0 21 0 2 Ok: 213,213
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKFR" HREF="#SECDBLKFR">BLKFR</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKFR</SAMP>
+</DT>
+<DD>
+Block transfer command, 24-bit data and Q-repeat mode.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR><BR>[Usage]<BR>caenc111c BLKFR <I>F N A maxsize timeout</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>N slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>A address&nbsp;&nbsp;&nbsp;decimal number</li><li>maxsize&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li><li>timeout&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@BLKFR <I>F N A maxsize timeout Ok:</I> <I>replyDatas</I><ol><li>replyDatas (Two or more data using delimiter ',')&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215 (decimal number)</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKFR 0 21 0 2 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKFR 0 21 0 2 1 Ok: 213,213
+<BR>
+</Tt></DL>
+<HR>
+<H3><A NAME="SECBLKFA" HREF="#SECDBLKFA">BLKFA</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>BLKFA</SAMP>
+</DT>
+<DD>
+Block transfer command, 24-bit data and address scan mode.<BR>
+See '<A href="../readmej.forblocktransfer.txt">Readme for Block transfer (Japanese)</A>' before using.
+<BR><BR>[Usage]<BR>caenc111c BLKFA <I>F Nstart maxsize</I><ol><li>F function&nbsp;&nbsp;&nbsp;decimal number</li><li>Nstart slotNumber&nbsp;&nbsp;&nbsp;&nbsp;1 - 23</li><li>maxsize&nbsp;&nbsp;&nbsp;&nbsp;1 - (decimal number)</li></ol>
+<BR>[Reply Message Format]<BR>@BLKFA <I>F Nstart maxsize Ok:</I> <I>replyDatas</I><ol><li>replyDatas (Two or more data using delimiter ',')&nbsp;&nbsp;&nbsp;&nbsp;0 - 16777215 (decimal number)</li></ol>
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c BLKFA 0 21 16
+<BR>(Receive messages)
+<BR>caenc111c&gttest @BLKFA 0 21 16 Ok: 213,0,12,3,90,2,0,2,1,43,3,2,1,5,6,7
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECTEST CAMAC Crate Controller" HREF="#SECDTEST CAMAC Crate Controller">TEST CAMAC Crate Controller</A></H2>
+<H3><A NAME="SECTEXTTERM" HREF="#SECDTEXTTERM">TEXTTERM</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>TEXTTERM</SAMP>
+</DT>
+<DD>
+Send and execute the CAMAC command directly.
+<BR><BR>[Usage]<BR>CAENC111c <I>commandText</I><ol><li>commandText&nbsp;&nbsp;&nbsp;(See caenc111c TCP control socket commands on Technical Information Manual)</li> </ol>
+<BR>[Reply Message Format]<BR>@TEXTTERM <I>commandText</I> <I>Ok: 0,replyData</I><ol><li>0&nbsp;&nbsp;&nbsp;&nbsp;status command executed successfully</li><li>replyData&nbsp;&nbsp;&nbsp;&nbsp;string format
+<BR>(Data reply through TCP Control. See caenc111c TCP control socket commands on Technical Information Manual)</li></ol>
+<BR>@TEXTTERM <I>commandText</I> <I>Ok: -1,</I>(command executed but command paramater wrong)
+<BR>@TEXTTERM <I>commandText</I> <I>Ok: -2,</I>(command executed but command nonexistent)
+<BR>@TEXTTERM <I>commandText Er: Bad Parameter.</I>&nbsp;&nbsp;&nbsp;&nbsp;(When a specifed parameter invalid)
+<BR><BR>[Examples]<BR><Tt>(sender)
+<BR>caenc111c TEXTTERM CFSA 0 22 0 0
+<BR>caenc111c TEXTTERM CFSA 0 22 1
+<BR>(Receive messages)
+<BR>caenc111c&gttest @TEXTTERM CFSA 0 22 0 0 Ok: 0,0 1230
+<BR>caenc111c&gttest @TEXTTERM CFSA 0 22 1 Ok: -1,
+<BR>
+</Tt></DL>
+<HR>
+<H2><A NAME="SECEvent Message List" HREF="#SECDEvent Message List">Event Message List</A></H2>
+<H3><A NAME="SEC_ChangedInhibitIsBusy" HREF="#SECD_ChangedInhibitIsBusy">_ChangedInhibitIsBusy</A><BR></H3>
+<P>
+<DL COMPACT><DT><SAMP>_ChangedInhibitIsBusy</SAMP>
+</DT>
+<DD>
+Send by CAENC111C controller when inhibit status has been changed, or '<A HREF="#SECflushdata">flushdata</A>','<A HREF="#SECflushdatatome">flushdatatome</A>' command has been executed.
+<BR><BR>[Event Message Format]<BR>_ChangedInhibitIsBusy <I>1</I>&nbsp;&nbsp;(when inhibit status is busy)
+<BR>_ChangedInhibitIsBusy <I>0</I>&nbsp;&nbsp;(when inhibit status is not busy)
+<BR></DL>
+
+</BODY></HTML>

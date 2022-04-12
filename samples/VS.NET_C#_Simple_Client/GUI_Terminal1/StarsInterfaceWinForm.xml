@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>StarsInterfaceWinForm</name>
+    </assembly>
+    <members>
+        <member name="T:STARS.WinForm.StarsCbWinForm">
+            <summary>Class for StarsCbWinForm.</summary>
+            <remarks>This class is stars.NET for Forms Application.</remarks>
+        </member>
+        <member name="M:STARS.WinForm.StarsCbWinForm.StartCbHandler(STARS.StarsCbHandler)">
+            <summary>Method for StartCbHandler.</summary>
+            <remarks>Add Stars handler for Forms Application.</remarks>
+            <param name="cb">Indicate 'new StarsCbHandler(starshandlername)'.</param>
+            <example>
+            <code>
+            public StarsInterface stars;
+            private void Form1_Load(object sender, EventArgs e)
+            {
+                stars = new StarsInterface(starsargs[0], starsargs[1]);
+                try
+                {
+                       stars.Connect();
+                }
+                catch (Exception se)
+                {
+                    MessageBox.Show(se.Message);
+                    this.Close();
+                }
+                StarsCbWinForm cbStars = new StarsCbWinForm(this, stars);
+                cbStars.StartCbHandler(new StarsCbHandler(stars_received));
+            </code>
+            </example>
+        </member>
+        <member name="M:STARS.WinForm.StarsCbWinForm.#ctor(System.Windows.Forms.Form,STARS.StarsInterface)">
+            <summary>Constructor for StarsCbWinForm.</summary>
+            <remarks>Make object for enable access to forms from stars.</remarks>
+            <param name="frmObject">Indicate 'Form' Object.</param>
+            <param name="st">Indicate 'Stars' Object.</param>
+            <example>
+            <code>
+            public StarsInterface stars;
+            private void Form1_Load(object sender, EventArgs e)
+            {
+                stars = new StarsInterface(starsargs[0], starsargs[1]);
+                try
+                {
+                       stars.Connect();
+                }
+                catch (Exception se)
+                {
+                    MessageBox.Show(se.Message);
+                    this.Close();
+                }
+                StarsCbWinForm cbStars = new StarsCbWinForm(this, stars);
+                cbStars.StartCbHandler(new StarsCbHandler(stars_received));
+            </code>
+            </example>
+        </member>
+    </members>
+</doc>

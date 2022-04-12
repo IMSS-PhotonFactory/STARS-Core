@@ -1,0 +1,14 @@
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\obj\Debug\StarsInterfaceWinForm.csprojResolveAssemblyReference.cache
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\bin\Debug\StarsInterfaceWinForm.dll
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\bin\Debug\StarsInterfaceWinForm.pdb
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\bin\Debug\StarsInterface.dll
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\bin\Debug\StarsInterface.pdb
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\obj\Debug\StarsInterfaceWinForm.dll
+C:\Users\kosuge\Documents\Visual Studio 2012\Projects\StarsInterface\StarsInterfaceWinForm\obj\Debug\StarsInterfaceWinForm.pdb
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\bin\Debug\StarsInterfaceWinForm.dll
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\bin\Debug\StarsInterfaceWinForm.pdb
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\bin\Debug\StarsInterface.dll
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\bin\Debug\StarsInterface.pdb
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\obj\Debug\StarsInterfaceWinForm.csprojResolveAssemblyReference.cache
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\obj\Debug\StarsInterfaceWinForm.dll
+C:\Users\kosuge\svn_stars\starsif.net_VS2012\StarsInterfaceWinForm\obj\Debug\StarsInterfaceWinForm.pdb

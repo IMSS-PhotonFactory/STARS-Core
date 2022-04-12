@@ -1,0 +1,3 @@
+_:Command:ToDevice:DeviceMethod.MethodID
+ :Command:ToDevice:NodeDefinition:DeviceProperty.PropertyID
+ :Command:ToDevice:NodeDefinition:DeviceProperty:PropertyValue.Value

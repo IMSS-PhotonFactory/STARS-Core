@@ -1,0 +1,168 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+#-----	5/18 Add Start	-----
+use Time::HiRes qw(gettimeofday);
+#-----	5/18 Add End	-----
+#########################################################################
+# logger
+#------------------------------------------------------------------------
+## Updated
+# Date      Ver Description
+#2009.05.19 1.1 Time -> use Time::HiRes
+#2014.12.09 1.5 Y. Nagatani
+#    * Additional changes only.
+#    *  Support program options: 
+#    *   nodename modifiable with option.
+#    *   nolog, echo, reclen options supported: same as syslogger
+#    *   directory, prefix and suffix of logfile modifiable with options.
+#    *  Support commands: 
+#    *   SetLogEnable (0|1): control nolog
+#########################################################################
+## ToDo: Set parameters here.
+#-----	2014.12/09 Modify Start	-----
+$::NodeName   = 'logger';        #Default node name.
+$::Server     = 'localhost';     #Default stars server.
+$::LogDir     = './';            #Default log directory
+$::LogPrefix  = 'log';           #Default log prefix.
+$::LogSuffix  = '.txt';          #Default log suffix.
+use constant LOGHEADLEN => 24;
+#use constant NODENAME  => 'logger';
+#use constant SERVER    => 'localhost';
+#use constant LOGDIR    => './';
+#use constant LOGPREFIX => 'log';
+#use constant LOGSUFFIX => '.txt';
+#-----	2014.12/09 Modify End	-----
+#########################################################################
+#-----	2014.12/09 Insert Start	-----
+$::Echo   = '';   #For echo mode.
+$::Nolog  = '';   #Flag for suppress output to log file.
+$::RECLEN = 0;    #Default output all message. >0 Trim by record length
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'e'      => \$::Echo,
+'nolog'  => \$::Nolog,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+'dir=s'  => \$::LogDir,
+'prefix=s' => \$::LogPrefix,
+'suffix=s' => \$::LogSuffix,
+'reclen=s' => \$::RECLEN
+) or die "Bad switch.\n";
+#-----	2014.12/09 Insert End	-----
+
+$::odate='';
+
+#-----	2014.12/09 Insert Start	-----
+if($_ = shift(@ARGV)){$::Server = $_;}
+unless($::LogDir =~ /[\/\\]$/){$::LogDir .= '/';}
+
+if($::Echo){$|=1;}
+#-----	2014.12/09 Insert End	-----
+
+## Open Stars server. $::tak is a Stars object.
+#-----	2014.12/09 Modify Start	-----
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+#$::tak = stars->new(NODENAME, SERVER) or die;
+#-----	2014.12/09 Modify End	-----
+
+#-----	2014.12/09 Insert Start	-----
+#Calc RecordLength
+$::RECLEN=$::RECLEN - LOGHEADLEN;
+#-----	2014.12/09 Insert End	-----
+
+$::tak->addcallback(\&handler);
+stars->Mainloop();
+close(LOG);
+exit(1);
+
+# Print usage. --Supported since 2014.12.09 -------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: logger [-h] [-e] [-nolog] [-dir Directory] [-prefix Logprefix] [-suffix Logsuffix] [-node MyNodeName] [-reclen StarsMessageLength] [StarsServer]\n";
+  print "       -h      Show this help.\n";
+  print "       -e      Turn on echo mode. If this switch will be configured, all messages\n";
+  print "              from STARS server will appear on the screen.\n";
+  print "       -nolog  Suppress output of log file.\n";
+  print "       -dir Direcotory         Set directory of logfile. Default is \"./\".\n";
+  print "       -prefix Logprefix       Set prefix of logfile. Default is \"log\".\n";
+  print "       -suffix Logsuffix       Set suffix of logfile. Default is \".txt\".\n";
+  print "       -reclen RecordLength    Trim LogMessage by RecordLength.\n";
+  exit(0);
+}
+
+sub handler{
+	my ($from, $to, $mess) = @_;
+	my $ctime;
+	my $cdate;
+	my $cmd="";
+
+	if($mess =~ s/^(_record|record)\s+//){
+		$cmd=$1;
+		#-----	2014.12/09 Insert Start	-----
+		if(($::RECLEN>0) and (length($mess)>$::RECLEN)){
+			$mess=pack("A".$::RECLEN,$mess);
+		}
+		#-----	2014.12/09 Insert End	-----
+		$cdate = $ctime = ksg_localtime();
+#-----	5/19 Edit Start	-----
+		$cdate =~ s/ \d\d:\d\d:\d\d.\d\d\d//;
+#		$cdate =~ s/ \d\d:\d\d:\d\d//;
+#-----	5/19 Edit End	-----
+		#-----	2014.12/09 Support $::Nolog since 2014.12.09	-----
+		unless($::Nolog){
+			if($cdate ne $::odate){
+				open_logfile($cdate);
+				$::odate=$cdate;
+			}
+			print LOG "$ctime $from $mess\n";
+		}
+		#-----	2014.12/09 Support $::Echo since 2014.12.09	-----
+		if($::Echo){print "$ctime $mess\n";}
+		if($cmd eq 'record'){
+			$::tak->Send("\@$cmd $ctime $mess","$from");
+		}
+	#-----	2014.12/09 Support SetLogEnable since 2014.12.09	-----
+	}elsif($mess=~/^SetLogEnable\s+([01])$/){
+		if($1 eq 1){$::Nolog=0;}else{$::Nolog=1;}
+		$::tak->Send("\@$mess Ok:", "$from");
+	}elsif($mess eq 'help'){
+		$::tak->Send("\@help record _record SetLogEnable","$from");
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::tak->Send("\@$mess Er: Bad command or nodename", "$from");
+	}
+}
+
+#-- Refresh log file ---------------------------------------------
+sub open_logfile{
+	my $d=shift;
+#-----	2014.12/09 Modify Start	-----
+#	my $filename = LOGDIR.LOGPREFIX.$d.LOGSUFFIX;
+	my $filename = $::LogDir.$::LogPrefix.$d.$::LogSuffix;
+#-----	2014.12/09 Modify end	-----
+	open(LOG, ">>$filename");
+	select(LOG);$|=1;select(STDOUT);
+	print LOG ksg_localtime()." Logger started.\n";
+}
+
+#-- Get "yyyy-mm-dd hh:mm:ss" style date -------------------------
+sub ksg_localtime{
+#-----	5/18 Delete Start	-----
+#my $tm = shift(@_);
+#if($tm eq ''){$tm=time();}
+#-----	5/18 Delete End	-----
+my ($sec, $mcsec) = gettimeofday;
+my @tt = localtime($sec);
+#-----	5/18 Edit Start	-----
+return(sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d",
+$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0],int($mcsec/1000)));
+#return(sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+#$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+#-----	5/18 Edit End	-----
+}

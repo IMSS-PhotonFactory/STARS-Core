@@ -1,0 +1,264 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use nportserv;
+#################################################################
+# LY72
+$::Version  = '$Revision: 1.1 $';
+$::Version .= '$Date: 2013-10-23 07:23:43 $';
+#
+$::Version =~ s/\$//g;
+#################################################################
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}else{usage();}
+require 'config.pl';
+
+## For calc;
+init_calc();
+
+## Label Mode
+@::Label=();
+if($::LabelSelect eq 'ABC'){
+	@::Label = qw(A B C);
+}elsif($::LabelSelect eq 'XYZ'){
+	@::Label = qw(X Y Z);
+}else{
+	die "Bad label select. It must be ABC or XYZ.";
+}
+
+## Open XPort
+$::enc = nportserv->new($::NPORT_HOST, $::NPORT_PORT)
+	or die "Could not connect Encoder";
+
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+
+$::tak->addcallback(\&handler);
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h] [-d] MyNodeName
+       -h   Show this help.
+       -d   Run with debug mode.
+__USAGE__
+
+exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	my $rt;
+	my $ch;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+if($to eq $::NodeName){
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+
+	}elsif($mess eq 'help'){
+		$rt="help hello getversion listnodes GetValue GetRawValue";
+
+	}elsif($mess eq 'listnodes'){
+		$rt=join(" ", @::ChName);
+
+	}elsif($mess eq 'GetValue'){
+		$rt=GetValueM();
+
+	}elsif($mess eq 'GetRawValue'){
+		$rt=GetValueM(1);
+
+	}elsif($mess eq 'getversion'){
+		$rt= $::Version;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+}elsif(($ch = chk_ch($to)) >= 0){
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+
+	}elsif($mess eq 'help'){
+		$rt="help hello GetValue GetRawValue SetOffset GetOffset";
+
+	}elsif($mess eq 'GetValue'){
+		$rt=GetValue($ch);
+
+	}elsif($mess eq 'GetRawValue'){
+		$rt=GetValue($ch, 1);
+
+	}elsif($mess =~ /^SetOffset ([+\-]*[0-9.]+)/){
+		$::Offset[$ch] = $1;
+		$rt='Ok:';
+
+	}elsif($mess eq 'GetOffset'){
+		$rt=$::Offset[$ch];
+
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+}else{
+	$to =~ s/$::NodeName\.//;
+	$::tak->Send("$::NodeName>$from \@$mess Er: $to is down.");
+	if($::Debug){
+		print "STARS SND: $::NodeName>$from \@$mess $rt\n";
+	}
+	return;
+}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+
+sub chk_ch{
+	my $cname = shift;
+	my $ch;
+	$cname =~ s/$::NodeName\.//;
+	for($ch = 0; $ch <= $#::ChName; $ch++){
+		if($::ChName[$ch] eq $cname){
+			return($ch);
+		}
+	}
+	return(-1);
+}
+
+sub wtrd{
+	my $cmd = shift;
+	my $rt;
+	if($::Debug){
+		print "WT: $cmd\n";
+	}
+	$::enc->OutSIO("$cmd\r\n");
+	if($::Debug){
+		print "RD: ";
+	}
+
+	$rt = $::enc->InSIO(undef, "\r\n");
+	if($rt eq ''){
+		if($::Debug){
+			print "Device error.\n";
+		}
+		$::Error = "Device error.";
+		return('');
+	}
+#	$rt =~ s/[\r\n]//g;
+	if($::Debug){
+		print "$rt\n";
+	}
+	return($rt);
+}
+
+sub GetValue{
+	my $ch = shift;
+	my $flgraw = shift;
+	my $rt;
+	my $cmd = sprintf("%sr", $::Label[$ch]);
+	$rt=wtrd($cmd); if($rt eq ''){return('');}
+
+	$rt =~ s/^\s+//;
+	$rt =~ s/\s+$//;
+
+	if($::Calc[$ch] eq ''){
+		return($rt);
+	}elsif($flgraw){
+		return($rt * 1);
+	}else{
+		return(calc_value($ch, $rt));
+	}
+}
+
+sub GetValueM{
+	my $flgraw = shift;
+	my $rt;
+	my $cmd = "R";
+	my @rtl;
+	my @buf = ();
+	my $ch;
+	$rt=wtrd($cmd); if($rt eq ''){return('');}
+
+	$rt =~ s/^\s+//;
+	$rt =~ s/\s+$//;
+
+	@rtl = split(/\s+/, $rt);
+
+	for($ch = 0; $ch <= $#rtl; $ch++){
+		if($::Calc[$ch] eq ''){
+			push(@buf, $rtl[$ch]);
+		}elsif($flgraw){
+			push(@buf, $rtl[$ch] * 1);
+		}else{
+			push(@buf, calc_value($ch, $rtl[$ch]));
+		}
+	}
+	return(join(" ", @buf));
+}
+
+sub init_calc(){
+	my $ch;
+	for($ch = 0; $ch <= $#::ChName; $ch++){
+		$::Calc[$ch] =~ s/INPUT/\$x/g;
+		$::Calc[$ch] =~ s/FACTOR/\$::Factor[\$ch]/g;
+		$::Calc[$ch] =~ s/OFFSET/\$::Offset[\$ch]/g;
+	}
+}
+
+sub calc_value{
+	my $ch = shift;
+	my $x = shift;
+	my $y;
+	my $cmd = '$y=sprintf("'. $::Format[$ch] . '", ' . $::Calc[$ch] . ');';
+	eval($cmd);
+	return($y);
+}
+

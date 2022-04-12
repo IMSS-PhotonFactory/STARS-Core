@@ -1,0 +1,64 @@
+#! /usr/bin/perl
+
+#Create Keyword ##################################
+$::Version='
+$Revision: 1.1 $
+$Date: 2010-01-19 02:15:41 $
+';
+# Takashi Kosuge #################################
+
+
+use strict;
+use Getopt::Long;
+use constant KEYMIN => 10;
+use constant KEYMAX => 18;
+
+$::KeyCount = 200;
+$::Version=~s/(\n|\r|\$)//g;
+
+# Options ---------------------------------------------------
+GetOptions(
+'count=i' => \$::KeyCount,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+# Print usage. ---------------------------------------------
+sub usage{
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h]  [-count KeywordCount] [OutPutFileName]
+       -h     Show this help.
+       -count Set keyword count.
+       If "OutPutFileName" is omitted, STDOUT is used for output.
+__USAGE__
+exit(0);
+}
+
+
+my $filename = shift(@ARGV);
+if($filename){
+	open(BUF, ">$filename") or die "Could not open keyfile: $!\n";
+	select(BUF);
+}
+
+srand(time()^($$+($$<<15)));
+
+my $lp;
+my $ry;
+my $lp2;
+my $buf;
+my $rd;
+my $klen;
+for($lp=0;$lp<$::KeyCount;$lp++){
+    $klen = int(rand(KEYMAX - KEYMIN)) + KEYMIN;
+    $buf='';
+    for($lp2=0;$lp2<$klen;$lp2++){
+	$rd = int(rand 93)+33;
+	if($rd >= 0x60){$rd++;}
+	$buf .= sprintf("%c",$rd);
+    }
+    print "$buf\n";
+}
+
+select(STDOUT);
+

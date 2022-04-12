@@ -1,0 +1,966 @@
+#!/usr/bin/perlf
+
+package PerlSvc;
+use strict;
+use IO::Socket;
+use IO::Select;
+use Symbol;
+use Time::HiRes qw( gettimeofday tv_interval );
+require Getopt::Long;
+use gpnetstars;
+#use stars;
+require 'nportsvr.pl';
+#########################################################################
+#gpnet controller
+$PerlSvc::Version='
+Version: 1 
+$Revision: 1.1 $
+$Date: 2011-05-13 01:52:40 $
+
+';
+#########################################################################
+#Setting for system
+$PerlSvc::GPNETPort      =  4001;
+$PerlSvc::GPNETHost      =  '192.168.11.166';
+$PerlSvc::Port           =  4000;
+$PerlSvc::LibDir         =  'gpnet-lib/';
+$PerlSvc::KeyDir         =  '';
+$PerlSvc::NodeName       =  'gpnet'; # stars nodename me.
+$PerlSvc::Server         =  '';        # Connecting starsserver
+$PerlSvc::ServerPort     =  '';        # Connecting starsserver port
+$PerlSvc::ServerKeyfile  =  '';        # Connecting starsserver keyfile
+$PerlSvc::LogDir         =  '';
+$PerlSvc::odate          =  '';
+use constant GPNETTIMEOUT => 50;
+$PerlSvc::GPNetTimeout   = GPNETTIMEOUT;
+use constant RNDMAX      => 10000;
+use constant HOSTLIST    => 'allow.cfg';
+use constant ALIASES     => 'aliases.cfg';
+use constant CMDDENY     => 'command_deny.cfg';
+use constant CMDALLOW    => 'command_allow.cfg';
+use constant LOGPREFIX => $PerlSvc::NodeName;
+use constant LOGSUFFIX => '.txt';
+#########################################################################
+
+######### ONLY DEVELOP ##########
+$::Debug=''; 
+######### ONLY DEVELOP ##########
+
+$PerlSvc::StartTime=[gettimeofday];
+$PerlSvc::Version=~s/(\n|\r|\$)//g;
+
+##WinSVC##
+%PerlSvc::Config = (ServiceName => $PerlSvc::NodeName);
+
+##WinSVC##
+$PerlSvc::Debug='';       #special debug
+$PerlSvc::tak=0;          #stars object
+%PerlSvc::NodeSFX=();     #node name with suffix and handle
+%PerlSvc::NodeHSFX=();    #handle and suffix value
+
+%PerlSvc::NodeH=();       #file handle and node name, handle is key, name is value
+%PerlSvc::NodeBuf=();     #node input buffer
+@PerlSvc::CmdDeny=();     #Command deny list with RegEx
+@PerlSvc::CmdAllow=();    #Command allow list with RegEx
+
+$PerlSvc::Xfh;            #Handle for printing
+$PerlSvc::Xbuf;           #Buffer for printing
+$PerlSvc::readable;       #Used by select in main loop
+$PerlSvc::listener;       #Used by select in main loop
+
+unless (defined &ContinueRun) {
+	*ContinueRun      = sub { return 1 };
+	*RunningAsService = sub { return 0 };
+	Interactive();
+}
+
+exit(0);
+
+sub Interactive{
+	Install();
+	Startup();
+}
+
+sub Install{
+	Getopt::Long::GetOptions(
+	'service=s'       => \$PerlSvc::Config{ServiceName},
+	'port=i'          => \$PerlSvc::Port,
+	'lib=s'           => \$PerlSvc::LibDir,
+	'key=s'           => \$PerlSvc::KeyDir,
+	'nodename=s'      => \$PerlSvc::NodeName,
+	'starsserver=s'   => \$PerlSvc::Server,
+	'starsport=i'     => \$PerlSvc::ServerPort,
+	'starskeyfile=s'  => \$PerlSvc::ServerKeyfile,
+	'gpnethost=s'     => \$PerlSvc::GPNETHost,
+	'gpnetport=i'     => \$PerlSvc::GPNETPort,
+	'logdir=s'        => \$PerlSvc::LogDir,
+	'd'               => \$PerlSvc::Debug,
+	'h'               => \&usage
+	);
+
+    $PerlSvc::Config{DisplayName} = "$PerlSvc::Config{ServiceName} STARS Bridge Service";
+    $PerlSvc::Config{Parameters}  = "--p $PerlSvc::Port --lib $PerlSvc::LibDir";
+    if($PerlSvc::KeyDir)       {$PerlSvc::Config{Parameters} .= " --key $PerlSvc::KeyDir";}
+    if($PerlSvc::NodeName)     {$PerlSvc::Config{Parameters} .= " --nodename $PerlSvc::NodeName";}
+    if($PerlSvc::Server)       {$PerlSvc::Config{Parameters} .= " --starsserver $PerlSvc::Server";}
+    if($PerlSvc::ServerPort)   {$PerlSvc::Config{Parameters} .= " --starsport $PerlSvc::ServerPort";}
+    if($PerlSvc::ServerKeyfile){$PerlSvc::Config{Parameters} .= " --starskeyfile $PerlSvc::ServerKeyfile";}
+    if($PerlSvc::GPNETHost)    {$PerlSvc::Config{Parameters} .= " --gpnethost $PerlSvc::GPNETHost";}
+    if($PerlSvc::GPNETPort)    {$PerlSvc::Config{Parameters} .= " --gpnetport $PerlSvc::GPNETPort";}
+    if($PerlSvc::LogDir)       {$PerlSvc::Config{Parameters} .= " --logdir $PerlSvc::LogDir";}
+    if($PerlSvc::Debug){$PerlSvc::Config{Parameters} .= " --d";}
+}
+
+# Set Starsup Parameters.------------------------------------
+sub GPNET_analizeoptions{
+	unless($PerlSvc::LibDir =~ /\/$/){$PerlSvc::LibDir .= '/';}
+	if($PerlSvc::KeyDir eq ''){$PerlSvc::KeyDir=$PerlSvc::LibDir;}
+	unless($PerlSvc::KeyDir =~ /\/$/){$PerlSvc::KeyDir .= '/';}
+	if($PerlSvc::NodeName eq ''){$PerlSvc::NodeName=$PerlSvc::Config{ServiceName};}
+	return(1);
+}
+# Print usage. ---------------------------------------------
+sub usage{
+  Getopt::Long::GetOptions(
+  'service=s'       => \$PerlSvc::Config{ServiceName},
+  'port=i'          => \$PerlSvc::Port,
+  'lib=s'           => \$PerlSvc::LibDir,
+  'key=s'           => \$PerlSvc::KeyDir,
+  'nodename=s'      => \$PerlSvc::NodeName,
+  'starsserver=s'   => \$PerlSvc::Server,
+  'starsport=i'     => \$PerlSvc::ServerPort,
+  'starskeyfile=s'  => \$PerlSvc::ServerKeyfile,
+  'gpnethost=s'     => \$PerlSvc::GPNETHost,
+  'gpnetport=i'     => \$PerlSvc::GPNETPort,
+  'logdir=s'        => \$PerlSvc::LogDir,
+  'd'               => \$PerlSvc::Debug
+  );
+  GPNET_analizeoptions();
+## Todo: Please modify help message for "-h" option.
+  print "STARS Bridge $PerlSvc::Version\n";
+  print "Usage: $0 [-h] [-port ServerPort] [-lib LibDir] [-key KeyDir]\n";
+  print "          [-service ServiceName] [-nodename NodeName]\n";
+  print "          [-gpnethost GPNETHost] [-gpnetport GPNETPort]\n";
+  print "          [-starsserver StarsServer] [-starsport StarsServerPort]\n";
+  print "          [-starskeyfile StarsServerKeyFile]\n\n";
+  print "You are able to run STARS bridge as service with Windows.\n";
+  print "Install and run as service:\n";
+  print "   $0 --install auto -port ServerPort -lib LibDir -starsserver StarsServer -starskeyfile StarsServerKeyFile -gpnethost GPNETHost -gpnetport=GPNETPort\n";
+  print "Remove service:\n";
+  print "   $0 --remove\n\n";
+  print "If your OS is FreeBSD, Linux etc., you are able to run STARS bridge on\n";
+  print " back ground.\n";
+  print "   ./$0 -port ServerPort -starsserver StarsServer -gpnethost GPNETHost -gpnetport=GPNETPort &\n\n";
+  unless($PerlSvc::Debug){exit(0);}
+  print "----------------------------------------------------------------------\n";
+  print "Startup Parameters will be:\n";
+  print "    port         = $PerlSvc::Port\n";
+  print "    lib          = $PerlSvc::LibDir\n";
+  print "    key          = $PerlSvc::KeyDir\n";
+  print "    service      = $PerlSvc::Config{ServiceName}\n";
+  print "    nodename     = $PerlSvc::NodeName\n";
+  unless($PerlSvc::Server)       {$PerlSvc::Server='localhost';}
+  unless($PerlSvc::ServerPort)   {$PerlSvc::ServerPort='6057';}
+  unless($PerlSvc::ServerKeyfile){$PerlSvc::ServerKeyfile="$PerlSvc::NodeName.key";}
+  print "    gpnethost    = $PerlSvc::GPNETHost\n";
+  print "    gpnetport    = $PerlSvc::GPNETPort\n";
+  print "    starsserver  = $PerlSvc::Server\n";
+  print "    starsport    = $PerlSvc::ServerPort\n";
+  print "    starskeyfile = $PerlSvc::ServerKeyfile\n";
+  print "    -logdir Direcotory     Set directory of logfile. Default is \"./\".\n";
+  exit(0);
+}
+###=============================================================
+sub Startup{
+	Getopt::Long::GetOptions(
+	'port=i'          => \$PerlSvc::Port,
+	'lib=s'           => \$PerlSvc::LibDir,
+	'key=s'           => \$PerlSvc::KeyDir,
+	'nodename=s'      => \$PerlSvc::NodeName,
+	'starsserver=s'   => \$PerlSvc::Server,
+	'starsport=i'     => \$PerlSvc::ServerPort,
+	'starskeyfile=s'  => \$PerlSvc::ServerKeyfile,
+	'gpnethost=s'     => \$PerlSvc::GPNETHost,
+	'gpnetport=i'     => \$PerlSvc::GPNETPort,
+	'logdir=s'        => \$PerlSvc::LogDir,
+    'd'               => \$PerlSvc::Debug
+	);
+	GPNET_analizeoptions();
+
+	my $fh;
+	my $tlap=0;
+
+	my $new_sock;
+	my $bufhn;
+	my $ipadr;
+	my $fromnode;
+	my $tonode;
+	my $buf;
+	my $ready;
+	my $s;
+
+####### SIO init
+	$::Debug=$PerlSvc::Debug;
+	$::NPORT_HOST=$PerlSvc::GPNETHost;
+	$::NPORT_PORT=$PerlSvc::GPNETPort;
+	device_init();
+	unless(mygpreset()){exit;}
+	if($PerlSvc::LogDir eq ''){
+		$PerlSvc::Nolog='1';
+	}else{
+		$PerlSvc::Nolog='';
+		unless($PerlSvc::LogDir =~ /[\/\\]$/){$PerlSvc::LogDir .= '/';}
+		if(-d $PerlSvc::LogDir){
+		}else{
+			$PerlSvc::Nolog='1';
+			print "Invalid log directory.[$PerlSvc::LogDir]\n";
+		}
+	}
+
+##Initialize
+	srand(time() ^ ($$ + ($$ <<15)) );
+	GPNET_loadcommandpermission();
+#	GPNET_loadaliases();
+
+	my $listener = 
+	      IO::Socket::INET->new(
+	        LocalPort => $PerlSvc::Port, Proto => 'tcp', Listen => 5, Reuse => 1 );
+	    die "Can't create socket for listening: $!" unless $listener;
+
+	$PerlSvc::readable = IO::Select->new;     # Create a new IO::Select object
+	$PerlSvc::readable->add($listener);          # Add the listener to it
+	$PerlSvc::listener=$listener;
+
+#--main---
+	while(ContinueRun()) {
+		if($PerlSvc::tak){
+			$fh=stars->Mainloop('',1,1);
+			if($fh eq $PerlSvc::tak->gethandle){
+				$PerlSvc::tak=0;
+				$tlap=150;
+			}
+		}else{
+			$tlap--;
+			if($tlap<=0){
+				$tlap=150;
+				connect2stars();
+			}
+		}
+#		($ready) = IO::Select->select($PerlSvc::readable, undef, undef, 2);
+		($ready) = IO::Select->select($PerlSvc::readable, undef, undef, 0.1);
+		foreach $s (@$ready) {
+			if($s == $listener) {
+				$new_sock = $listener->accept;
+				if($new_sock){
+					select($new_sock);$|=1;select(STDOUT);
+					$PerlSvc::readable->add($new_sock);
+					$bufhn = GPNET_gethostname($new_sock);
+				    $ipadr = GPNET_gethostaddr($new_sock);
+#					unless(GPNET_checkhost($PerlSvc::LibDir.HOSTLIST, $bufhn)){
+					unless(GPNET_checkhost($PerlSvc::LibDir.HOSTLIST, $bufhn, $ipadr, 0)){
+						printh($new_sock, "Bad host. $bufhn\n");
+						$PerlSvc::readable->remove($new_sock);
+						$new_sock->close;
+					}
+					$PerlSvc::NodeBuf{$new_sock}='';
+# ADD FOR GPIB I/F
+					logwrite("GPNET[$new_sock] LOGIN;$ipadr");
+					$PerlSvc::NodeH{$new_sock}=$new_sock;
+				}
+			} else {  # It is an established connection
+				if( sysread($s,$buf,512) ){
+					$PerlSvc::NodeBuf{$s} .= $buf;
+					while($PerlSvc::NodeBuf{$s} =~ s/([^\r\n]*)\r*\n//){
+						$buf=$1;
+						if ($buf =~ /^(exit|quit)$/i) {
+							if($PerlSvc::Debug){
+								if(exists $PerlSvc::NodeH{$s}){
+									printd("$PerlSvc::NodeH{$s}.$PerlSvc::NodeHSFX{$s}>$PerlSvc::NodeName $buf\n");
+								}
+							}
+							delnode($s);
+							$PerlSvc::readable->remove($s);
+							$s->close;
+# ADD FOR GPIB I/F
+						} elsif(exists $PerlSvc::NodeH{$s}){
+							my($cmd,$readflg)=check_gpnet_command($buf);
+							unless($cmd eq ''){
+								my $rt=gpib_write("$buf");
+								if($PerlSvc::Debug){
+									print "SND:$buf->$rt,$readflg\n";
+								}
+								logwrite("GPNET[$s] SND:$buf->$rt;$readflg");
+								if($readflg ne ''){
+									$rt='';
+									while(1){
+										my $buf=device_read($PerlSvc::GPNetTimeout);
+										if($buf eq ''){
+											last;
+										}
+										$rt=$rt.$buf;
+										if($PerlSvc::Debug){
+											print "RCV:$rt\n";
+										}
+										logwrite("GPNET[$s] RCV:$rt");
+										if($rt=~/$readflg/){
+											printh($s,$rt."\n");
+											last;
+										}
+									}
+								}
+							}else{
+								print "Command Denied.\n";
+							}
+						}
+					}
+				} else { # The client disconnected.
+					if($PerlSvc::Debug){
+						if(exists $PerlSvc::NodeH{$s}){
+							printd("$PerlSvc::NodeH{$s}.$PerlSvc::NodeHSFX{$s} is disconnected.\n");
+						}
+					}
+					delnode($s);
+					$PerlSvc::readable->remove($s);
+					$s->close;
+				}
+			}
+		}
+	}
+	close(LOG);
+	return(0);
+}
+sub close_clients {
+	my $ready;
+	my @ss=$PerlSvc::readable->handles();
+	foreach my $s (@ss) {
+		if($PerlSvc::listener == $s){next;}
+		delnode($s);
+		$PerlSvc::readable->remove($s);
+		$s->close;
+	}
+	return('Ok:');
+}
+
+############################################################
+# Command handler from Stars server ------------------------
+############################################################
+# act Stars server -----------------------------------------
+sub myact{
+	my $msg=shift;
+	if($PerlSvc::Debug){printd("$msg\n");}
+	my($f,$t,$m)=$PerlSvc::tak->act("$msg");
+	return($f,$t,$m);
+}
+# Send Stars server ----------------------------------------
+sub mySend{
+	my $msg=shift;
+	if($PerlSvc::Debug){printd("$msg\n");}
+	$PerlSvc::tak->Send($msg);
+}
+# Message from Stars server ----------------------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($fromnode, $tonode, $mess) = @_;
+	my $rt;
+	my $fromA;
+
+	if($PerlSvc::Debug){printd("$fromnode>$tonode $mess\n");}
+
+	## Message to GPNET ##
+	if($tonode=~/^$PerlSvc::NodeName$/){
+		if($mess =~ /^$/){
+			mySend("$PerlSvc::NodeName>$fromnode \@");return;
+		}
+		$fromA = getaliasnode($fromnode);
+		### Event message
+		return GPNET_commands($PerlSvc::tak->gethandle(),$fromnode,$mess,$fromnode,$fromA,$tonode);
+
+#	}elsif($tonode=~/^$PerlSvc::NodeName\.(\S+)/){
+#		### Check if GPNET clients exists
+#		my($toH,$toD);
+#		($toH, $toD, $_)=getrealnode($tonode);
+#		unless($toH){
+#			unless($mess =~ /^[_@]/){
+#				mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: $tonode is down.");
+#			}
+#			return;
+#		}
+#		### Check command permission
+#		if($mess =~ /^[^@]/ and
+#			( (@PerlSvc::CmdDeny and isDenyCheckCmdDeny($fromnode, $tonode, $mess))
+#			or (@PerlSvc::CmdAllow and isDenyCheckCmdAllow($fromnode, $tonode, $mess)) ) ){
+#			if($mess =~ /^[^_]/){
+#				mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: Command denied.");return;
+#			}
+#			return;
+#		}
+#		$fromA = getaliasnode($fromnode);
+#		### Event & command & reply message
+#		$toD=~s/^$PerlSvc::NodeName\.//;
+#		printh($toH, "$fromA>$toD $mess\n");
+#		return;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: $tonode is down.");
+		return;
+	}
+	return;
+}
+#------ GPNET Commands --------------------------------
+sub GPNET_commands{
+	my ($hd, $frn, $cmd, $frnR, $frnA, $aliasme) = @_;
+	my $rt;
+	if($cmd =~ /^@_/){
+		return;
+	}elsif($cmd eq 'hello'){
+		printh($hd, "$aliasme>$frn \@hello Nice to meet you.\n");
+	}elsif($cmd eq 'getversion'){
+		printh($hd, "$aliasme>$frn \@getversion $PerlSvc::Version\n");
+	}elsif($cmd eq 'help'){
+		printh($hd, "$aliasme>$frn \@help hello getversion Reset Restart\n");
+	}elsif($cmd=~/^Reset/){$rt=mygpreset();
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd=~/^Restart$/){
+		$rt=close_clients();
+		$rt=mygpreset();
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd=~/^DisconnectClients/){
+		$rt=close_clients();
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd=~/^GetTimeout$/){$rt=$PerlSvc::GPNetTimeout;
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd=~/^SetTimeout\s+([0-9]+)$/){$rt=mygpsettimeout($1);
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd=~/^Clear$/){$rt=mygpclear('',0);
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd=~/^Clear\s+(\S+)$/){$rt=mygpclear($1,0);
+		printh($hd, "$aliasme>$frn \@$cmd $rt\n");
+	}elsif($cmd eq 'connectstars'){
+		connect2stars();
+		if($PerlSvc::tak){
+			printh($hd, "$aliasme>$frn \@connectstars Ok:\n");
+		}else{
+			printh($hd, "$aliasme>$frn \@connectstars Er: System is down.\n");
+		}
+	}elsif($cmd =~ /^\@/){return(1);
+	}else{
+		printh($hd, "$aliasme>$frn \@$cmd Er: Command is not found or parameter is not enough.\n");
+	}
+	return(1);
+}
+#------ Connect to stars --------------------------------
+sub connect2stars{
+	if($PerlSvc::tak){return($PerlSvc::tak);}
+	if($PerlSvc::tak=stars->new($PerlSvc::NodeName, $PerlSvc::Server,
+	                     $PerlSvc::ServerPort, $PerlSvc::ServerKeyfile)) {
+		if($PerlSvc::Debug){
+			printd("Connected to Stars Server as $PerlSvc::NodeName.\n");
+		}
+	    ### Reflect starbr's flgon to System.
+		if(defined $PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+			my $buf=$PerlSvc::NodeFlgOn{$PerlSvc::NodeName};
+			my($cmd,$delflg);
+			while($buf=~s/ (\S+) //){
+				($cmd,$delflg)=($1,1);
+				foreach (keys(%PerlSvc::NodeFlgOn)){
+					if(/^$PerlSvc::NodeName$/){next;
+					}elsif($PerlSvc::NodeFlgOn{$_}=~/ $cmd /){
+						$delflg=0;last;
+					}
+				}
+				if($delflg){
+					$PerlSvc::NodeFlgOn{$PerlSvc::NodeName}=~s/ $cmd //;
+					unless($PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+						delete $PerlSvc::NodeFlgOn{$PerlSvc::NodeName};
+					}
+				}else{
+					my($cmdS);
+					($_, $cmdS, $_)=getrealnode($cmd);
+					my($f,$t,$m)=myact("$PerlSvc::NodeName>System flgon $cmdS");
+					unless($m=~/Er: Node $cmdS is already in the list/ or $m!~/Er:/){
+						exit(0);
+					}
+				}
+			}
+		}
+		$PerlSvc::tak->addcallback(\&handler);
+		$PerlSvc::tak->{timeout} = 30;
+	}else{
+		if($PerlSvc::Debug){
+			printd("Failed to connect to Stars Server. [$PerlSvc::NodeName, "
+		 ."$PerlSvc::Server, $PerlSvc::ServerPort, $PerlSvc::ServerKeyfile]\n");
+		}
+	}
+	return($PerlSvc::tak);
+}
+#------- GPNET: Set Command permission -----------------
+sub GPNET_loadcommandpermission{
+	@PerlSvc::CmdDeny =();
+	@PerlSvc::CmdAllow =();
+
+	my $RD = gensym();
+	open($RD,$PerlSvc::LibDir.CMDDENY);
+	while(<$RD>){
+		if(/^#/){next;}
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		~s/\$PerlSvc::NodeName/$PerlSvc::NodeName/g;
+		push(@PerlSvc::CmdDeny, $_);
+	}
+	close($RD);
+
+	open($RD,$PerlSvc::LibDir.CMDALLOW);
+	while(<$RD>){
+		if(/^#/){next;}
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		~s/\$PerlSvc::NodeName/$PerlSvc::NodeName/g;
+		push(@PerlSvc::CmdAllow, $_);
+	}
+	close($RD);
+	return(1);
+}
+#------- GPNET: Return sysdatetime --------------------
+sub GPNET_gettime{
+	my $tm = shift(@_);
+	if($tm eq ''){$tm=time();}
+	my @tt = localtime($tm);
+	return(sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+	$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+#------- Convert alias nodename to real -----------------
+sub getrealnode{
+	my $nodeA=shift; # coming as alias name.
+	my $dest;
+	my $nodeR;
+	my $handle='';
+	my $key;
+	my $buf;
+	my @cnt;
+	my $destA;
+	my $destR;
+
+	$nodeR=$nodeA;
+	foreach $key (reverse(sort(keys(%PerlSvc::AliasReal)))){
+		if($nodeR=~s/^$key$/$PerlSvc::AliasReal{$key}/){
+			last;
+		}elsif($nodeR=~s/^$key(\..+)/$PerlSvc::AliasReal{$key}$1/){
+			last;
+		}
+	}
+
+	$destR=$dest=$nodeR;
+	if($nodeR=~/\./){
+		foreach $key (reverse(sort(keys(%PerlSvc::NodeSFX)))){
+			$buf=$nodeR;
+			@cnt=keys(%{$PerlSvc::NodeSFX{$key}});
+			if(scalar(@cnt) eq 1){
+				if($buf=~/^$key$/){
+					$handle=$PerlSvc::NodeSFX{$key}{$cnt[0]};
+					$destR=$dest=$buf;
+					last;
+				}elsif($buf=~s/^$key(\..+)/$1/){
+					$handle=$PerlSvc::NodeSFX{$key}{$cnt[0]};
+					$buf=~s/\.$cnt[0]$//;
+					$destR=$dest="$key$buf";
+					last;
+				}
+			}elsif($buf=~s/^$key(\..+)/$1/){
+				if($buf=~s/\.([^.\s]+)$//){
+					if(defined $PerlSvc::NodeSFX{$key}{$1}){
+						$handle=$PerlSvc::NodeSFX{$key}{$1};
+						$dest="$key$buf";
+						$destR="$key$buf.$1";
+						last;
+					}
+				}
+			}
+		}
+	}
+	$destA=getaliasnode($destR);
+	if(wantarray){
+		return($handle, $dest, $nodeR, $destA, $destR);
+	}else {
+		return("dest=$dest,real=$nodeR");
+	}
+}
+#------- Convert real nodename to alias -----------------
+sub getaliasnode{
+	my $nodeR=shift;  # coming as real name.
+	my $nodeA;
+	my $handle='';
+	my $key;
+	my $buf;
+
+	$nodeA=$nodeR;
+	foreach $key (reverse(sort(keys(%PerlSvc::RealAlias)))){
+		if($nodeA=~s/^$key$/$PerlSvc::RealAlias{$key}/){
+			last;
+		}elsif($nodeA=~s/^$key(\..+)/$PerlSvc::RealAlias{$key}$1/){
+			last;
+		}
+	}
+	return($nodeA);
+}
+#------- Check command deny -----------------------------
+sub mygpisDenyCheckCmdDeny{
+	my ($buf) = @_;
+	my $chk;
+#	print "DENY $buf\n";
+	if($buf =~ /^\s*$/){return(0);}
+	for $chk (@PerlSvc::CmdDeny){
+#		print "CMP:$buf $chk\n";
+		if($buf =~ /$chk/){return(1);}
+	}
+	return(0);
+}
+#------- Check command allow ----------------------------
+sub mygpisDenyCheckCmdAllow{
+	my ($buf) = @_;
+	my $chk;
+#	print "ALLOW $buf\n";
+	if($buf =~ /^\s*$/){return(0);}
+	for $chk (@PerlSvc::CmdAllow){
+#		print "CMP:$buf $chk\n";
+		if($buf =~ /$chk/){return(0);}
+	}
+	return(1);
+}
+#------- Check and return suffix ------------------------
+sub checknode{
+	my($node,$handle) = @_;
+	if($node eq 'Debugger'){
+		if(defined $PerlSvc::NodeSFX{"$PerlSvc::NodeName.$node"}{1}){return('');
+		}else{return(1);}
+	}
+
+	my $sfx=tv_interval($PerlSvc::StartTime);
+	$sfx=~s/\.//;
+	return($sfx);
+}
+#------- Delete node ------------------------------------
+sub delnode{
+	my $handle=shift(@_);
+	my $node = $PerlSvc::NodeH{$handle};
+	my $sfx  = $PerlSvc::NodeHSFX{$handle};
+	my $buffh;
+	my $to;
+	my $lp;
+
+# reset my self
+	logwrite("GPNET[$handle] LOGOUT");
+	delete $PerlSvc::NodeH{$handle};
+	delete $PerlSvc::NodeBuf{$handle};
+
+	return(1);
+}
+#------ PrinttoDebugger ---------------------------------
+sub printd{
+	my $buf=shift;
+	if(defined $PerlSvc::NodeSFX{"$PerlSvc::NodeName.Debugger"}){
+		my $handle=$PerlSvc::NodeSFX{"$PerlSvc::NodeName.Debugger"}{1};
+		print $handle $buf;
+	}
+	return(1);
+}
+#------ Print -------------------------------------------
+sub printh{
+	($PerlSvc::Xfh,$PerlSvc::Xbuf) = @_;
+	print $PerlSvc::Xfh "$PerlSvc::Xbuf";
+	printd("$PerlSvc::Xbuf");
+	return(1);
+}
+#------ Check host for node -----------------------------
+sub check_term_and_host{
+	my $nd=shift; #nodename
+	my $hd=shift; #handle
+
+	if($::Debug){
+		print "check_term_and_host I am node $nd\n";
+	}
+	unless(-e $PerlSvc::KeyDir.$nd.'.allow'){
+		if($::Debug){
+			print "check_term_and_host not_found_ok $PerlSvc::KeyDir.$nd.allow\n";
+		}
+		return(1);
+	}
+#	if(GPNET_checkhost($PerlSvc::KeyDir.$nd.'.allow', GPNET_gethostname($hd))){
+	if(GPNET_checkhost($PerlSvc::KeyDir.$nd.'.allow', GPNET_gethostname($hd), GPNET_gethostaddr($hd),1)){
+		return(1);
+	}
+	return(0);
+}
+#------ Check Node Key ----------------------------------
+sub check_nodekey{
+	my $nname=shift;
+	my $nkeynum=shift;
+	my $nkeyval=shift;
+
+	my $kcount=0;
+	my $lp;
+
+	my $hd = gensym();
+	open($hd, $PerlSvc::KeyDir."$nname.key") or return('');
+	while(<$hd>){$kcount++;}
+	unless($kcount){close($hd); return('');}
+	$kcount = $nkeynum % $kcount;
+	seek($hd, 0, 0);
+	for($lp=0; $lp < $kcount; $lp++){$_=<$hd>;}
+	$_=<$hd>;
+	chomp;s/\r//;
+	close($hd);
+	if($_ eq $nkeyval){return(1);}
+	return('');
+}
+#------ Make Idkey --------------------------------------
+sub get_nodeidkey{
+ return( int(rand RNDMAX) );
+}
+#------ Get Hostname ------------------------------------
+sub GPNET_gethostname{
+	my $s = shift(@_);
+	my $host;
+	$host=gethostbyaddr($s->peeraddr(),AF_INET);
+	unless($host){
+		$host=$s->peerhost();
+	}
+	return($host);
+}
+#------ Get IPADDR ------------------------------------
+sub GPNET_gethostaddr{
+	my $s = shift(@_);
+	my $ip='';
+	$ip=inet_ntoa($s->peeraddr());
+	return($ip);
+}
+#------ Check Host --------------------------------------
+sub GPNET_checkhost{
+	my $l     = shift(@_);
+	my $h     = shift(@_);
+	my $ipadr = shift(@_);
+	my $unchecked=shift(@_);
+	my $RD;
+	my $con;
+	my @check=($h);
+	push(@check,$ipadr) if($h ne $ipadr);
+	
+	if($::Debug){
+		print "system_checkhost I am $h and $ipadr\n";
+	}
+	$RD = gensym();
+	open($RD,"$l");
+	while(<$RD>){
+		if(/^#/){next;}
+		chop;s/\r//;
+		if(($_ eq '') || (/^\s+$/)){next;}
+		$unchecked=0;
+		s/\*/\.\+/g;
+		if($::Debug){
+			print "system_checkhost Checking with $_\n";
+		}
+		foreach $con (@check){
+#			if($con eq $_){
+			if($con=~/^$_$/){
+				if($::Debug){
+					print "system_checkhost Matched with $_\n";
+				}
+				close($RD);
+				return(1);
+			}
+		}
+	}
+	close($RD);
+	return($unchecked);
+}
+
+
+
+sub mycheckdevarg{
+	my @in=@_;
+	my @out=();
+	my $i;
+	unless(@in){$::Error="No device number.";return('')}
+	for $i (@in){
+		$i = int($i);
+		unless($i>0){$::Error="Bad device number $i.";return('');}
+		push(@out,$i);
+	}
+	return(@out);
+}
+
+sub mychecktimeout{
+	my $cmd='?TIME';
+	device_write($cmd);
+	my $rt=device_read($PerlSvc::GPNetTimeout);if($rt eq 1){$::Error="Timeout";return('');}
+	return('Ok:');
+}
+#----------------------------
+# CLEAR: DC / DC d1 d2...dn
+sub mygpclear{
+	my $arg=shift;
+	my $tmoutflg = shift;
+	my $cmd='DC';
+	my $rt='';
+	if($arg=~/^\s*$/){
+		$rt=gpib_write($cmd,$tmoutflg);
+	}else{
+		my @dev=split(/\s*,\s*/, $arg);
+		@dev=mycheckdevarg(@dev); if($#dev<0){return('')}
+		$rt=gpib_write("$cmd @dev",$tmoutflg);
+	}
+	return($rt);
+}
+#----------------------------
+# TIME: TIME n
+sub mygpsettimeout{
+	my $timeout=shift;
+	my $rt;
+	$timeout=$timeout+0;
+	if($timeout<0 and $timeout>255){
+		$::Error="Bad command or parameter.";return('');
+	}
+	$rt=gpib_write("TIME $timeout");
+	unless($rt eq ''){
+		$PerlSvc::GPNetTimeout=$timeout;
+	}
+	return($rt);
+}
+#----------------------------
+# RESET: ALL
+sub mygpreset{
+	my $rt;
+	device_write(pack("C", 1),1);sleep(2);$rt=device_read();#READ ROM VERSION
+	if($rt eq ''){$::Error="Initialize error of gpnet";}
+	device_write("DEL 0 0 0");#SET DELIMITER GP-IB,comma,RS232C 0:CR-LF
+	#XON/OFF:Default
+	device_write("IFC");sleep(1);#DECLARE AS CONTROLLER
+	$PerlSvc::GPNetTimeout = GPNETTIMEOUT;
+	mygpsettimeout($PerlSvc::GPNetTimeout); #DECLARE TIMEOUT
+	mygpclear('',1);    #DEVICE CLEAR
+	return('Ok');
+}
+
+sub gpib_write{
+	my $mess = shift;
+	my $tmoutflg = shift;
+	if($mess=~/^\s*$/){$::Error="No data.";return('');}
+	device_write("$mess");
+	if($tmoutflg){unless(mychecktimeout()){return('');};}
+	return('Ok:');
+}
+sub check_gpnet_command{
+	my $cmd=shift;
+	my $inputflg='';
+
+	if((@PerlSvc::CmdDeny and mygpisDenyCheckCmdDeny($cmd))
+			or (@PerlSvc::CmdAllow and mygpisDenyCheckCmdAllow($cmd)) ){
+			return('','');
+	}
+
+	#CHECK INPUT REQUIRED COMMAND
+	if($cmd=~/(^|\s+)LSN\s+FROM\s+/i){
+		$inputflg='.+';
+	}elsif($cmd=~/(^|\s+)(LML)\s+FROM\s+/i){
+		$inputflg=',1$';
+	}elsif($cmd=~/(^|\s+)LB[\*]?\s+FROM\s+/i){
+		$inputflg=',1$';
+	}elsif($cmd=~/(^|\s+)LB[@]\s+FROM\s+/i){
+	}elsif($cmd=~/(^|\s+)\?(ST|RM|DC|DT|QS|PD)(\s+|$)/i){
+		$inputflg='.+';
+	}elsif($cmd=~/(^|\s+)\?(TIME)(\s+|$)/i){
+		$inputflg='.+';
+	}elsif($cmd=~/(^|\s+)(SYC)(\s+|$)/i){
+		$inputflg='.+';
+	}elsif($cmd=~/(^|\s+)(AP|AP\s+IFs\+QS)(\s+|$)/i){
+		$inputflg='\S,\S';
+	}elsif($cmd=~/(^|\s+)(POL)\s+/i){
+		$inputflg='\S,\S';
+	}elsif($cmd=~/(^|\s+)\?()(\s+|$)/i){
+		$inputflg='\S,\S';
+	}else{
+	}
+	return($cmd,$inputflg);
+}
+
+#GPNET COMMAND
+#LSN FROM d & INPUT,D$
+#LML FROM d & INPUT,E$(=1)
+#LB[*]? FROM d & INPUT,E$(=1)
+#LB@ FROM d & INPUT
+#?ST & INPUT ST$
+#?RM & INPUT RM$
+#?DC & INPUT DC$
+#?DT & INPUT DT$
+#?QS & INPUT Q$
+#?QS & INPUT Q$
+#SYC & INPUT $BUF
+#POL d1 d2 .. dn & INPUT dv,st
+#AP d1 d2 .. dn & INPUT dv,st
+#AP IF QS & INPUT dv,st
+#CHR(1)
+#IFC
+#DEL n1 n2 n3
+#XC c1 c2
+#TIME n
+#TLK TO d1 d2 ... dn
+#TLK TO d1 d2 ... dn#<Data>
+#TML TO d1 d2 ... dn\n$A\n$B\n$C$CHR(8)
+#TB TO n#.....
+#TB TO n#.....*
+#WB hex hex
+#WB hex hex#ddd...
+#RB hex hex & INPUT
+#PDV d1 d2 .. dn
+#QS nn
+#DC
+#DC d1 d2 .. dn
+#DT d1 d2 .. dn
+#REM
+#LOC
+#FMT n
+#RC n
+
+#Same as logger
+#-- Refresh log file ---------------------------------------------
+sub open_logfile{
+	my $d=shift;
+	close(LOG);
+	my $filename = $PerlSvc::LogDir.$PerlSvc::NodeName.$d.LOGSUFFIX;
+	open(LOG, ">>$filename");
+	select(LOG);$|=1;select(STDOUT);
+	print LOG ksg_localtime()." GPNET logger started.\n";
+}
+
+#Same as logger
+#-- Get "yyyy-mm-dd hh:mm:ss" style date -------------------------
+sub ksg_localtime{
+my ($sec, $mcsec) = gettimeofday;
+my @tt = localtime($sec);
+return(sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d",
+$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0],int($mcsec/1000)));
+}
+
+sub logwrite{
+	my $mess = shift;
+	my $ctime;
+	my $cdate;
+
+	$cdate = $ctime = ksg_localtime();
+	$cdate =~ s/ \d\d:\d\d:\d\d.\d\d\d//;
+
+	unless($PerlSvc::Nolog){
+		if($cdate ne $PerlSvc::odate){
+			open_logfile($cdate);
+			$PerlSvc::odate=$cdate;
+		}
+		print LOG "$ctime $mess\n";
+	}
+	if($::Echo){print "$ctime $mess\n";}
+}

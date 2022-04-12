@@ -1,0 +1,41 @@
+#helpcommand
+#? Show help
+#? Usage: help [command]
+
+
+my $cmd = shift(@_);
+
+my @cmds;
+
+opendir(BUF,SCRIPTDIR);
+while($_=readdir(BUF)){
+	if(s/\.scr$//){
+		push(@cmds, "$_");
+	}
+}
+close(BUF);
+
+unless($cmd){
+	foreach (sort(@cmds)){
+		print "\t$_";
+	}
+	print "\n";
+	return('DEFAULT');
+}
+
+unless( -e SCRIPTDIR."$cmd.scr"){
+	$::Error="$cmd not found";
+	return('');
+}
+
+print "$cmd: ";
+open(BUF, SCRIPTDIR."$cmd.scr");
+while(<BUF>){
+	chomp;s/\r//;
+	if(s/^#\? //){
+		print "$_\n";
+	}
+}
+close(BUF);
+return('DEFAULT');
+

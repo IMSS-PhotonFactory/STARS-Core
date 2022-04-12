@@ -1,0 +1,226 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use Tk;
+
+#################################################################
+# configpm16c02
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'pm16cconfig';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::mt         = 0;                  #Default motor number
+$::Cntl       = 'pm16c02';          #Default controller.
+#################################################################
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'node=s' => \$::NodeName,
+'c=s'    => \$::Cntl,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+@::title = ('CW Limit','CCW Limit','High Speed','Middle Speed','Low Speed','Acc Rate','Limits Value','Jog Pulse','Cancel Backlash','Motor Setup','Stop Mode');
+@::cmd = qw(DigitalCwLs DigitalCcwLs HighSpeed MiddleSpeed LowSpeed AccRate Limits JogPulse CancelBacklash MotorSetup StopMode);
+$::NumberOfCmds=9; #number of items of pm16c04 and pm16c02
+
+if($_ = shift(@ARGV)){$::mt     = $_;}
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+## Check PM16C-04X or not
+	my $ver = $::tak->act("$::Cntl GetRomVersion");
+	(undef,undef,$ver) = split(/\s+/, $ver, 3);
+	if($ver=~/PM16C-04X/){
+		#set number of items of pm16c04-X
+		$::NumberOfCmds=11;
+	}
+	
+my $root = MainWindow->new();
+	# widget creation 
+	$root->title("Setting of $::Cntl");
+
+	my($frame_0) = $root->Frame (
+	);
+
+	my($frame_1) = $root->Frame (
+	);
+	
+	my $option_1 = $root->Optionmenu(
+		-options => [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
+		-textvariable => \$::mt,
+		-command => sub{pread();}
+	);
+
+	my $label_0 = $root->Label (
+		-text => 'Motor No./Name',
+	);
+
+	$::label_01 = $root->Label (
+		-text => 'Name',
+	);
+my $i;
+my @label_i=();
+	for($i=0;$i<$::NumberOfCmds;$i++){
+		$label_i[$i] = $root->Label (
+			-text => $::title[$i],
+		);
+		$::entry[$i] = $root->Entry (
+			-justify => 'right',
+		);
+	}
+
+	my($button_1) = $root->Button (
+		-text => 'Apply',
+	);
+	my($button_2) = $root->Button (
+		-text => 'Reset',
+	);
+
+	# widget commands
+
+	$button_1->configure(
+		-command => \&ApplyButton
+	);
+	$button_2->configure(
+		-command => \&ResetButton
+	);
+
+	# Geometry management
+
+	$label_0->grid(
+		-in => $root,
+		-column => '1',
+		-row => '1'
+	);
+	$frame_0->grid(
+		-in => $root,
+		-column => '2',
+		-row => '1'
+	);
+
+	$option_1->grid(
+		-in => $frame_0,
+		-column => '1',
+		-row => '1'
+	);
+
+	$::label_01->grid(
+		-in => $frame_0,
+		-column => '2',
+		-row => '1'
+	);
+
+	for($i=0;$i<$::NumberOfCmds;$i++){
+		$label_i[$i]->grid(
+			-in => $root,
+			-column => '1',
+			-row => $i+2
+		);
+		$::entry[$i]->grid(
+			-in => $root,
+			-column => '2',
+			-row => $i+2
+		);
+	}
+
+	$frame_1->grid(
+		-in => $root,
+		-column => '2',
+		-row => $::NumberOfCmds + 2
+	);
+	$button_1->grid(
+		-in => $frame_1,
+		-column => '1',
+		-row => '1'
+	);
+	$button_2->grid(
+		-in => $frame_1,
+		-column => '2',
+		-row => '1'
+	);
+
+	# Resize behavior management
+
+	# container $root (rows)
+	$root->gridRowconfigure(1, -weight  => 0, -minsize  => 18);
+	$root->gridRowconfigure(2, -weight  => 0, -minsize  => 15);
+	$root->gridRowconfigure(3, -weight  => 0, -minsize  => 5);
+	$root->gridRowconfigure(4, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(5, -weight  => 0, -minsize  => 3);
+	$root->gridRowconfigure(6, -weight  => 0, -minsize  => 6);
+	$root->gridRowconfigure(7, -weight  => 0, -minsize  => 7);
+	$root->gridRowconfigure(8, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(9, -weight  => 0, -minsize  => 8);
+	$root->gridRowconfigure(10, -weight  => 0, -minsize  => 8);
+	if($::NumberOfCmds >= 11){
+		$root->gridRowconfigure(11, -weight  => 0, -minsize  => 8);
+		$root->gridRowconfigure(12, -weight  => 0, -minsize  => 8);
+	}
+	$root->gridRowconfigure($::NumberOfCmds+2, -weight  => 0, -minsize  => 42);
+
+	# container $root (columns)
+	$root->gridColumnconfigure(1, -weight => 0, -minsize => 2);
+	$root->gridColumnconfigure(2, -weight => 0, -minsize => 2);
+
+	# container $frame_1 (rows)
+	$frame_1->gridRowconfigure(1, -weight  => 0, -minsize  => 30);
+
+	# container $frame_1 (columns)
+	$frame_1->gridColumnconfigure(1, -weight => 0, -minsize => 79);
+	$frame_1->gridColumnconfigure(2, -weight => 0, -minsize => 72);
+
+	# additional interface code
+	# end additional interface code
+
+pread();
+
+MainLoop();
+
+
+
+exit(1);
+
+sub ApplyButton{
+pwrite();
+pread();
+}
+
+sub ResetButton{
+pread();
+}
+
+sub pread{
+	my $i;
+	my $buf;
+	$buf = $::tak->act("$::Cntl GetMotorName $::mt");
+	(undef,undef,undef,$buf) = split(/\s+/, $buf);
+	$::label_01->configure('-text' => $buf);
+	for($i=0;$i<$::NumberOfCmds;$i++){
+		$buf = $::tak->act("$::Cntl Get$::cmd[$i] $::mt");
+		(undef,undef,undef,$buf) = split(/\s+/, $buf);
+		$::entry[$i]->delete(0,"end");
+		$::entry[$i]->insert(0, $buf);
+	}
+}
+
+sub pwrite{
+	my $i;
+	my $buf;
+	for($i=0;$i<$::NumberOfCmds;$i++){
+		$buf= $::entry[$i]->get();
+		$buf= $::tak->act("$::Cntl Set$::cmd[$i] $::mt $buf");
+	}
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: configpm16c02 [-h] [-node MyNodeName] [-c Controller] MotorNumber [StarsServer]\n";
+  exit(0);
+}

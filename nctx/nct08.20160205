@@ -1,0 +1,1662 @@
+#! /usr/bin/perl
+#################################################################
+# nct08(xx) STARS client
+# 2007-04-20 Yasuko Nagatani
+# 2016-01-13 Support CT08-01E.
+# 2016-02-05 Support NCT08-01A.
+#----------------------------------------------------------------
+# CVS $Date: 2016/02/05 00:00:00 $ $Revision: 3.1 $
+#################################################################
+use strict;
+use Getopt::Long;
+use stars;
+use Time::HiRes qw(gettimeofday tv_interval);
+use nportserv2; #Future, may change back to nportserv
+
+$|=1;
+
+use constant NCT08_PGM_VERSION    =>   3.1;    # pgm version
+
+use constant WAIT_BUF_EMPTY         =>    20;  # msec wait until buffer empty
+use constant WAIT_MEMWRITE_DEFAULT  =>    40;  # msec wait after device write
+use constant WAIT_MEMWRITE_ACT      =>   100;  # msec wait after device write
+use constant WAIT_MEMWRITE_GETVALUE =>    20;  # msec wait after device write
+use constant WAIT_RESET             => 60000;  # msec wait after reset
+use constant INTERVAL_WATCH         =>   100;  # msec stars_interval 
+
+#################################################################
+$::NodeName     = 'nct08';   # Default Node Name
+$::Server       = 'localhost'; # Default stars server.
+#################################################################
+## Values for handling options,
+## which could be set by using command line options, or config.pl
+$::Debug        = '';     # '1' : print debug.
+$::StopOverflow = '';     # '1' : stop when overflow detected.
+$::Flushdata    = '';     # milliseconds : flushdata interval while busy.
+$::OverflowValue = '';    # negative number : countervalue to indivate overflow.
+$::ChangedValue  = '';    # Enable send _ChangedValue.
+$::ReadValueFormat = '';  # D:Decimal X:Hexadecimal other:Auto
+#################################################################
+## Values at config.pl
+##$::NPORT_HOST='';       # NCT08-0x IP Address
+##$::NPORT_PORT='';       # NCT08-0x IP Port
+#################################################################
+
+## Globals for program control.
+$::Registered = 0;
+$::Buf_Interval     = '';
+$::NCT08CounterResetFlg='';
+@::NCT08ControllerSeqno=();
+%::NCT08ControllerNumber=();
+%::NCT08ControllerName=();
+%::NCT08CounterSeqName=();
+%::NCT08CounterNumber=();
+%::NCT08CounterName=();
+%::NCT08Dev=();
+%::NCT08Devtype=();
+%::NCT08Devtypeno=();
+%::NCT08DevVersion=();
+%::NCT08ReadValueFormatType=();
+%::NCT08HardwareVerionFlg=();
+%::NCT08Devhandler=();
+
+%::NCT08WAITFLG     = ();
+$::NCT08WAITSTARTTIME = 0;
+
+# ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'              => \$::Debug,
+'h'              => \&usage,
+#'stopoverflow=i' => \$::StopOverflow,
+#'overflowvalue=i'=> \$::OverflowValue,
+'flushdata=i'    => \$::Flushdata
+) or die 'Bad switch.\n';
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+require 'config.pl';
+unless($::Registered){
+	if(defined($::NPORT_HOST)){
+		if(defined($::NPORT_PORT)){
+			NCT08Register($::NPORT_HOST,$::NPORT_PORT);
+		}else{
+			NCT08Register($::NPORT_HOST);
+		}
+	}else{
+		NCT08Register('','');
+	}
+}
+
+if($::Debug){
+	print "### Started with debug mode.###\n";
+	print "### Option values here.###\n";
+#	if($::StopOverflow){
+#		print "Stop counters when overflow detected.\n";
+#	}else{
+#		print "Countinue counting when overflow detected.\n";
+#	}
+	if($::Flushdata){
+		print "Send _ChangedValue Event in $::Flushdata(ms) while busy.\n";
+	}else{
+		print "Stop sending _ChangedValue Event while busy.\n";
+	}
+#	if($::OverflowValue){
+#		print "Set $::OverflowValue to counter value when overflow detected.\n";
+#	}else{
+#		print "Counter value unchanged when overflow detected.\n";
+#	}
+}
+
+set_help_list();
+
+## Open Stars server. $::tak is a Stars object.
+if($::Debug){print "### Connecting to $::Server as $::NodeName.###\n";}
+$::tak = stars->new($::NodeName, $::Server)
+	or die 'Could not connect Stars server';
+
+## Init.
+NCT08Init();
+
+$::tak->addcallback(\&handler);
+stars->Mainloop(\&NCT08interval, INTERVAL_WATCH);
+exit;
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for '-h' option.
+  print "Usage: $::NodeName [nodename] [-h] [-d] [-stopoverflow 0|1] [-flushdata[ Number]] [-overflow[ Number]]\n";
+  print "-h                Show usage.\n";
+  print "-d                Show debug messages.\n";
+  print "\n";
+  print "-flushdata number Send _ChangedValue Event in number(ms) while busy.\n";
+  print "                   number : unit millsecond, specify multiple of ".INTERVAL_WATCH.".\n";
+#  print "\n";
+#  print "-overflow number  Set number to countervalue when overflow detected.\n";
+#  print "                   number : negative recomended.\n";
+#  print "\n";
+#  print "-stopoverflow 0   Continue counting when overflow detected.\n";
+#  print "  or\n";
+#  print "-stopoverflow 1   Stop counter when overflow detected.\n";
+  exit(0);
+}
+sub NCT08_getreadvalueformat{
+	my ($nodeno) = (shift);
+	if(uc($::NCT08ReadValueFormatType{$nodeno}) eq 'X'){
+		return(1);
+	}
+	return(0);
+}
+sub NCT08_getdevtype{
+	my ($nodeno) = (shift);
+	if(defined($::NCT08Devtypeno{$::NCT08Devtype{$nodeno}})){
+		return($::NCT08Devtypeno{$::NCT08Devtype{$nodeno}});
+	}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-01'){
+		return(1);
+	}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-02'){
+		return(2);
+	}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-01A'){
+		return(2);
+	}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-01B'){
+		return(3);
+	}elsif($::NCT08Devtype{$nodeno}=~/^CT\d+\S+$/){
+		return(4);
+	}
+	return(0);
+}
+sub NCT08_getdevdisptype{
+	my ($nodeno) = (shift);
+	return($::NCT08Devtype{$nodeno});
+}
+sub NCT08_getnow{
+	my ($sec, $mcsec) = gettimeofday;
+#	my @tt = localtime($sec);
+#return(sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d",
+#$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0],int($mcsec/1000)));
+
+	my ($s,$mn,$h,$d,$m,$y,$wday,$yday,$isdst) = localtime($sec);
+	my $rt=sprintf("%04d/%02d/%02d %02d:%02d:%02d.%03d",$y+1900,$m+1,$d,$h,$mn,$s,int($mcsec/1000));
+	return("\[$rt\] ");
+}
+#############################################################
+## handler called by Stars Server
+#############################################################
+sub name2num{
+	my $nodename=shift;
+	if(defined($::NCT08ControllerNumber{$nodename})){
+		return($::NCT08ControllerNumber{$nodename},-1,-1);
+	}elsif($::NCT08CounterNumber{$nodename}){
+		my($nodeno,$cno,$cseqno)=split(':',$::NCT08CounterNumber{$nodename},3);
+		return($nodeno,$cno,$cseqno);
+	}else{
+		$::Error="Bad node name.";return(-1,-1,-1);
+	}
+}
+#---------------------------------------------------------------
+sub handler{
+	my ($from, $to, $mess) = @_;
+
+	if($::Debug){print NCT08_getnow()."STARS RCV: $from>$to $mess\n";}
+	if($mess=~/^[\_\@\>]/){return;}
+
+	my($destinationflg,$commandflg)=(0,0);
+	my $rt='';
+	$::Error='';
+
+	##Top Level Commands
+	if($to=~/^$::NodeName$/){
+		($destinationflg,$commandflg)=(1,1);
+		if($mess=~/^hello$/)			  {$rt='nice to meet you.';
+		}elsif($mess=~/^help$/)			  {$rt=get_help_list($to);
+		}elsif($mess=~/^help\s(\S+)/)	  {$rt=get_help_list($to,$1);
+		}elsif($mess=~/^GetAllNodeNameList$/){
+			my @array=keys(%::NCT08CounterNumber);
+			push(@array,keys(%::NCT08ControllerNumber));
+			foreach (keys(%::NCT08CounterSeqName)){
+				unless(defined($::NCT08ControllerNumber{$_})){
+					push(@array,"$_");
+				}
+			}
+			unless(defined($::NCT08ControllerNumber{$::NodeName})){
+				push(@array,"$::NodeName");
+			}
+			$rt=join(',',sort(@array));
+		}elsif($mess=~/^GetAllControllerNodeNameList$/){
+			$rt=join(',',sort(keys(%::NCT08ControllerNumber)));
+		}elsif($mess=~/^GetAllCounterTopNodeNameList$/){
+			$rt=join(',',sort(keys(%::NCT08CounterSeqName)));
+		}elsif($mess=~/^GetAllCounterNodeNameList$/){
+			$rt=join(',',sort(keys(%::NCT08CounterNumber)));
+		}elsif($mess=~/^flushdata(tome)?$/){
+			my $dest;if($1 eq 'tome'){$dest=$from;}else{$dest='';}
+			for(my $seqno=0;$seqno<=$#::NCT08ControllerSeqNo;$seqno++){
+				my $nodeno=$::NCT08ControllerSeqNo[$seqno];
+				$rt=NCT08flushdata($nodeno,$dest);if($rt eq ''){last;}
+			}
+		}else{$commandflg=0;}
+	}
+	
+	##CounterTag Level Commands
+	if(($commandflg eq 0) and defined($::NCT08CounterSeqName{$to})){
+		($destinationflg,$commandflg)=(1,1);
+		if($mess=~/^hello$/)			  {$rt='nice to meet you.';
+		}elsif($mess=~/^help$/)			  {$rt=get_help_list($to);
+		}elsif($mess=~/^help\s(\S+)/)	  {$rt=get_help_list($to,$1);
+		}elsif($mess=~/^GetCounterList$/) {
+			$rt=join(',',@{$::NCT08CounterSeqName{$to}});
+			$rt=~s/([\,]?)$to\./$1/g;
+		}elsif($mess=~/^GetCounterName\s(\d+)$/){
+			my $sno=$1;
+			unless($#{$::NCT08CounterSeqName{$to}}<$sno){
+				$rt=$::NCT08CounterSeqName{$to}[$sno];
+				$rt=~s/([\,]?)$to\./$1/;
+			}else{
+				$::Error='Bad number.';
+			}
+		}elsif($mess=~/^GetCounterNumber\s(\S+)$/){
+			my $name="$to\.$1";
+			my($nodeno,$cno,$cseqno)=name2num($name);
+			if($cseqno>=0){$rt=$cseqno;}else{$::Error='Bad name.';}
+		}elsif($mess=~/^GetValue$/){
+			my($prevnodeno)=('');
+			for(my $sno=0;$sno<=$#{$::NCT08CounterSeqName{$to}};$sno++){
+				my $name=$::NCT08CounterSeqName{$to}[$sno];
+				my($nodeno,$cno,$cseqno)=name2num($name);
+				if($prevnodeno eq $nodeno){next;}else{$prevnodeno=$nodeno;}
+				$rt="$rt,".NCT08GetCurrent($nodeno,'',0);
+			}$rt=~s/^\,//;
+		}elsif($mess=~/^GetValue\s(\d+)$/){
+			my $sno=$1;
+			unless($#{$::NCT08CounterSeqName{$to}}<$sno){
+				my $name=$::NCT08CounterSeqName{$to}[$sno];
+				my($nodeno,$cno,$cseqno)=name2num($name);
+				$rt=NCT08GetCurrent($nodeno,$cno,0);
+			}else{$::Error='Bad number.';}
+		}elsif($mess=~/^IsOverflow$/){
+			my($prevnodeno)=('');
+			for(my $sno=0;$sno<=$#{$::NCT08CounterSeqName{$to}};$sno++){
+				my $name=$::NCT08CounterSeqName{$to}[$sno];
+				my($nodeno,$cno,$cseqno)=name2num($name);
+				if($prevnodeno eq $nodeno){next;}else{$prevnodeno=$nodeno;}
+				$rt="$rt,".NCT08IsOverflow($nodeno,'',0);
+			}$rt=~s/^\,//;
+		}elsif($mess=~/^IsOverflow\s(\d+)$/){
+			my $sno=$1;
+			unless($#{$::NCT08CounterSeqName{$to}}<$sno){
+				my $name=$::NCT08CounterSeqName{$to}[$sno];
+				my($nodeno,$cno,$cseqno)=name2num($name);
+				$rt=NCT08IsOverflow($nodeno,$cno,0);
+			}else{$::Error='Bad number.';}
+		}elsif($mess=~/^CounterReset$/){
+			my($prevnodeno)=('');
+			for(my $sno=0;$sno<=$#{$::NCT08CounterSeqName{$to}};$sno++){
+				my $name=$::NCT08CounterSeqName{$to}[$sno];
+				my($nodeno,$cno,$cseqno)=name2num($name);
+				if($prevnodeno eq $nodeno){next;}else{$prevnodeno=$nodeno;}
+				$rt=NCT08CounterReset($nodeno,'CLAL');
+			}$rt=~s/^\,//;
+		}elsif($mess=~/^CounterReset\s(\d+)$/){
+			my $sno=$1;
+			unless($#{$::NCT08CounterSeqName{$to}}<$sno){
+				my $name=$::NCT08CounterSeqName{$to}[$sno];
+				my($nodeno,$cno,$cseqno)=name2num($name);
+				if($cno eq 8){
+					$rt=NCT08CounterReset($nodeno,'CLTM');
+				}else{
+					$rt=NCT08CounterReset($nodeno,"CLCT0$cno");
+				}
+			}else{$::Error='Bad number.';}
+		}else{$commandflg=0;}
+	}
+	
+	if($commandflg eq 0){
+	 	my($nodeno,$cno,$cseqno)=name2num($to);
+	 	if($nodeno>=0){
+			($destinationflg,$commandflg)=(1,1);
+	 		if($cno>=0){
+				##Counter Level Commands
+	 			$rt=Counter_handler($from, $to, $mess, $nodeno, $cno);
+		 	}else{
+				##Controller Level Commands
+		 		$rt=Ctl_handler($from, $to, $mess, $nodeno);
+		 	}
+		}else{
+			$commandflg=0;
+		}
+	}
+
+	if($destinationflg eq 0){
+		$::tak->Send("\@$mess Er: $to is down.", $from); return;
+	}elsif($commandflg eq 0){
+		$::Error='Bad command or parameter.';
+	}
+	
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){print NCT08_getnow()."STARS SND: $to>$from \@$mess Er: $::Error\n";}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){print NCT08_getnow()."STARS SND: $to>$from \@$mess $rt\n";}
+	}
+	return;
+}
+#############################################################
+## Ctl_handler called by handler
+#############################################################
+sub Ctl_handler{
+	my ($from, $to, $mess, $nodeno) = @_;
+	my $rt='';
+	my($cmd,$arg);
+	my($dataflushflag)=0;
+	
+	if($mess=~/^hello$/)			  {$rt='nice to meet you.';
+	}elsif($mess=~/^help$/)			  {$rt=get_help_list($to);
+	}elsif($mess=~/^help\s(\S+)/)	  {$rt=get_help_list($to,$1);
+
+	}elsif($mess=~/^GetControllerNumber$/){$rt="$nodeno";
+
+	}elsif($mess=~/^GetDeviceType$/){$rt=NCT08_getdevdisptype($nodeno);
+
+	}elsif($mess=~/^GetReadValueFormat$/){$rt=NCT08_getreadvalueformat($nodeno);
+
+	}elsif($mess=~/^GetCounterNodeNameList$/){
+		$rt=join(',',@{$::NCT08CounterName{$nodeno}});
+	}elsif($mess=~/^GetCounterNodeName\s([0-8])$/){
+		$rt=$::NCT08CounterName{$nodeno}[$1];
+	}elsif($mess=~/^GetCounterNumberByNodeName\s(\S+)$/){
+		my $name="$1";
+		my($nodeno,$cno,$cseqno)=name2num($name);
+		if($cno>=0){$rt=$cno;}else{$::Error='Bad name.';}
+	}elsif($mess=~/^flushdata(tome)?$/){
+		my $dest;if($1 eq 'tome'){$dest=$from;}else{$dest='';}
+		$rt=NCT08flushdata($nodeno,$dest);
+	}elsif($mess=~/^GetRomVersion$/) {$rt=NCT08act($nodeno,'VER?');
+	}elsif($::NCT08HardwareVerionFlg{$nodeno} and $mess=~/^GetHardwareVersion$/) {
+		$rt=NCT08act($nodeno,'VERH?');
+	}elsif($mess=~/^IsBusy$/)		 {$rt=NCT08IsBusy($nodeno,0);
+	}elsif($mess=~/^CountStart$/)    {$rt=NCT08CountStart($nodeno);
+	}elsif($mess=~/^Stop$/)     	 {$rt=NCT08CountStop($nodeno);
+## Read configuration commands.
+	}elsif($mess=~/^GetStopMode$/)	 {$rt=NCT08GetCountMode($nodeno);
+	}elsif($mess=~/^GetCountPresetK$/){
+		$rt=NCT08act($nodeno,'CPR?');unless($rt eq ''){$rt=$rt+0;}
+	}elsif($mess=~/^GetTimerPresetK$/){
+		$rt=NCT08act($nodeno,'TPR?');unless($rt eq ''){$rt=$rt+0;}
+	}elsif($mess=~/^GetCountPreset$/){
+		$rt=NCT08act($nodeno,'CPRF?');unless($rt eq ''){$rt=$rt+0;}
+	}elsif($mess=~/^GetTimerPreset$/){
+		$rt=NCT08act($nodeno,'TPRF?');unless($rt eq ''){$rt=$rt+0;}
+## Configuration commands.
+	}elsif($mess=~/^SetStopMode\s(T|C|N)$/){
+		$cmd=$1;if($cmd=~/(T|C)/){$cmd="EN$1S";}else{$cmd='DSAS';}
+		$rt=NCT08sendIfnotBusy($nodeno,$cmd);
+		
+	}elsif((NCT08_getdevtype($nodeno)=~/[13]/) and $mess=~/^SetCountPresetK\s(\d+)$/ and $1<=4294967){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"SCPR$arg");
+	}elsif((NCT08_getdevtype($nodeno) eq 1) and $mess=~/^SetTimerPresetK\s(\d+)$/ and $1<=4294967){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"STPR$arg");
+	}elsif((NCT08_getdevtype($nodeno)=~/[13]/) and $mess=~/^SetCountPreset\s(\d+)$/  and $1<=4294967295){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"SCPRF$arg");
+	}elsif((NCT08_getdevtype($nodeno) eq 1) and $mess=~/^SetTimerPreset\s(\d+)$/  and $1<=4294967295){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"STPRF$arg");
+
+	}elsif((NCT08_getdevtype($nodeno)=~/[24]/) and $mess=~/^SetCountPresetK\s(\d+)$/ and $1<=281474976710){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"SCPR$arg");
+	}elsif((NCT08_getdevtype($nodeno)=~/[234]/) and $mess=~/^SetTimerPresetK\s(\d+)$/ and $1<=1099511627){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"STPR$arg");
+	}elsif((NCT08_getdevtype($nodeno)=~/[24]/) and $mess=~/^SetCountPreset\s(\d+)$/  and $1<=281474976710655){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"SCPRF$arg");
+	}elsif((NCT08_getdevtype($nodeno)=~/[234]/) and $mess=~/^SetTimerPreset\s(\d+)$/  and $1<=1099511627775){
+		my $arg=$1;$rt=NCT08sendIfnotBusy($nodeno,"STPRF$arg");
+
+## Reset commands
+	}elsif($mess=~/^CounterReset$/)   {
+		$rt=NCT08CounterReset($nodeno,'CLAL');
+	}elsif($mess=~/^CounterReset\s([0-6])\-([1-7])$/){
+		$rt=NCT08CounterReset($nodeno,"CLCT0".$1."0".$2);
+	}elsif($mess=~/^CounterReset\s([0-7])\-8$/){
+		$rt=NCT08CounterReset($nodeno,"CLCT0".$1."07");
+		unless($rt eq ''){$rt=NCT08CounterReset($nodeno,'CLTM');}
+	}elsif($mess=~/^CounterReset\s([0-7])$/){
+		$rt=NCT08CounterReset($nodeno,"CLCT0$1");
+	}elsif($mess=~/^CounterReset\s8$/){
+		$rt=NCT08CounterReset($nodeno,'CLTM');
+	}elsif($mess=~/^PresetCounterReset$/){
+		$rt=NCT08CounterReset($nodeno,'CLPC');
+	}elsif($mess=~/^TimerReset$/)  {$rt=NCT08CounterReset($nodeno,'CLTM');
+## GetValue commands
+	}elsif($mess=~/^GetValue$/)             {$rt=NCT08GetCurrent($nodeno,'',0);
+	}elsif($mess=~/^GetValue\s([0-7])\-([1-8])$/){
+		$rt=NCT08GetCurrent($nodeno,"$1\-$2",0);
+	}elsif($mess=~/^GetValue\s([0-8])$/)    {$rt=NCT08GetCurrent($nodeno,$1,0);
+	}elsif($mess=~/^GetValuePresetCounter$/){$rt=NCT08GetCurrent($nodeno,7,0);
+	}elsif($mess=~/^GetValueTimer$/)        {$rt=NCT08GetCurrent($nodeno,8,0);
+## IsOverflow commands
+	}elsif($mess=~/^IsOverflow$/)	        {$rt=NCT08IsOverflow($nodeno,'',0);
+	}elsif($mess=~/^IsOverflow\s([0-7])\-([1-8])$/){
+		$rt=NCT08IsOverflow($nodeno,,"$1\-$2",0);
+	}elsif($mess=~/^IsOverflow\s([0-8])$/)  {$rt=NCT08IsOverflow($nodeno,$1,0);
+	}elsif($mess=~/^IsOverflowPresetCounter$/){
+		$rt=NCT08IsOverflow($nodeno,7,0);
+	}elsif($mess=~/^IsOverflowTimer$/)      {$rt=NCT08IsOverflow($nodeno,8,0);
+## Data gather commands 
+	}elsif($mess=~/^SetGateEnable\s([01])$/){
+		my $arg=$1;$arg=~s/0/DS/;$arg=~s/1/EN/;
+		$rt=NCT08sendIfnotBusy($nodeno,"GATEIN_$arg");
+	}elsif($mess=~/^GetGateEnable$/){
+		$rt=NCT08act($nodeno,'GATEIN?');
+		$rt=~s/EN/1/;$rt=~s/DS/0/;
+	}elsif($mess=~/^GateSyncDataReset$/){
+		$rt=NCT08GateSyncCmd($nodeno,"CLGSAL");
+	}elsif($mess=~/^GateSyncStartAddressReset$/){
+		$rt=NCT08GateSyncCmd($nodeno,"CLGSDN");
+	}elsif($mess=~/^SetGateSyncStartAddress\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSDN",$1);
+	}elsif($mess=~/^GetGateSyncStartAddress$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSDN?");
+	}elsif($mess=~/^SetGateSyncEndAddress\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSED",$1);
+	}elsif($mess=~/^GetGateSyncEndAddress$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSED?");
+	}elsif($mess=~/^SetGateSyncDataMode\s([Dd][iI][Ff]|[Dd])$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GT_ACQ_DIF");
+	}elsif($mess=~/^SetGateSyncDataMode\s([Ff][Uu][Ll]|[Fu])$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GT_ACQ_FUL");
+	}elsif($mess=~/^GetGateSyncDataMode$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GT_ACQ?");
+	}elsif($mess=~/^GateSyncGateModeStart$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSTRT");
+	}elsif($mess=~/^GateSyncEdgeModeStart$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GESTRT");
+		
+	}elsif($mess=~/^GateSyncGateTimerModeStart$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GTSTRT");
+
+	}elsif($mess=~/^SetGateSyncGateTimerOnTime\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GTRUN",$1);
+	}elsif($mess=~/^SetGateSyncGateTimerOffTime\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GTOFF",$1);
+	}elsif($mess=~/^GetGateSyncGateTimerOnTime$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GTRUN?");
+	}elsif($mess=~/^GetGateSyncGateTimerOffTime$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GTOFF?");
+		
+	}elsif($mess=~/^GetGateSyncStatusFlg$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSTS?");
+		if($rt=~/OFF/){$rt="N";}
+		elsif($rt=~/Edge/){$rt="E";}
+		elsif($rt=~/Timer/){$rt="T";}
+		elsif($rt=~/Gate mode/){$rt="G";}
+		elsif($rt=~/Hex/){$rt="H";}
+	}elsif($mess=~/^GetGateSyncStatus$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSTS?");
+	}elsif($mess=~/^GetGateSyncData$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSDAL?");
+	}elsif($mess=~/^GetGateSyncHexData$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSDALH?");
+		
+	}elsif($mess=~/^GetGateSyncDataAddressFromTo\s(\d+)\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSDRD?",$1,$2);
+	}elsif($mess=~/^GetGateSyncHexDataAddressFromTo\s(\d+)\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSDRDH?",$1,$2);
+
+	}elsif($mess=~/^GetGateSyncDataChannelFromToAddressFromTo\s(\d+)\s(\d+)\s(\d)\s(\d+)\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSCRD?",$1,$2,$3,$4,$5);
+	}elsif($mess=~/^GetGateSyncHexDataChannelFromToAddressFromTo\s(\d+)\s(\d+)\s(\d)\s(\d+)\s(\d+)$/){
+		$rt=NCT08GateSyncCmd($nodeno,"GSCRDH?",$1,$2,$3,$4,$5);
+## Send NCT08 commands directly. 
+	}elsif($mess=~/^devact\s(\S+\?\S*)$/){
+		$rt=NCT08act($nodeno,$1,WAIT_MEMWRITE_GETVALUE);
+	}elsif($mess=~/^devsend\s([^\?\s]+)$/){
+		$rt=NCT08send($nodeno,$1);
+## Command Error.
+	}else{
+		$::Error='Bad command or parameter';
+	}
+	return($rt);
+}
+#############################################################
+## Counter_handler called by handler
+#############################################################
+sub Counter_handler{
+	my ($from, $to, $mess, $nodeno, $cno) = @_;
+	my $rt='';
+	
+	if($mess=~/^hello$/)			   {$rt='nice to meet you.';
+	}elsif($mess=~/^help$/)			   {$rt=get_help_list($to);
+	}elsif($mess=~/^help\s(\S+)/)	   {$rt=get_help_list($to,$1);
+	}elsif($mess=~/^GetCounterNumber$/){$rt="$cno";
+	}elsif($mess=~/^CounterReset$/){
+		if($cno eq 8){$rt=NCT08CounterReset($nodeno,'CLTM');
+		}else{$rt=NCT08CounterReset($nodeno,"CLCT0$cno");}
+	}elsif($mess=~/^GetValue$/){
+		$rt=NCT08GetCurrent($nodeno,$cno,0);
+	}elsif($mess=~/^IsOverflow$/){
+		$rt=NCT08IsOverflow($nodeno,$cno,0);
+## Command Error.
+	}else{
+		$::Error='Bad command or parameter';
+	}
+	return($rt);
+}
+#############################################################
+## Interval
+#############################################################
+sub interval_DETECT{
+	my $rt;
+	my %readed=();
+	for(my $seqno=0;$seqno<=$#::NCT08ControllerSeqNo;$seqno++){
+		my $nodeno=$::NCT08ControllerSeqNo[$seqno];
+		if($readed{$nodeno}){
+			next;
+		}
+		my $rt=NCT08read($nodeno,0.01);
+		if($rt ne ''){
+			$::tak->Send("$::NCT08ControllerName{$nodeno}>System _DataArrived $rt");
+			$::NCT08WAITFLG{$nodeno}=0;
+		}
+		$readed{$nodeno}=1;
+ 	}
+	return(1);
+}
+sub NCT08interval{
+	for(my $seqno=0;$seqno<=$#::NCT08ControllerSeqNo;$seqno++){
+		my $nodeno=$::NCT08ControllerSeqNo[$seqno];
+		if($::NCT08WAITFLG{$nodeno}){
+			if(tv_interval($::NCT08WAITFLG{$nodeno})<=$::NCT08WAITSTARTTIME){
+				next;
+			}else{
+				$::NCT08WAITFLG{$nodeno}=0;
+			}
+		}
+		my $flgbusy=NCT08IsBusy($nodeno,1); #force read
+		my $gsts=NCT08GateSyncCmd($nodeno,"GSTS?");
+ 		if($flgbusy eq '1'){
+			if($::StopOverflow){
+				my $rt=NCT08actALM($nodeno,1);
+				if($rt eq ''){print "$::Error\n";return('');}
+				if($::StopOverflow and $rt=~/1/){
+					NCT08CountStop($nodeno);return('');
+				}
+			}
+			if($::Flushdata){
+				$::Buf_Interval--;
+				if($::Buf_Interval<=0){
+					$::Buf_Interval=NCT08resetInterval();
+					if(NCT08actRDAL($nodeno,1) eq ''){
+						print "$::Error\n";return('');
+					}
+				}
+			}
+		}elsif($flgbusy eq '0'){
+			if($::NCT08CounterResetFlg){
+				if($::ChangedValue){
+					NCT08actALM($nodeno,1);
+					NCT08actRDAL($nodeno,1);
+				}
+				$::NCT08CounterResetFlg='';
+			}
+ 		}else{print "$::Error\n";return('');}
+ 	}
+	return(1);
+}
+#---------------------------------------------------------------
+sub NCT08resetInterval{
+	my $rt=int($::Flushdata/INTERVAL_WATCH);
+	return($rt);
+}
+#############################################################
+## Interval
+#############################################################
+sub NCT08flushdata{
+	my($nodeno,$tonode)=(shift,shift);
+	if($tonode eq ''){$tonode='System';}
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $flgbusy=NCT08actMOD($nodeno,0);
+	unless($flgbusy eq ''){
+		$::NCT08ControllerIsBusy{$nodeno}=$flgbusy;
+		$::tak->Send("$::NCT08ControllerName{$nodeno}>$tonode _ChangedIsBusy $::NCT08ControllerIsBusy{$nodeno}");
+	}else{return('');}
+	my @overflows=split(/\s/,NCT08actALM($nodeno,0),9);
+	unless($#overflows eq 9){
+		for(my $i=0;$i<9;$i++){
+			$::NCT08Overflows{$nodeno}[$i]=$overflows[$i];
+			$::tak->Send("$::NCT08CounterName{$nodeno}[$i]>$tonode _ChangedIsOverflow $::NCT08Overflows{$nodeno}[$i]");
+		}
+	}else{return('');}
+	my @currents=split(/\s/,NCT08actRDAL($nodeno,0),9);
+	unless($#currents eq 9){
+		for(my $i=0;$i<9;$i++){
+			$::NCT08Currents{$nodeno}[$i]=$currents[$i];
+			$::tak->Send("$::NCT08CounterName{$nodeno}[$i]>$tonode _ChangedValue $::NCT08Currents{$nodeno}[$i]");
+		}
+	}else{return('');}
+	return('Ok:');
+}
+
+#############################################################
+## Low Level Functions
+#############################################################
+sub NCT08read{
+	my($nodeno,$mslp)=(shift,shift);
+	unless($mslp>0){$mslp=WAIT_MEMWRITE_DEFAULT/1000;}
+	my $rt=$::NCT08Dev{$nodeno}->InSIO($mslp);$rt=~s/[\r|\n]//g;
+	if($::Debug){
+		print NCT08_getnow()."REPLY \[$::NCT08ControllerName{$nodeno}\] #$rt#\n";
+	}
+	return($rt);
+}
+#---------------------------------------------------------------
+sub NCT08readline{
+	my($nodeno,$mslp,$delim)=(shift,shift,shift);
+	unless($mslp>0){$mslp=WAIT_MEMWRITE_DEFAULT/1000;}
+	my $rt2=();
+	if($delim ne ""){
+		if($::Debug){
+			print "DELIMITER1 ",$delim,"\n";
+		}
+	}
+
+	while(1){
+		my $rt=$::NCT08Dev{$nodeno}->InSIO2($mslp,$delim);
+#		$rt=~s/\n$//;
+		$rt=~s/\r//g;
+		$rt=~s/\n/\t/g;
+		if($::Debug){
+			print NCT08_getnow()."REPLYLINE \[$::NCT08ControllerName{$nodeno}\] #$rt#\n";
+		}
+		if($rt eq ""){last;}
+		$rt2="$rt2$rt";
+		if(($delim ne "") and ($rt2=~/$delim/) ){
+			last;
+		}
+	}
+	$rt2=~s/\t$//;
+	return($rt2);
+}
+#---------------------------------------------------------------
+sub NCT08send{
+	my($nodeno,$cmd,$mslp)=(shift,shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	$::NCT08Dev{$nodeno}->OutSIO("$cmd\r\n");
+	if($::Debug){
+		print NCT08_getnow()."SEND  \[$::NCT08ControllerName{$nodeno}\] #$cmd#\n";
+	}
+	if($mslp>0){$::tak->Sleep(WAIT_MEMWRITE_DEFAULT);}return('Ok:');
+}
+#---------------------------------------------------------------
+sub NCT08sendIfnotBusy{
+	my($nodeno,$cmd,$mslp)=(shift,shift,shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $flgbusy=NCT08IsBusy($nodeno,0);
+	if($flgbusy eq 1){
+		$::Error="Busy.";return('');
+	}elsif($flgbusy eq 0){
+		$::NCT08Dev{$nodeno}->OutSIO("$cmd\r\n");
+		if($::Debug){
+			print NCT08_getnow()."SEND  \[$::NCT08ControllerName{$nodeno}\] #$cmd#\n";
+		}
+		if($mslp>0){$::stars->Sleep(WAIT_MEMWRITE_DEFAULT);}return('Ok:');
+	}else{return('');}
+}
+#---------------------------------------------------------------
+sub NCT08act{
+	my($nodeno,$cmd,$mslp)=(shift,shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	$::NCT08Dev{$nodeno}->OutSIO("$cmd\r\n");
+	if($::Debug){
+		print NCT08_getnow()."SEND  \[$::NCT08ControllerName{$nodeno}\] #$cmd#\n";
+	}
+	unless($mslp>0){$mslp=WAIT_MEMWRITE_DEFAULT/1000;}
+	my $rt=$::NCT08Dev{$nodeno}->InSIO($mslp);$rt=~s/[\r|\n]//g;
+	if($::Debug){
+		print NCT08_getnow()."REPLY \[$::NCT08ControllerName{$nodeno}\] #$rt#\n";
+	}
+	return($rt);
+}
+#==============================================================
+sub NCT08actMOD{
+	my($nodeno,$force)=(shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $rt=NCT08act($nodeno,'MOD?',WAIT_MEMWRITE_GETVALUE);
+	unless($rt=~/R\_SN\_(T|C|N)\_(O|F)/){
+		$::Error="Data Error. Sendto=$::NCT08ControllerName{$nodeno} Command=MOD\? Reply=$rt";
+		$::tak->Send("$::NodeName>System _IsError $::Error");
+		print "$::Error\n";
+		return('','');
+	}
+	my($countmode,$flgbusy)=($1,$2);
+	unless($flgbusy=~s/O/1/){$flgbusy=0;}
+	if(($flgbusy ne $::NCT08ControllerIsBusy{$nodeno})){
+		# Flush IsBusy
+		if($force){
+			if($::Debug){print "### $::NCT08ControllerName{$nodeno} IsBusy: $flgbusy ###\n";}
+			$::tak->Send("$::NCT08ControllerName{$nodeno}>System _ChangedIsBusy $flgbusy");
+			if($flgbusy eq 0){
+				if($::ChangedValue){
+					NCT08actALM($nodeno,$force);
+					NCT08actRDAL($nodeno,$force);
+				}
+				$::Buf_Interval=NCT08resetInterval();
+			}
+			$::NCT08ControllerIsBusy{$nodeno}=$flgbusy;
+		}
+	}
+	return($countmode,$flgbusy);
+}
+#==============================================================
+sub NCT08actRDAL{
+	my($nodeno,$force)=(shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $fmtxflg=NCT08_getreadvalueformat($nodeno);
+	my $rt;
+	if($fmtxflg){
+		$rt=NCT08act($nodeno,'RDALH?',WAIT_MEMWRITE_GETVALUE);
+	}else{
+		$rt=NCT08act($nodeno,'RDAL?',WAIT_MEMWRITE_GETVALUE);
+	}
+	unless(
+#	  $rt=~/^(\d{10})\s(\d{10})\s(\d{10})\s(\d{10})\s(\d{10})\s(\d{10})\s(\d{10})\s(\d{10})\s(\d{10})$/){
+#	  $rt=~/^(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)\s(\d+)$/){
+	  $rt=~/^(\S+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)$/){
+		$::Error="Data Error. Sendto=$::NCT08ControllerName{$nodeno} Command=RDAL\? Reply=$rt";
+		$::tak->Send("$::NodeName>System _IsError $::Error");
+		print "$::Error\n";return('');
+	}
+	my @currents=($1,$2,$3,$4,$5,$6,$7,$8,$9);
+	my @overflows=();
+	if($::OverflowValue){
+		@overflows=split(/\s/,NCT08actALM($nodeno,$force),9);
+		if($overflows[0] eq ''){return('');}
+	}
+	for(my $i=0;$i<9;$i++){
+		if($::OverflowValue and ($overflows[$i] eq 1)){
+			$currents[$i]=$::OverflowValue;
+		}
+		if($fmtxflg){
+			$currents[$i]=hex($currents[$i]);
+		}else{
+			$currents[$i]=$currents[$i]+0;
+		}
+		if(($::NCT08Currents{$nodeno}[$i] ne $currents[$i])){
+			if($force){
+				#Flush Current
+				if($::Debug){print "### $::NCT08CounterName{$nodeno}[$i] Current: $currents[$i] ###\n";}
+				$::tak->Send("$::NCT08CounterName{$nodeno}[$i]>System _ChangedValue $currents[$i]");
+				$::NCT08Currents{$nodeno}[$i]=$currents[$i];
+			}
+		}
+	}
+	return("@currents");
+}
+#==============================================================
+sub NCT08actALM{
+	my($nodeno,$force)=(shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $rt=NCT08act($nodeno,'ALM?',WAIT_MEMWRITE_ACT);
+	unless($rt=~/^over\S\S(\S\S)(\S\S)$/){
+		$::Error="Data Error. Sendto=$::NCT08ControllerName{$nodeno} Command=ALM\? Reply=$rt";
+		$::tak->Send("$::NodeName>System _IsError $::Error");
+		print "$::Error\n";return('');
+	}
+	my($counterobit)=unpack("B8",pack("H2","$1"));
+	$counterobit=reverse($counterobit);
+	my($timerobit)=$2;unless($timerobit=~s/^TM$/1/){$timerobit=0;}
+	$counterobit=$counterobit.$timerobit;
+	my @overflows=split(//,$counterobit,9);
+	for(my $i=0;$i<9;$i++){
+		if(($::NCT08Overflows{$nodeno}[$i] ne $overflows[$i])){
+			if($force){
+				#Flush Current
+				if($::Debug){print "### $::NCT08CounterName{$nodeno}[$i] Overflow: $overflows[$i] ###\n";}
+				$::tak->Send("$::NCT08CounterName{$nodeno}[$i]>System _ChangedIsOverflow $overflows[$i]");
+				$::NCT08Overflows{$nodeno}[$i]=$overflows[$i];
+			}
+		}
+	}
+	return("@overflows");
+}
+#############################################################
+## Middle Level Functions
+#############################################################
+sub NCT08GetCountMode{
+	my($nodeno)=(shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my($mode,$flgbusy)=NCT08actMOD($nodeno);
+	return($mode);
+}
+#---------------------------------------------------------------
+sub NCT08IsBusy{
+	my($nodeno,$force)=(shift,shift);
+	my($mode,$flgbusy)=NCT08actMOD($nodeno,$force);
+	return($flgbusy);
+}
+#---------------------------------------------------------------
+sub NCT08GetCurrent{
+	my($nodeno,$arrayno,$force)=(shift,shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my @currents=split(/\s/,NCT08actRDAL($nodeno,$force),9);
+	if($currents[0] eq ''){return('');}
+	if($arrayno=~/^[0-8]$/){
+		return($currents[$arrayno]);
+	}elsif($arrayno=~/^([0-7])\-([1-8])$/){
+		my($i,$e,$rt)=($1+1,$2,$currents[$1]);
+		for(;$i<=$e;$i++){
+			$rt=$rt."\,$currents[$i]";
+		}
+		return($rt);
+	}elsif($arrayno eq ''){
+		return(join(',',@currents));
+	}else{
+		$::Error="Internal Error. NCT08GetCurrent arrayno=$arrayno\n";
+		$::tak->Send("$::NodeName>System _IsError $::Error");
+		print "$::Error\n";
+		return();
+	}
+}
+#---------------------------------------------------------------
+sub NCT08IsOverflow{
+	my($nodeno,$arrayno,$force)=(shift,shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my @overflows=split(/\s/,NCT08actALM($nodeno,$force),9);
+	if($overflows[0] eq ''){return('');}
+	if($arrayno=~/^[0-8]$/){
+		return($overflows[$arrayno]);
+	}elsif($arrayno=~/^([0-7])\-([1-8])$/){
+		my($i,$e,$rt)=($1+1,$2,$overflows[$1]);
+		for(;$i<=$e;$i++){
+			$rt=$rt."\,$overflows[$i]";
+		}
+		return($rt);
+	}elsif($arrayno eq ''){
+		return(join(',',@overflows));
+	}else{
+		$::Error="Internal Error. NCT08IsOverflow arrayno=$arrayno\n";
+		$::tak->Send("$::NodeName>System _IsError $::Error");
+		print "$::Error\n";
+		return();
+	}
+}
+#---------------------------------------------------------------
+sub NCT08CountStart{
+	my($nodeno)=(shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $flgbusy=NCT08IsBusy($nodeno,0);
+	if($flgbusy eq 1){
+		$::Error="Busy.";return('');
+	}elsif($flgbusy eq 0){
+		if($::NCT08CounterResetFlg){
+			if($::ChangedValue){
+				my $rt=NCT08actRDAL($nodeno,1);
+				if($rt eq ''){return($rt);}
+				#$::tak->Sleep(WAIT_MEMWRITE_DEFAULT);
+			}
+			$::NCT08CounterResetFlg='';
+		}
+		my $rt=NCT08send($nodeno,'STRT');
+		$::NCT08ControllerIsBusy{$nodeno}=1;
+		$::tak->Send("$::NCT08ControllerName{$nodeno}>System _ChangedIsBusy 1");
+		#$::tak->Sleep(WAIT_MEMWRITE_DEFAULT);
+		return($rt);
+	}else{return('');}
+}
+#---------------------------------------------------------------
+sub NCT08CountStop{
+	my($nodeno)=(shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $flgbusy=NCT08IsBusy($nodeno,0);
+	if($flgbusy eq 1){
+		return(NCT08send($nodeno,'STOP'));
+	}elsif($flgbusy eq 0){return('Ok:');
+	}else{return('');}
+}
+#---------------------------------------------------------------
+sub NCT08CounterReset{
+	my($nodeno,$cmd)=(shift,shift);
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	my $rt=NCT08send($nodeno,$cmd);
+	my $flgbusy=NCT08IsBusy($nodeno,0);
+	if($flgbusy eq 1){return($rt);
+	}elsif($flgbusy eq 0){$::NCT08CounterResetFlg=1;return($rt);
+	}else{return('');}
+}
+#---------------------------------------------------------------
+sub NCT08GateSyncCmd{
+	my($nodeno,$cmd,$arg,$arg2,$arg3,$arg4,$arg5)=(shift,shift,shift,shift,shift,shift,shift);
+	my $rt="";
+	if($::NCT08WAITFLG{$nodeno}){
+		$::Error="$::NCT08Devtype{$nodeno} is locked.";
+		return('');
+	}
+	if($cmd=~/\?/){
+		if($cmd=~/^GT_ACQ\?$/){
+			if(NCT08_getdevtype($nodeno) eq 4){
+				if($::NCT08DevVersion{$nodeno} < 1.08){
+					$::Error="Sorry.Unsupported version $::NCT08DevVersion{$nodeno}.";return('');
+				}
+			}
+		}elsif($cmd=~/^GS(DAL)[H]?\?/){
+			NCT08send($nodeno,$cmd);
+			my $rt2=NCT08readline($nodeno,100,"EOF");
+			if($rt2 eq ""){
+				$::Error="No data.";return('');
+			}
+			$rt=$rt2;
+			$rt=~s/,\s+/,/g;
+			$rt=~s/\s,/,/g;
+			$rt=~s/EOF\s*//;
+			return($rt);
+		}elsif($cmd=~/^GS(DRD)[H]?\?$/){
+			if(($arg=~/^(\d+)$/) and ($arg2=~/^(\d+)$/)){
+				$arg=$arg+0;
+				$arg2=$arg2+0;
+				if(
+					(($arg>=0) and ($arg<=9999))
+					and (($arg2>=0) and ($arg2<=9999))
+					and (($arg2-$arg)>=0)
+				){
+				}else{
+					$::Error="Bad parameter.";return('');
+				}
+			}else{
+				$::Error="Bad parameter.";return('');
+			}
+			$cmd=sprintf("%s%04d%04d",$cmd,$arg,$arg2);
+			NCT08send($nodeno,$cmd);
+			my $rt2=NCT08readline($nodeno,100,"EOF");
+			if($rt2 eq ""){
+				$::Error="No data.";return('');
+			}
+			$rt=$rt2;
+			$rt=~s/,\s+/,/g;
+			$rt=~s/\s,/,/g;
+			$rt=~s/EOF\s*//;
+			return($rt);
+		}elsif($cmd=~/^GS(CRD)[H]?\?$/){
+			if(
+				($arg=~/^(\d+)$/) and ($arg2=~/^(\d+)$/)and ($arg3=~/^(\d+)$/)
+				and ($arg4=~/^(\d+)$/) and ($arg5=~/^(\d+)$/)
+			){
+				$arg=$arg+0;
+				$arg2=$arg2+0;
+				$arg3=$arg3+0;
+				$arg4=$arg4+0;
+				$arg5=$arg5+0;
+				if(
+					(($arg>=0) and ($arg<=7))
+					and (($arg2>=0) and ($arg2<=7))
+					and (($arg2-$arg)>=0)
+					and ($arg3=~/^[01]$/)
+					and (($arg4>=0) and ($arg4<=9999))
+					and (($arg5>=0) and ($arg5<=9999))
+					and (($arg5-$arg4)>=0)
+				){
+				}else{
+					$::Error="Bad parameter.";return('');
+				}
+			}else{
+				$::Error="Bad parameter.";return('');
+			}
+			$cmd=sprintf("%s%d%d%d%04d%04d",$cmd,$arg,$arg2,$arg3,$arg4,$arg5);
+			NCT08send($nodeno,$cmd);
+			my $rt2=NCT08readline($nodeno,100,"EOF");
+			if($rt2 eq ""){
+				$::Error="No data.";return('');
+			}
+			$rt=$rt2;
+			$rt=~s/,\s+/,/g;
+			$rt=~s/\s,/,/g;
+			$rt=~s/EOF\s*//;
+			return($rt);
+		}
+		$rt=NCT08act($nodeno,$cmd);
+	}else{
+		my $flgbusy=NCT08IsBusy($nodeno,0);
+		if($flgbusy eq 1){
+			$::Error="Busy.";return('');
+		}
+		if($cmd=~/^GS(DN|ED)$/){
+			if($arg=~/^(\d+)$/){
+				$arg=$arg+0;
+				if(($arg>=0) and ($arg<=9999)){
+				}else{
+					$::Error="Bad parameter.";return('');
+				}
+			}else{
+				$::Error="Bad parameter.";return('');
+			}
+			$cmd=sprintf("%s%d",$cmd,$arg);
+		}elsif($cmd=~/^GT_ACQ_(DIF|FUL)$/){
+			if(NCT08_getdevtype($nodeno) eq 4){
+				if($::NCT08DevVersion{$nodeno} < 1.08){
+						$::Error="Sorry.Unsupported version $::NCT08DevVersion{$nodeno}.";return('');
+				}
+			}
+		}elsif($cmd=~/^GT(RUN|OFF)$/){
+			if($arg=~/^(\d+)$/){
+				$arg=$arg+0;
+				if(($arg>=0) and ($arg<=4294967295)){
+				}else{
+					$::Error="Bad parameter.";return('');
+				}
+			}else{
+				$::Error="Bad parameter.";return('');
+			}
+			$cmd=sprintf("%s%d",$cmd,$arg);
+		}elsif($cmd=~/^CLGSAL$/){
+			$rt=NCT08send($nodeno,$cmd);
+			NCT08send($nodeno,'VER?');
+			$::NCT08WAITFLG{$nodeno}=[gettimeofday];
+			$::NCT08WAITSTARTTIME= WAIT_RESET / 1000;
+			return($rt);
+		}elsif($cmd=~/^(G|GE|GT)STRT$/){
+			$rt=NCT08send($nodeno,$cmd);
+			my $rt2=NCT08act($nodeno,"GSTS?");
+			if(($1 eq 'GE') and ($rt2=~/Edge/)){
+			}elsif(($1 eq 'GT') and ($rt2=~/Timer/)){
+			}elsif(($1 eq 'G') and ($rt2=~/Gate mode/)){
+			}elsif($rt2=~/Hex/){
+			}else{
+				$rt="";
+				$::Error="Unable to start gate sync action. [$rt2]";
+			}
+			return($rt);
+		}else{
+			$cmd="$cmd$arg";
+		}
+		$rt=NCT08send($nodeno,$cmd);
+	}
+	return($rt);
+}
+#############################################################
+## Init
+#############################################################
+sub NCT08Init{
+	$::Buf_Interval=NCT08resetInterval();
+
+	for(my $seqno=0;$seqno<=$#::NCT08ControllerSeqNo;$seqno++){
+		#Init Globals
+		my $nodeno=$::NCT08ControllerSeqNo[$seqno];
+		$::NCT08ControllerIsBusy{$nodeno}='';
+		@{$::NCT08Currents{$nodeno}}=qw(-1 -1 -1 -1 -1 -1 -1 -1 -1);
+
+		#Read until buffer empty.
+		while($::NCT08Dev{$nodeno}->InSIO(WAIT_BUF_EMPTY/1000) ne ''){}
+		$::NCT08Devhandler{$nodeno}=$::NCT08Dev{$nodeno}->GetSIOHandle();
+		$::tak->addcallback(\&interval_DETECT,$::NCT08Devhandler{$nodeno},'Detect');
+
+		#Read Values
+		unless($_=NCT08act($nodeno,'VER?')){die "$::Error\n";}
+		my @props=split(/\s/,$_);
+		if($::Debug){print "### $::NodeName Firmware Version: $_ ###\n";}
+		if($::NCT08Devtype{$nodeno} eq ''){
+			$::NCT08Devtype{$nodeno}=$_;
+			if($::NCT08Devtype{$nodeno}=~/(NCT08-02)/){
+				$::NCT08Devtype{$nodeno}=$1;
+			}elsif($::NCT08Devtype{$nodeno}=~/(NCT08-01B)/){
+				$::NCT08Devtype{$nodeno}=$1;
+			}elsif($::NCT08Devtype{$nodeno}=~/(NCT08-01A)/){
+				$::NCT08Devtype{$nodeno}=$1;
+			}elsif($::NCT08Devtype{$nodeno}=~/\s(CT\d+\S+)/){
+				$::NCT08Devtype{$nodeno}=$1;
+			}else{
+				$::NCT08Devtype{$nodeno}='NCT08-01';
+			}
+		}else{
+			if($::NCT08Devtype{$nodeno} eq 'NCT08-02'){
+			}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-01B'){
+			}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-01A)'){
+			}elsif($::NCT08Devtype{$nodeno} eq 'NCT08-01'){
+			}elsif($::NCT08Devtype{$nodeno}=~/^(CT\d+\S+)$/){
+			}else{
+				die '$::NCT08Devtype{$nodeno} is unsupported in this program.';
+			}
+		}
+		# Set flag use RDALH? or RDAL?
+		$props[0]=~s/[a-zA-Z]//g;
+		$::NCT08ReadValueFormatType{$nodeno}='D'; # Default RDAL?
+		if($::ReadValueFormat eq ''){
+			if(NCT08_getdevtype($nodeno) eq 2){
+				if($props[0]>=1.02){
+					$::NCT08ReadValueFormatType{$nodeno} = 'X' #RDALH? Greater than NCT08-02 Ver 1.02
+				}
+			}elsif(NCT08_getdevtype($nodeno) eq 3){
+				if($props[0]>=1.02){
+					$::NCT08ReadValueFormatType{$nodeno} = 'X' #RDALH? Greater than NCT08-01B Ver 1.02
+				}
+			}elsif(NCT08_getdevtype($nodeno) eq 4){
+				$::NCT08ReadValueFormatType{$nodeno} = 'X' #RDALH? Greater than NCT08-01B Ver 1.02
+			}
+		}elsif(uc($::ReadValueFormat)=~/^\s*([DX])\s*$/){
+			$::NCT08ReadValueFormatType{$nodeno}=$1;
+		}else{
+			die '$::ReadValueFormat is unsupported in this program.';
+		}
+		$::NCT08DevVersion{$nodeno}="0";
+		unless($props[0] eq ""){
+			$::NCT08DevVersion{$nodeno}=$props[0]+0;
+		}
+		$::NCT08HardwareVerionFlg{$nodeno} = 0;
+		if(NCT08_getdevtype($nodeno) eq 3){
+			if($props[0]>=1.04){
+				NCT08send($nodeno,'ALL_REP_DS'); #ALL_REP_DS? Greater than NCT08-01B Ver 1.04
+				$::NCT08HardwareVerionFlg{$nodeno} = 1;
+			}
+		}elsif(NCT08_getdevtype($nodeno) eq 4){
+			NCT08send($nodeno,'ALL_REP_DS'); #ALL_REP_DS? Greater than NCT08-01B Ver 1.04
+			$::NCT08HardwareVerionFlg{$nodeno} = 1;
+		}
+		if(NCT08IsBusy($nodeno,1) eq ''){die "$::Error\n";}
+	}
+	foreach (keys(%::NCT08CounterSeqName)){
+		for(my $i=0;$i<=$#{$::NCT08CounterSeqName{$_}};$i++){
+			if($::Debug){print "Counter SeqNo-$i of $_ named $::NCT08CounterSeqName{$_}[$i]\n";}
+		}
+	}
+	return(1);
+}
+###################W##########################################
+## Register Program
+#############################################################
+#Reference $::NodeName
+#Use with @{$::NCT08CounterName{$nodeno}} or @::NCT08CounterName
+#Set $::NCT08ControllerSeqno[<seqno>]      : controller nodename
+#Set $::NCT08ControllerNumber{<nodename>}  : controller nodeno
+#Set $::NCT08ControllerName{<nodeno>}      : controller nodename
+#SET $::NCT08CounterSeqName{<countertag>}[<cseqno>] : counter nodename by tag
+#Set $::NCT08CounterNumber{<cnodename>}    : counter nodeno, cno, cseqno
+#Set $::NCT08CounterName{<nodeno>}[<cno>]  : counter nodename
+#Set $::NCT08Dev{<nodeno>}                 : device handler
+
+#
+#config.pl
+# Sample
+#@{$::NCT08CounterName{0}}=qw(00 01 02 03 04 05 06 07 TM0);
+#@{$::NCT08CounterName{1}}=qw(10 11 12 13 14 15 16 17 TM1);
+#@::NCT08CounterName=qw(f00 f01 f02 f03 f04 f05 f06 f07 TMR);
+#@::CounterName   = qw(F01 F02 F03 F04 F05 F06 F07 F08 FTM);
+#NCT08Register('192.168.11.132','7777',"$::NodeName.C1","$::NodeName.CH",0);
+#NCT08Register('192.168.11.123','7777',"$::NodeName.C2", $::NodeName    ,1);
+#NCT08Register('192.168.11.132','7777',"$::NodeName.C2", $::NodeName    ,0);
+#NCT08Register('192.168.11.132','7777',"$::NodeName.C1","$::NodeName"   ,0);
+#NCT08Register('192.168.11.132','7777',"$::NodeName"   ,"$::NodeName"   ,0);
+#NCT08Register('192.168.11.132');
+
+#
+sub NCT08Register{
+	my($server,$portno,$nodename,$counternodetag,$nodeno,$pgmtag,$pgmver)=@_;
+	my($name,$i,$cseqno);
+	
+	$::Registered = $::Registered + 1;
+
+	# Set default value.
+	if($server eq ''){$server='192.168.1.55';}
+	if($portno eq ''){$portno='7777';}
+	if($nodename eq ''){$nodename=$::NodeName;
+	}elsif(!($nodename=~/^$::NodeName$/ or $nodename=~/^$::NodeName\.\S+$/)){
+		die "Start nodename with $::NodeName\[$nodename\].\n";
+	}
+	if($counternodetag eq ''){$counternodetag=$nodename;
+	}elsif(!($counternodetag=~/^$::NodeName$/ or $counternodetag=~/^$::NodeName\.\S+$/)){
+		die "Start counternodetag with $::NodeName\[$counternodetag\].\n";
+	}
+	if($nodeno eq ''){
+		$i=0;
+		foreach(sort keys %::NCT08Dev){
+			if($_ ne $i){die "Specify number for controller.\n";}$i++;
+		}
+		$nodeno=$i;
+	}elsif($nodeno<0){
+		die "Specify number greater equals 0.\n";
+	}
+	# Check basic parameter.
+	if(defined($::NCT08ControllerNumber{$nodename})){
+		die "Duplicate nodename\[$nodename\].\n";
+	}elsif(defined($::NCT08ControllerName{$nodeno})){
+		die "Duplicate controller number\[$nodeno\].\n";
+	}elsif(defined($::NCT08CounterNumber{$nodename})){
+		die "Duplicate nodename\[$nodename\].\n";
+	}
+
+	
+	if($::Debug){print "### Nodenames here.###\n";}
+
+	$::NCT08ControllerNumber{$nodename}=$nodeno;
+	$::NCT08ControllerName{$nodeno}=$nodename;
+	$::NCT08ControllerSeqNo[($#::NCT08ControllerSeqNo)+1]=$nodeno;
+
+	if($::Debug){print "Controller-$nodeno named $nodename\n";}
+
+	my @array=();
+#	if(defined(@{$::NCT08CounterName{$nodeno}})){
+	if(defined($::NCT08CounterName{$nodeno}) and ($#{$::NCT08CounterName{$nodeno}}>=0)){
+		@array=@{$::NCT08CounterName{$nodeno}};
+#	}elsif(defined(@::NCT08CounterName)){
+	}elsif($#::NCT08CounterName>=0){
+		@array=@::NCT08CounterName;
+#	}elsif(defined(@::CounterName)){
+	}elsif($#::CounterName>=0){
+		@array=@::CounterName;
+	}else{
+		@array=qw(C00 C01 C02 C03 C04 C05 C06 C07 TMR);
+	}
+	unless($#array eq 8){
+		die "Invalid number of countername\[$#array\]\n";
+	}else{
+		for($i=0;$i<=$#array;$i++){
+			$name="$counternodetag.$array[$i]";
+			if(defined($::NCT08CounterNumber{$name})){
+				die "Duplicate nodename\[$name\].\n";
+			}
+			if(defined($::NCT08ControllerNumber{$name})){
+				die "Duplicate nodename\[$name\].\n";
+			}
+			if($::Debug){print "Counter-$i of Controller-$nodeno named $name\n";}
+			$cseqno=$#{$::NCT08CounterSeqName{$counternodetag}}+1;
+			$::NCT08CounterSeqName{$counternodetag}[$cseqno]=$name;
+			$::NCT08CounterNumber{$name}="$nodeno\:$i\:$cseqno";
+			$::NCT08CounterName{$nodeno}[$i]=$name;
+		}
+	}
+	
+	#Connect to Device.
+	if($::Debug){print "### Connecting to NCT08($server \/ $portno).###\n";}
+	$::NCT08Dev{$nodeno}=nportserv->new($server,$portno) 
+	  or die "Failed to connect $server/$portno\n";
+
+	unless($pgmtag){
+		$::NCT08_PGM_TAG{$nodeno}=$pgmtag;
+	}else{
+		$::NCT08_PGM_TAG{$nodeno} = '';
+	}
+	unless($pgmver){
+		$::NCT08_PGM_VER{$nodeno}=$pgmver;
+	}else{
+		$::NCT08_PGM_VER{$nodeno} = NCT08_PGM_VERSION;
+	}
+	return(1);
+}
+
+sub get_help_list{
+	my $to = shift;
+	my $cmd = shift;
+	my %array=();
+		
+	unless($cmd){
+		if($to eq $::NodeName){
+			foreach (keys(%{$::NCT08help{'NodeName'}})){$array{$_}=1;}
+		}
+		if(defined($::NCT08CounterSeqName{$to})){
+			foreach (keys(%{$::NCT08help{'CounterTag'}})){
+				unless(defined($array{$_})){$array{$_}=1;}
+			}
+		}
+	 	my($nodeno,$cno,$cseqno)=name2num($to);
+ 		if($nodeno>=0){
+ 			if($cno>=0){
+				foreach (keys(%{$::NCT08help{'Counter'}})){
+					unless(defined($array{$_})){$array{$_}=1;}
+				}
+		 	}else{
+				foreach (keys(%{$::NCT08help{'Controller'}})){
+					unless(defined($array{$_})){$array{$_}=1;}
+				}
+		 	}
+		 }
+		return(join(" ", sort keys(%array)));
+	}
+
+ 	my($nodeno,$cno,$cseqno)=name2num($to);
+	if($nodeno>=0){
+		if($cno>=0){
+			if(defined($::NCT08help{'Counter'}{$cmd})){
+				return($::NCT08help{'Counter'}{$cmd});
+			}
+	 	}else{
+			if(defined($::NCT08help{'Controller'}{$cmd})){
+				return($::NCT08help{'Controller'}{$cmd});
+			}
+	 	}
+	}
+	if(defined($::NCT08CounterSeqName{$to})){
+		if(defined($::NCT08help{'CounterTag'}{$cmd})){
+			return($::NCT08help{'CounterTag'}{$cmd});
+		}
+	}
+	if($to eq $::NodeName){
+		if(defined($::NCT08help{'NodeName'}{$cmd})){
+			return($::NCT08help{'NodeName'}{$cmd});
+		}
+	}
+
+	$::Error = "Command \"$cmd\" not found.";
+	return('');
+}
+
+sub set_help_list{
+	my $title='';
+	my $titlenew;
+	my $buf='';
+	my $target='';
+	
+	%::NCT08help={
+        'Controller' => {'hello'=>'','help'=>''},
+        'Counter'    => {'hello'=>'','help'=>''},
+        'NodeName'   => {'hello'=>'','help'=>''},
+        'CounterTag' => {'hello'=>'','help'=>''}
+	};
+	while(<DATA>){
+		if(/^(?:Usage|Event): (\w+)( |$)/){
+			$titlenew = $1;
+			if($title){
+				$buf =~ s/\r//gm;
+				$buf =~ s/\n/\\n/gm;
+				if($target =~ /NodeName/){
+					unless(($::Registered eq 1) and defined($::NCT08ControllerNumber{$::NodeName})){
+						$::NCT08help{'NodeName'}{$title} = $buf;
+					}
+				}
+				if($target =~ /CTag/){
+					$::NCT08help{'CounterTag'}{$title} = $buf;
+				}
+				if($target =~ /Controller/){
+					if(($::Registered eq 1) and defined($::NCT08ControllerNumber{$::NodeName}) and ($target=~/ControllerN/)){
+					}elsif(($::Registered eq 1) and defined($::NCT08CounterSeqName{join('',sort(keys(%::NCT08ControllerNumber)))}) and ($target=~/ControllerC/)){
+					}else{
+						$::NCT08help{'Controller'}{$title} = $buf;
+					}
+				}
+				if($target =~ /Counter/){
+					$::NCT08help{'Counter'}{$title} = $buf;
+				}
+				$buf = '';
+			}
+			$title = $1;
+		}
+		if(/Target: (.+)/){
+			$target=$1;
+			next;
+		}
+		$buf .= $_;
+	}
+	$buf =~ s/\r//gm;
+	$buf =~ s/\n/\\n/gm;
+	if($target =~ /Controller/){
+		$::NCT08help{'Controller'}{$title} = $buf;
+	}
+	if($target =~ /Counter/){
+		$::NCT08help{'Counter'}{$title} = $buf;
+	}
+	if($target =~ /NodeName/){
+		$::NCT08help{'NodeName'}{$title} = $buf;
+	}
+	if($target =~ /CounterTag/){
+		$::NCT08help{'CounterTag'}{$title} = $buf;
+	}
+	
+	return(1);
+}
+
+__DATA__
+Usage: GetControllerNumber
+Target: ControllerN
+    Get a controller number.
+
+Usage: GetCounterNodeNameList
+Target: ControllerC
+    List all counter names of the nodename.
+
+Usage: GetCounterNodeName Number
+Target: ControllerC
+    Get a counter nodename of "Number" of the nodename.
+
+Usage: GetCounterNumberByNodeName Name
+Target: ControllerC
+    Get a counter number of counter nodename - "Name".
+
+Usage: CounterReset [Number|NumberFrom-NumberTo]
+Target: Controller
+    Reset all the counters/timer to 0 with no indication of the nodename.
+    Reset a counter of counter - "Number" to 0.
+    Reset the counters from counter - "NumberFrom" to counter - "NumberTo" to 0.
+        "Number" Condition is between 0 and 8.
+	
+Usage: TimerReset
+Target: Controller
+    Reset a timer counter to 0.
+
+Usage: PresetCounterReset
+Target: Controller
+    Reset a preset counter to 0.
+
+Usage: GetValue [Number|NumberFrom-NumberTo]
+Target: Controller
+    Get all postion data of counters/timer with no indication.
+        delimiter is ','.
+    Get a postion data of counter - "Number".
+    Get a postion data from counter - "CounterNumberFrom" to counter - "CounterNumberTo".
+        "Number" Condition is between 0 and 8.
+
+Usage: GetValuePresetCounter
+Target: Controller
+    Get a postion data of preset counter.
+
+Usage: GetValueTimer
+Target: Controller
+    Get a postion data of timer counter.
+
+Usage: IsOverflow [Number|NumberFrom-NumberTo]
+Target: Controller
+    Check, is counter overflow?, return 1(overflow) or 0(not overflow).
+    Get all overflow data of counters/timer with no indication.
+        delimiter is ','.
+    Get a overflow data of counter - "Number".
+    Get a overflow data from counter - "NumberFrom" to counter - "CounterNumberTo".
+        "Number" Condition is between 0 and 8.
+
+Usage: IsOverflowPresetCounter
+Target: Controller
+    Check, is preset counter overflow?, return 1(overflow) or 0(not overflow).
+    Get a overflow data of preset counter.
+
+Usage: IsOverflowTimer
+Target: Controller
+    Check, is counter overflow?, return 1(overflow) or 0(not overflow).
+    Get a overflow data of timer counter.
+
+Usage: GetHardwareVersion
+Target: Controller
+    Get hardware version of NCT08-0x.
+
+Usage: GetRomVersion
+Target: Controller
+    Get firmware virsion of NCT08-0x.
+
+Usage: IsBusy
+Target: Controller
+    Check, is counter busy?
+
+Usage: CountStart
+Target: Controller
+    Start counting.
+
+Usage: Stop
+Target: Controller
+    Stop counting.
+
+Usage: GetStopMode
+Target: Controller
+    Get stop mode.
+    C: Stop counting automatically when preset counter's reached preset counter value,
+    T: Stop counting automatically when timer's reached timer preset value,
+    N: stop manually.
+
+Usage: GetCountPreset
+Target: Controller
+    Get preset counter value, unit is cts.
+
+Usage: GetTimerPreset
+Target: Controller
+    Get timer preset value, unit is microseconds.
+
+Usage: GetCountPresetK
+Target: Controller
+    Get preset counter value, unit is kcts.
+
+Usage: GetTimerPresetK
+Target: Controller
+    Get timer preset value, unit is miliseconds.
+
+Usage: SetStopMode C|T|N
+Target: Controller
+    Set stop mode.
+    C: Stop counting automatically when preset counter's reached preset counter value,
+    T: Stop counting automatically when timer's reached timer preset value,
+    N: stop manually.
+
+Usage: SetCountPreset Value
+Target: Controller
+    Set "Value"(cts) into preset counter value, Value <= 4294967925 (cts)
+
+Usage: SetTimerPreset Value
+Target: Controller
+    Set "Value"(microsec) into timer preset value, Value <= 4294967925 (microsec)
+
+Usage: SetCountPresetK Value
+Target: Controller
+    Set "Value"(kcts) into preset counter value, Value <= 4294967 (kcts)
+
+Usage: SetTimerPresetK Value
+Target: Controller
+    Set "Value"(ms) into timer preset value, Value <= 4294967 (ms)
+
+Usage: GetAllNodeNameList
+Target: NodeName
+    Get all valid nodenames.
+
+Usage: GetAllControllerNodeNameList
+Target: NodeName
+    Get all valid nodenames indicating controllers.
+
+Usage: GetAllCounterNodeNameList
+Target: NodeName
+    Get all valid nodenames indicating each counters.
+
+Usage: GetAllCounterTopNodeNameList
+Target: NodeName
+    Get all valid nodenames indicating counter's modification.
+
+Usage: GetCounterList
+Target: CTag
+    List all counter names of the nodename.
+
+Usage: GetCounterName Number
+Target: CTag
+    Get a counter name of "Number" of the nodename.
+
+Usage: GetCounterNumber CounterName
+Target: CTag
+    Get a number of "CounterName" of the nodename.
+
+Usage: GetValue [Number]
+Target: CTag
+    Get all postion data of counters/timers of the nodename with no indication.
+        delimiter is ','.
+    Get a postion data of a counter/timer of "Number" of the nodename.
+
+Usage: IsOverflow [Number]
+Target: CTag
+    Check, is counter overflow?, return 1(overflow) or 0(not overflow).
+    Get all overflow data of counters/timers of the nodename with no indication.
+        delimiter is ','.
+    Get a overflow data of a counter/timer of "Number" of the nodename.
+
+Usage: GetCounterNumber
+Target: Counter
+    Get a counter/timer number of the nodename.
+
+Usage: CounterReset
+Target: Counter
+    Reset a counter/timer of the nodename to 0.
+
+Usage: GetValue
+Target: Counter
+    Get a postion data of a counter/timer of the nodename.
+
+Usage: IsOverflow
+Target: Counter
+    Check, is counter overflow?, return 1(overflow) or 0(not overflow).
+    Get a overflow data of a counter/timer of the nodename.
+
+Usage: CounterReset
+Target: CTag
+    Reset all counters/timers of the nodename to 0 with no indication.
+    Reset a counter/timer of "Number" of the nodename to 0.
+
+Usage: hello
+Target: Controller, Counter, NodeName, CTag
+    The client returns "@hello nice to meet you."
+
+Usage: help [Commmand]
+Target: Controller, Counter, NodeName, CTag
+    List commands or show usage (with "command")
+
+Usage: flushdata
+Target: Controller, NodeName
+    Get all status of NCT08-0x and sends event messages to "System".
+
+Usage: flushdatatome
+Target: Controller, NodeName
+    Get all status of NCT08-0x and sends event messages to me.
+
+Event: _ChangedIsBusy Value
+Target: Controller
+    _ChangedIsBusy event shows that the status of counting or not.
+    1 is busy, 0 is free.
+
+Event: _ChangedValue Value
+Target: Counter
+    _ChangedValue event shows that the counters/timer has been changed.
+
+Event: _ChangedIsOverflow Value
+Target: Counter
+    _ChangedIsOverflow event shows that the overflow status of the counters/timer has been changed.
+    1 for overflow, 0 for not.

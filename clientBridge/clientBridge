@@ -1,0 +1,1210 @@
+#!/usr/bin/perl
+package PerlSvc;
+
+use strict;
+use IO::Socket;
+use IO::Select;
+use Symbol;
+use Time::HiRes qw( gettimeofday tv_interval );
+
+require Getopt::Long;
+use clientBridge;
+
+#########################################################################
+#STARS bridge
+$PerlSvc::Version='
+Version: 1 
+$Revision: 1.3 $
+$Date: 2013/07/24 12:00:00 $
+
+';
+# Update:
+# 2010/01/19 Y.Nagatani Released.
+# 2013/07/24 Y.Nagatani Bugfix:clientBridge abend when Debugger login.
+#########################################################################
+#Setting for system
+$PerlSvc::Port           =  7057;
+$PerlSvc::LibDir         =  'clientBridge-lib/';
+$PerlSvc::KeyDir         =  '';
+$PerlSvc::NodeName       =  'clientBridge'; # stars nodename me.
+$PerlSvc::Server         =  '';        # Connecting starsserver
+$PerlSvc::ServerPort     =  '';        # Connecting starsserver port
+$PerlSvc::ServerKeyfile  =  '';        # Connecting starsserver keyfile
+use constant RNDMAX      => 10000;
+use constant HOSTLIST    => 'allow.cfg';
+use constant ALIASES     => 'aliases.cfg';
+use constant CMDDENY     => 'command_deny.cfg';
+use constant CMDALLOW    => 'command_allow.cfg';
+#########################################################################
+
+######### ONLY DEVELOP ##########
+$::Debug=0; 
+######### ONLY DEVELOP ##########
+
+$PerlSvc::StartTime=[gettimeofday];
+
+$PerlSvc::Version=~s/(\n|\r|\$)//g;
+
+##WinSVC##
+%PerlSvc::Config = (ServiceName => $PerlSvc::NodeName);
+
+##WinSVC##
+$PerlSvc::Debug=0;        #special debug
+$PerlSvc::tak=0;          #stars object
+%PerlSvc::NodeSFX=();     #node name with suffix and handle
+%PerlSvc::NodeHSFX=();    #handle and suffix value
+
+#%PerlSvc::Node=();       #node name and file handle, name is key, handle is value
+
+%PerlSvc::NodeH=();       #file handle and node name, handle is key, name is value
+%PerlSvc::NodeBuf=();     #node input buffer
+%PerlSvc::NodeFlgOn=();   #node list which sends event message to this node
+%PerlSvc::NodeIDKey =();  #KeyNumber from server
+%PerlSvc::AliasReal =();  #alias list, key is aliase
+%PerlSvc::RealAlias =();  #alias list, key is real name
+@PerlSvc::CmdDeny=();     #Command deny list with RegEx
+@PerlSvc::CmdAllow=();    #Command allow list with RegEx
+
+$PerlSvc::Xfh;            #Handle for printing
+$PerlSvc::Xbuf;           #Buffer for printing
+$PerlSvc::readable;       #Used by select in main loop
+
+unless (defined &ContinueRun) {
+	*ContinueRun      = sub { return 1 };
+	*RunningAsService = sub { return 0 };
+	Interactive();
+}
+
+exit(0);
+
+sub Interactive{
+	Install();
+	Startup();
+}
+
+sub Install{
+	Getopt::Long::GetOptions(
+	'service=s'       => \$PerlSvc::Config{ServiceName},
+	'port=i'          => \$PerlSvc::Port,
+	'lib=s'           => \$PerlSvc::LibDir,
+	'key=s'           => \$PerlSvc::KeyDir,
+	'nodename=s'      => \$PerlSvc::NodeName,
+	'starsserver=s'   => \$PerlSvc::Server,
+	'starsport=i'     => \$PerlSvc::ServerPort,
+	'starskeyfile=s'  => \$PerlSvc::ServerKeyfile,
+	'd'               => \$PerlSvc::Debug,
+	'h'               => \&usage
+	);
+
+    $PerlSvc::Config{DisplayName} = "$PerlSvc::Config{ServiceName} STARS Bridge Service";
+    $PerlSvc::Config{Parameters}  = "--p $PerlSvc::Port --lib $PerlSvc::LibDir";
+    if($PerlSvc::KeyDir)       {$PerlSvc::Config{Parameters} .= " --key $PerlSvc::KeyDir";}
+    if($PerlSvc::NodeName)     {$PerlSvc::Config{Parameters} .= " --nodename $PerlSvc::NodeName";}
+    if($PerlSvc::Server)       {$PerlSvc::Config{Parameters} .= " --starsserver $PerlSvc::Server";}
+    if($PerlSvc::ServerPort)   {$PerlSvc::Config{Parameters} .= " --starsport $PerlSvc::ServerPort";}
+    if($PerlSvc::ServerKeyfile){$PerlSvc::Config{Parameters} .= " --starskeyfile $PerlSvc::ServerKeyfile";}
+    if($PerlSvc::Debug){$PerlSvc::Config{Parameters} .= " --d";}
+}
+
+# Set Starsup Parameters.------------------------------------
+sub clientBridge_analizeoptions{
+	unless($PerlSvc::LibDir =~ /\/$/){$PerlSvc::LibDir .= '/';}
+	if($PerlSvc::KeyDir eq ''){$PerlSvc::KeyDir=$PerlSvc::LibDir;}
+	unless($PerlSvc::KeyDir =~ /\/$/){$PerlSvc::KeyDir .= '/';}
+	if($PerlSvc::NodeName eq ''){$PerlSvc::NodeName=$PerlSvc::Config{ServiceName};}
+	return(1);
+}
+# Print usage. ---------------------------------------------
+sub usage{
+  Getopt::Long::GetOptions(
+  'service=s'       => \$PerlSvc::Config{ServiceName},
+  'port=i'          => \$PerlSvc::Port,
+  'lib=s'           => \$PerlSvc::LibDir,
+  'key=s'           => \$PerlSvc::KeyDir,
+  'nodename=s'      => \$PerlSvc::NodeName,
+  'starsserver=s'   => \$PerlSvc::Server,
+  'starsport=i'     => \$PerlSvc::ServerPort,
+  'starskeyfile=s'  => \$PerlSvc::ServerKeyfile,
+  'd'               => \$PerlSvc::Debug
+  );
+  clientBridge_analizeoptions();
+## Todo: Please modify help message for "-h" option.
+  print "STARS Bridge $PerlSvc::Version\n";
+  print "Usage: $0 [-h] [-port ServerPort] [-lib LibDir] [-key KeyDir]\n";
+  print "          [-service ServiceName] [-nodename NodeName]\n";
+  print "          [-starsserver StarsServer] [-starsport StarsServerPort]\n";
+  print "          [-starskeyfile StarsServerKeyFile]\n\n";
+  print "You are able to run STARS bridge as service with Windows.\n";
+  print "Install and run as service:\n";
+  print "   $0 --install auto -port ServerPort -lib LibDir -starsserver StarsServer -starskeyfile StarsServerKeyFile\n";
+  print "Remove service:\n";
+  print "   $0 --remove\n\n";
+  print "If your OS is FreeBSD, Linux etc., you are able to run STARS bridge on\n";
+  print " back ground.\n";
+  print "   ./$0 -port ServerPort -starsserver StarsServer &\n\n";
+  unless($PerlSvc::Debug){exit(0);}
+  print "----------------------------------------------------------------------\n";
+  print "Startup Parameters will be:\n";
+  print "    port         = $PerlSvc::Port\n";
+  print "    lib          = $PerlSvc::LibDir\n";
+  print "    key          = $PerlSvc::KeyDir\n";
+  print "    service      = $PerlSvc::Config{ServiceName}\n";
+  print "    nodename     = $PerlSvc::NodeName\n";
+  unless($PerlSvc::Server)       {$PerlSvc::Server='localhost';}
+  unless($PerlSvc::ServerPort)   {$PerlSvc::ServerPort='6057';}
+  unless($PerlSvc::ServerKeyfile){$PerlSvc::ServerKeyfile="$PerlSvc::NodeName.key";}
+  print "    starsserver  = $PerlSvc::Server\n";
+  print "    starsport    = $PerlSvc::ServerPort\n";
+  print "    starskeyfile = $PerlSvc::ServerKeyfile\n";
+  exit(0);
+}
+###=============================================================
+sub Startup{
+	Getopt::Long::GetOptions(
+	'port=i'          => \$PerlSvc::Port,
+	'lib=s'           => \$PerlSvc::LibDir,
+	'key=s'           => \$PerlSvc::KeyDir,
+	'nodename=s'      => \$PerlSvc::NodeName,
+	'starsserver=s'   => \$PerlSvc::Server,
+	'starsport=i'     => \$PerlSvc::ServerPort,
+	'starskeyfile=s'  => \$PerlSvc::ServerKeyfile,
+    'd'               => \$PerlSvc::Debug
+	);
+	clientBridge_analizeoptions();
+
+	my $fh;
+	my $tlap=0;
+
+	my $new_sock;
+	my $bufhn;
+	my $ipadr;
+	my $fromnode;
+	my $tonode;
+	my $buf;
+	my $ready;
+	my $s;
+
+##Initialize
+	srand(time() ^ ($$ + ($$ <<15)) );
+	clientBridge_loadcommandpermission();
+	clientBridge_loadaliases();
+
+	my $listener = 
+	      IO::Socket::INET->new(
+	        LocalPort => $PerlSvc::Port, Proto => 'tcp', Listen => 5, Reuse => 1 );
+	    die "Can't create socket for listening: $!" unless $listener;
+
+	$PerlSvc::readable = IO::Select->new;     # Create a new IO::Select object
+	$PerlSvc::readable->add($listener);          # Add the listener to it
+
+#--main---
+	while(ContinueRun()) {
+		if($PerlSvc::tak){
+			$fh=stars->Mainloop('',1,1);
+			if($fh eq $PerlSvc::tak->gethandle){
+				$PerlSvc::tak=0;
+				$tlap=150;
+			}
+		}else{
+			$tlap--;
+			if($tlap<=0){
+				$tlap=150;
+				connect2stars();
+			}
+		}
+#		($ready) = IO::Select->select($PerlSvc::readable, undef, undef, 2);
+		($ready) = IO::Select->select($PerlSvc::readable, undef, undef, 0.1);
+		foreach $s (@$ready) {
+			if($s == $listener) {
+				$new_sock = $listener->accept;
+				if($new_sock){
+					select($new_sock);$|=1;select(STDOUT);
+					$PerlSvc::readable->add($new_sock);
+					$bufhn = clientBridge_gethostname($new_sock);
+				    $ipadr = clientBridge_gethostaddr($new_sock);
+#					unless(clientBridge_checkhost($PerlSvc::LibDir.HOSTLIST, $bufhn)){
+					unless(clientBridge_checkhost($PerlSvc::LibDir.HOSTLIST, $bufhn, $ipadr, 0)){
+						printh($new_sock, "Bad host. $bufhn\n");
+						$PerlSvc::readable->remove($new_sock);
+						$new_sock->close;
+					}
+					$PerlSvc::NodeBuf{$new_sock}='';
+					$PerlSvc::NodeIDKey{$new_sock}=get_nodeidkey();
+					printh($new_sock,$PerlSvc::NodeIDKey{$new_sock}."\n");
+				}
+			} else {  # It is an established connection
+				if( sysread($s,$buf,512) ){
+					$PerlSvc::NodeBuf{$s} .= $buf;
+					while($PerlSvc::NodeBuf{$s} =~ s/([^\r\n]*)\r*\n//){
+						$buf=$1;
+						if ($buf =~ /^(exit|quit)$/i) {
+							if($PerlSvc::Debug){
+								if(exists $PerlSvc::NodeH{$s}){
+									printd("$PerlSvc::NodeH{$s}.$PerlSvc::NodeHSFX{$s}>$PerlSvc::NodeName $buf\n");
+								}
+							}
+							delnode($s);
+							$PerlSvc::readable->remove($s);
+							$s->close;
+						} elsif(exists $PerlSvc::NodeHSFX{$s}){
+							sendmes($s,"$buf");
+						} else {
+							unless(addnode($s,"$buf")){
+								delete $PerlSvc::NodeBuf{$s};
+								delete $PerlSvc::NodeIDKey{$s};
+								$PerlSvc::readable->remove($s);
+								$s->close;
+							}
+						}
+					}
+				} else { # The client disconnected.
+					if($PerlSvc::Debug){
+						if(exists $PerlSvc::NodeH{$s}){
+							printd("$PerlSvc::NodeH{$s}.$PerlSvc::NodeHSFX{$s} is disconnected.\n");
+						}
+					}
+					delnode($s);
+					$PerlSvc::readable->remove($s);
+					$s->close;
+				}
+			}
+		}
+	}
+	return(0);
+}
+#------- Send message to clientBridge -------------------------
+sub sendmes{
+	my($handle,$buf)=@_;
+	my($fromterm,$fromA,$fromD,$fromR,$fromDA,$fromDR);
+	my($toH,$toA,$toD);
+	my $aliasme=getaliasnode($PerlSvc::NodeName);
+
+	### Message from clientBridge clients.
+	if(exists $PerlSvc::NodeH{$handle}){
+		if($buf =~ s/^([a-zA-Z_0-9.\-]+)>//){
+			if($PerlSvc::Debug){printd("$1>$buf\n");}
+			$fromterm=$1;
+			my $buf="$PerlSvc::NodeName.$fromterm";
+			if($buf=~s/^$PerlSvc::NodeH{$handle}//){
+				if($buf eq ''){
+					$buf = "$PerlSvc::NodeH{$handle}.$PerlSvc::NodeHSFX{$handle}";
+				}elsif($buf=~/^\./){
+#					if($buf=~/\.$PerlSvc::NodeHSFX{$handle}$/){
+#						$buf="$PerlSvc::NodeH{$handle}$buf";
+#					}else{
+						$buf="$PerlSvc::NodeH{$handle}$buf.$PerlSvc::NodeHSFX{$handle}";
+#					}
+				}else{
+					$buf=$fromterm;
+				}
+			}else{
+				$buf=$fromterm;
+			}
+			($_, $fromD, $fromR, $fromDA, $fromDR)=getrealnode($buf);
+			$fromA = getaliasnode($fromR);
+		}else{
+			if($PerlSvc::Debug){
+				printd("$PerlSvc::NodeH{$handle}.$PerlSvc::NodeHSFX{$handle}>$buf\n");
+			}
+			$fromterm = $PerlSvc::NodeH{$handle};
+			$fromR = "$fromterm.$PerlSvc::NodeHSFX{$handle}";
+			$fromA = getaliasnode($fromR);
+			($_, $fromD, $_, $fromDA, $fromDR)=getrealnode($fromA);
+			$fromterm=~s/^$PerlSvc::NodeName\.//;
+		}
+	}else{
+		# Ignore. clientBridge Bug.
+		if($PerlSvc::Debug){printd("clientBridge>clientBridge _DEBUG Er: Error of handle.\n");}
+		return(1);
+	}
+
+	unless($buf =~ s/^([a-zA-Z_0-9.\-]+)\s*//){
+		printh($handle, "$aliasme>$fromterm> \@\n");
+		return(1);
+	}
+
+	$toA = $1;
+	($toH, $toD, $_)=getrealnode($toA);
+	if($toD=~/^$PerlSvc::NodeName\./){
+		unless($toH){
+			unless($buf =~ /^[_@]/){
+				printh($handle, "$aliasme>$fromterm \@$buf Er: $toA is down.\n");
+			}
+			return(1);
+		}
+	}
+	
+	if($buf =~ /^[^@]/ and
+		( (@PerlSvc::CmdDeny and isDenyCheckCmdDeny($fromD, $toD, $buf))
+		or (@PerlSvc::CmdAllow and isDenyCheckCmdAllow($fromD, $toD, $buf)) ) ){
+		if($buf =~ /^[^_]/){
+			printh($handle, "$aliasme>$fromterm \@$buf Er: Command denied.\n");
+		}
+		return(1);
+	}
+
+	if($toD eq $PerlSvc::NodeName){
+		return clientBridge_commands($handle, $fromterm, $buf, $fromR, $fromA, $aliasme);
+	}elsif($toH){
+		$toD=~s/^$PerlSvc::NodeName\.//;
+		if($buf =~ /^[_@]/){
+			printh($toH, "$fromDA>$toD $buf\n");
+		}else{
+			printh($toH, "$fromA>$toD $buf\n");
+		}
+		return(1);
+	}else{
+		if($toD eq 'System'){
+			if($buf=~/^_/){
+				starsbr_event2($fromterm,$buf,$fromR,$fromA);
+				if($PerlSvc::tak){
+					mySend("$fromDR>$toD $buf"); # Important
+				}
+				return(1);
+			}
+			unless(presystem_commands($handle, $fromterm, $buf, $fromR, $fromA, $aliasme)){
+				unless($PerlSvc::tak){
+					unless(connect2stars()){
+						printh($handle, "System>$fromterm \@$buf Er: $toA is down.\n");
+						return;
+					}
+				}
+				my($f,$t,$m)=myact("$fromR>$toD $buf");
+				if($f){handler($f,$t,$m);}
+			}
+		}else{
+			unless($PerlSvc::tak){
+				unless(connect2stars()){
+					printh($handle, "System>$fromterm \@$buf Er: $toA is down.\n");
+					return;
+				}
+			}
+			if($buf =~ /^[_@]/){
+#				mySend("$fromR>$toD $buf");
+				mySend("$fromDR>$toD $buf");
+			}else{
+				my($f,$t,$m)=myact("$fromR>$toD $buf");
+				if($f){handler($f,$t,$m);}
+			}
+		}
+	}
+	return(1);
+}
+############################################################
+# Command handler from Stars server ------------------------
+############################################################
+# act Stars server -----------------------------------------
+sub myact{
+	my $msg=shift;
+	if($PerlSvc::Debug){printd("$msg\n");}
+	my($f,$t,$m)=$PerlSvc::tak->act("$msg");
+	return($f,$t,$m);
+}
+# Send Stars server ----------------------------------------
+sub mySend{
+	my $msg=shift;
+	if($PerlSvc::Debug){printd("$msg\n");}
+	$PerlSvc::tak->Send($msg);
+}
+# Message from Stars server ----------------------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($fromnode, $tonode, $mess) = @_;
+	my $rt;
+	my $fromA;
+
+	if($PerlSvc::Debug){printd("$fromnode>$tonode $mess\n");}
+
+	## Message to clientBridge ##
+	if($tonode=~/^$PerlSvc::NodeName$/){
+		### Check command permission
+		if($mess =~ /^[^@]/ and
+			( (@PerlSvc::CmdDeny and isDenyCheckCmdDeny($fromnode, $tonode, $mess))
+			or (@PerlSvc::CmdAllow and isDenyCheckCmdAllow($fromnode, $tonode, $mess)) ) ){
+			if($mess =~ /^[^_]/){
+				mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: Command denied.");return;
+			}
+			return;
+		}
+		if($mess =~ /^$/){
+			mySend("$PerlSvc::NodeName>$fromnode \@");return;
+		}
+		$fromA = getaliasnode($fromnode);
+		### Event message
+		if($mess =~ /^[_]/){
+			stars_event($fromA,$mess);return;
+		### Command message
+		}elsif($mess =~ /^[^@]/){
+			return clientBridge_commands($PerlSvc::tak->gethandle(),$fromnode,$mess,$fromnode,$fromA,$tonode);
+		}
+		### Ignore reply message
+		return;
+	}elsif($tonode=~/^$PerlSvc::NodeName\.(\S+)/){
+		### Check if clientBridge clients exists
+		my($toH,$toD);
+		($toH, $toD, $_)=getrealnode($tonode);
+		unless($toH){
+			unless($mess =~ /^[_@]/){
+				mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: $tonode is down.");
+			}
+			return;
+		}
+		### Check command permission
+		if($mess =~ /^[^@]/ and
+			( (@PerlSvc::CmdDeny and isDenyCheckCmdDeny($fromnode, $tonode, $mess))
+			or (@PerlSvc::CmdAllow and isDenyCheckCmdAllow($fromnode, $tonode, $mess)) ) ){
+			if($mess =~ /^[^_]/){
+				mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: Command denied.");return;
+			}
+			return;
+		}
+		$fromA = getaliasnode($fromnode);
+		### Event & command & reply message
+		$toD=~s/^$PerlSvc::NodeName\.//;
+		printh($toH, "$fromA>$toD $mess\n");
+		return;
+	}elsif($mess =~ /^[@_]/){
+		return;
+	}else{
+		mySend("$PerlSvc::NodeName>$fromnode \@$mess Er: $tonode is down.");
+		return;
+	}
+	return;
+}
+#------- clientBridge: Event coming from system to clientBridge ----
+sub stars_event{
+	my($frnA,$cmd) = @_;
+	my $to;
+	my $buffh;
+
+	foreach (keys(%PerlSvc::NodeFlgOn)){
+		if($PerlSvc::NodeFlgOn{$_} =~ / $frnA /){
+			($buffh, $to, $_)=getrealnode($_);
+			if($buffh){
+				$to=~s/^$PerlSvc::NodeName\.//;
+				printh($buffh, "$frnA>$to $cmd\n");
+			}
+		}
+	}
+	return(1);
+}
+#------- starsbr: Event coming ---------------------------
+sub starsbr_event2{
+	my($frn,$cmd,$frnR,$frnA) = @_;
+	my $to;
+	my $buffh;
+
+	my $frnX;
+	($_, $frnX, $_)=getrealnode($frnA);
+	$frnX=getaliasnode($frnX);
+
+	foreach (keys(%PerlSvc::NodeFlgOn)){
+		if($PerlSvc::NodeFlgOn{$_} =~ / $frnA /){
+			($buffh, $to, $_)=getrealnode($_);
+			$to=~s/^$PerlSvc::NodeName\.//;
+			if($buffh){
+				printh($buffh, "$frnA>$to $cmd\n");
+			}
+		}elsif($frnX and $PerlSvc::NodeFlgOn{$_} =~ / $frnX /){
+			($buffh, $to, $_)=getrealnode($_);
+			$to=~s/^$PerlSvc::NodeName\.//;
+			if($buffh){
+				## Added by nagatani 07/12/11
+#				printh($buffh, "$frnA>$to $cmd\n");
+				printh($buffh, "$frnX>$to $cmd\n");
+			}
+		}
+	}
+#	if($PerlSvc::tak){
+#		mySend("$frnR>System $cmd");
+#	}
+	return(1);
+}
+#------- clientBridge: Event coming from clientBridge clients ------
+sub clientBridge_event{
+	my($frn,$cmd,$frnR,$frnA) = @_;
+	my $to;
+	my $buffh;
+
+	my $frnX;
+	($_, $frnX, $_)=getrealnode($frnA);
+	$frnX=getaliasnode($frnX);
+
+	foreach (keys(%PerlSvc::NodeFlgOn)){
+		if($PerlSvc::NodeFlgOn{$_} =~ / $frnA /){
+			($buffh, $to, $_)=getrealnode($_);
+			$to=~s/^$PerlSvc::NodeName\.//;
+			if($buffh){
+				printh($buffh, "$frnA>$to $cmd\n");
+			}
+		}elsif($frnX and $PerlSvc::NodeFlgOn{$_} =~ / $frnX /){
+			($buffh, $to, $_)=getrealnode($_);
+			$to=~s/^$PerlSvc::NodeName\.//;
+			if($buffh){
+				printh($buffh, "$frnA>$to $cmd\n");
+			}
+		}
+	}
+	if($PerlSvc::tak){
+		mySend("$frnR>System $cmd");
+	}
+	return(1);
+}
+
+
+#------Stars System Commands--------------------------------------------------
+sub presystem_commands{
+	my ($hd, $frn, $cmd, $frnR, $frnA, $aliasme) = @_;
+	my ($dhandle,$toR);
+	if($cmd=~/^_/){
+		clientBridge_event($frn,$cmd,$frnR,$frnA);
+	}elsif($cmd =~ s/^disconnect //){
+		($dhandle, $_, $toR)=getrealnode($cmd);
+		if($dhandle or $toR=~/^$PerlSvc::NodeName\./){
+			clientBridge_disconnect($hd,$frn,$cmd,$aliasme);
+		}else{return(0);}
+	}elsif($cmd =~ s/^flgon //){
+		clientBridge_flgon($hd,$frn,$cmd,$frnR);
+	}elsif($cmd =~ s/^flgoff //){
+		clientBridge_flgoff($hd,$frn,$cmd,$frnR);
+	}elsif($cmd =~ /^\@/){return(1);
+	}else{
+		return(0);
+	}
+	return(1);
+}
+#------ clientBridge Commands --------------------------------
+sub clientBridge_commands{
+	my ($hd, $frn, $cmd, $frnR, $frnA, $aliasme) = @_;
+	if($cmd =~ /^_/){
+		clientBridge_event($frn,$cmd,$frnR,$frnA);
+	}elsif($cmd =~ s/^disconnect //){
+		clientBridge_disconnect($hd,$frn,$cmd,$aliasme);
+	}elsif($cmd eq 'loadpermission'){
+		clientBridge_loadcommandpermission();
+		printh($hd, "$aliasme>$frn \@loadpermission Command permission list has been loaded.\n");
+	}elsif($cmd eq 'loadaliases'){
+		clientBridge_loadaliases();
+		printh($hd, "$aliasme>$frn \@loadaliases Aliases has been loaded.\n");
+	}elsif($cmd eq 'listaliases'){
+		printh($hd, "$aliasme>$frn \@listaliases ".clientBridge_listaliases()."\n");
+	}elsif($cmd eq 'listnodes'){
+		printh($hd, "$aliasme>$frn \@listnodes ".clientBridge_listnodes()."\n");
+	}elsif($cmd eq 'gettime'){
+		printh($hd, "$aliasme>$frn \@gettime ".clientBridge_gettime()."\n");
+	}elsif($cmd eq 'hello'){
+		printh($hd, "$aliasme>$frn \@hello Nice to meet you.\n");
+	}elsif($cmd eq 'getversion'){
+		printh($hd, "$aliasme>$frn \@getversion $PerlSvc::Version\n");
+	}elsif($cmd eq 'help'){
+		printh($hd, "$aliasme>$frn \@help whoami loadaliases listaliases loadpermission listnodes gettime hello getversion disconnect\n");
+### new commands
+	}elsif($cmd eq 'listflgons'){
+		printh($hd, "$aliasme>$frn \@listflgons ".clientBridge_listflgons()."\n");
+	}elsif($cmd eq 'whoami'){
+		printh($hd, "$aliasme>$frn \@whoami ".$frnR."\n");
+	}elsif($cmd eq 'getaliasname'){
+		printh($hd, "$aliasme>$frn \@getaliasname ".$frnA."\n");
+	}elsif($cmd=~/^getaliasname (\S+)$/){
+		printh($hd, "$aliasme>$frn \@getaliasname $1 ".getaliasnode($1)."\n");
+	}elsif($cmd eq 'getrealname'){
+		printh($hd, "$aliasme>$frn \@getrealname ".getrealnode($frnA)."\n");
+	}elsif($cmd=~/^getrealname (\S+)$/){
+		printh($hd, "$aliasme>$frn \@getrealname $1 ".getrealnode($1)."\n");
+	}elsif($cmd eq 'connectstars'){
+		connect2stars();
+		if($PerlSvc::tak){
+			printh($hd, "$aliasme>$frn \@connectstars Ok:\n");
+		}else{
+			printh($hd, "$aliasme>$frn \@connectstars Er: System is down.\n");
+		}
+	}elsif($cmd =~ /^\@/){return(1);
+	}else{
+		printh($hd, "$aliasme>$frn \@$cmd Er: Command is not found or parameter is not enough.\n");
+	}
+	return(1);
+}
+#------ Connect to stars --------------------------------
+sub connect2stars{
+	if($PerlSvc::tak){return($PerlSvc::tak);}
+	if($PerlSvc::tak=stars->new($PerlSvc::NodeName, $PerlSvc::Server,
+	                     $PerlSvc::ServerPort, $PerlSvc::ServerKeyfile)) {
+		if($PerlSvc::Debug){
+			printd("Connected to Stars Server as $PerlSvc::NodeName.\n");
+		}
+	    ### Reflect starbr's flgon to System.
+		if(defined $PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+			my $buf=$PerlSvc::NodeFlgOn{$PerlSvc::NodeName};
+			my($cmd,$delflg);
+			while($buf=~s/ (\S+) //){
+				($cmd,$delflg)=($1,1);
+				foreach (keys(%PerlSvc::NodeFlgOn)){
+					if(/^$PerlSvc::NodeName$/){next;
+					}elsif($PerlSvc::NodeFlgOn{$_}=~/ $cmd /){
+						$delflg=0;last;
+					}
+				}
+				if($delflg){
+					$PerlSvc::NodeFlgOn{$PerlSvc::NodeName}=~s/ $cmd //;
+					unless($PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+						delete $PerlSvc::NodeFlgOn{$PerlSvc::NodeName};
+					}
+				}else{
+					my($cmdS);
+					($_, $cmdS, $_)=getrealnode($cmd);
+					my($f,$t,$m)=myact("$PerlSvc::NodeName>System flgon $cmdS");
+					unless($m=~/Er: Node $cmdS is already in the list/ or $m!~/Er:/){
+						exit(0);
+					}
+				}
+			}
+		}
+		$PerlSvc::tak->addcallback(\&handler);
+		$PerlSvc::tak->{timeout} = 30;
+	}else{
+		if($PerlSvc::Debug){
+			printd("Failed to connect to Stars Server. [$PerlSvc::NodeName, "
+		 ."$PerlSvc::Server, $PerlSvc::ServerPort, $PerlSvc::ServerKeyfile]\n");
+		}
+	}
+	return($PerlSvc::tak);
+}
+#------ clientBridge Flgon -----------------------------------
+sub clientBridge_flgon{
+	my($hd,$frn,$cmd,$frnR)=@_;
+	unless($cmd =~ /^([a-zA-Z_0-9.\-]+)/){
+		printh($hd, "System>$frn \@flgon Er: Parameter is not enough.\n");
+		return('');
+	}
+	my($cmdH,$cmdS);
+	$cmd = $1;
+	($cmdH, $cmdS, $_)=getrealnode($cmd);
+	unless($cmdH){
+		# Register to system flgons
+		if($PerlSvc::tak){
+			#1L Comment & Added 07/12/13 for CHG#2: Event from System to myclients.
+#			my($f,$t,$m)=myact("$PerlSvc::NodeName>System flgon $cmd");
+			my($f,$t,$m)=myact("$PerlSvc::NodeName>System flgon $cmdS");
+			unless($m=~/Er: Node $cmdS is already in the list/ or $m!~/Er:/){
+				printh($hd, "$f>$frn $m\n");return('');
+			}
+		}
+		if(defined $PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+			$PerlSvc::NodeFlgOn{$PerlSvc::NodeName} .= " $cmd ";
+		}else{
+			$PerlSvc::NodeFlgOn{$PerlSvc::NodeName} = " $cmd ";
+		}
+	}
+	# Register to clientBridge flgons
+	if(defined $PerlSvc::NodeFlgOn{$frnR}){
+		if($PerlSvc::NodeFlgOn{$frnR} =~ / $cmd /){
+			printh($hd, "System>$frn \@flgon Er: Node $cmd is already in the list.\n");
+		}else{
+			$PerlSvc::NodeFlgOn{$frnR} .= " $cmd ";
+			printh($hd, "System>$frn \@flgon Node $cmd has been registered.\n");
+		}
+	}else{
+		$PerlSvc::NodeFlgOn{$frnR} = " $cmd ";
+		printh($hd, "System>$frn \@flgon Node $cmd has been registered.\n");
+	}
+	return(1);
+}
+#------ clientBridge Flgoff ----------------------------------
+sub clientBridge_flgoff{
+	my($hd,$frn,$cmd,$frnR)=@_;
+	unless($cmd =~ /^([a-zA-Z_0-9.\-]+)/){
+		printh($hd, "System>$frn \@flgoff Er: Parameter is not enough.\n");
+		return('');
+	}
+	my($cmdH,$cmdS);
+	$cmd = $1;
+	($cmdH, $cmdS, $_)=getrealnode($cmd);
+
+	unless(defined $PerlSvc::NodeFlgOn{$frnR}){
+		printh($hd, "System>$frn \@flgoff Er: List is void.\n");
+		return('');
+	}
+	unless($PerlSvc::NodeFlgOn{$frnR} =~ s/ $cmd //){
+		printh($hd, "System>$frn \@flgoff Er: Node $cmd is not in the list.\n");
+		return('');
+	}
+	unless($PerlSvc::NodeFlgOn{$frnR}){
+		delete $PerlSvc::NodeFlgOn{$frnR};
+	}
+	printh($hd, "System>$frn \@flgoff Node $cmd has been removed.\n");
+
+	if($PerlSvc::tak){
+		if(defined $PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+			if($PerlSvc::NodeFlgOn{$PerlSvc::NodeName} =~ / $cmdS /){
+				my $delflag=1;
+				foreach (keys(%PerlSvc::NodeFlgOn)){
+					if(/^$PerlSvc::NodeName$/){next;
+					}elsif($PerlSvc::NodeFlgOn{$_} =~ / $cmd /){
+						$delflag=0;last;
+					}
+				}
+				if($delflag){
+					my($f,$t,$m)=myact("$PerlSvc::NodeName>System flgoff $cmdS");
+					unless($m=~/Er: Node $cmdS is not in the list/ or $m!~/Er:/){
+						printh($hd, "$f>$frn $m\n");return('');
+					}
+					$PerlSvc::NodeFlgOn{$PerlSvc::NodeName} =~ s/ $cmd //;
+					unless($PerlSvc::NodeFlgOn{$PerlSvc::NodeName}){
+						delete $PerlSvc::NodeFlgOn{$PerlSvc::NodeName};
+					}
+				}
+			}
+		}
+	}
+	return(1);
+}
+#------- clientBridge: Event coming ---------------------------
+sub clientBridge_event{
+	my($frn,$cmd,$frnR,$frnA) = @_;
+	my $to;
+	my $buffh;
+
+	my $frnX;
+	($_, $frnX, $_)=getrealnode($frnA);
+	$frnX=getaliasnode($frnX);
+
+	foreach (keys(%PerlSvc::NodeFlgOn)){
+		if($PerlSvc::NodeFlgOn{$_} =~ / $frnA /){
+			($buffh, $to, $_)=getrealnode($_);
+			$to=~s/^$PerlSvc::NodeName\.//;
+			if($buffh){
+				printh($buffh, "$frnA>$to $cmd\n");
+			}
+		}elsif($frnX and $PerlSvc::NodeFlgOn{$_} =~ / $frnX /){
+			($buffh, $to, $_)=getrealnode($_);
+			$to=~s/^$PerlSvc::NodeName\.//;
+			if($buffh){
+				printh($buffh, "$frnA>$to $cmd\n");
+			}
+		}
+	}
+	if($PerlSvc::tak){
+		mySend("$frnR>System $cmd");
+	}
+	return(1);
+}
+#------- clientBridge: Disconnect client ----------------------
+sub clientBridge_disconnect{
+	my ($hd,$frn,$cmd,$aliasme) = @_;
+	my $node;
+	my $dhandle;
+	
+	unless($cmd =~ /^([a-zA-Z_0-9.\-]+)/){
+		printh($hd,"$aliasme>$frn \@disconnect Er: Parameter is not enough.\n");
+		return('');
+	}
+	$cmd=$1;
+	($dhandle, $_, $_)=getrealnode($cmd);
+	unless($dhandle){
+		printh($hd, "$aliasme>$frn \@disconnect Er: Node $cmd is down.\n");
+		return('');
+	}
+	printh($hd, "$aliasme>$frn \@disconnect $cmd.\n");
+	delnode($dhandle);
+	$PerlSvc::readable->remove($dhandle);
+	$dhandle->close;
+	return(1);
+}
+#------- clientBridge: Set Command permission -----------------
+sub clientBridge_loadcommandpermission{
+	@PerlSvc::CmdDeny =();
+	@PerlSvc::CmdAllow =();
+
+	my $RD = gensym();
+	open($RD,$PerlSvc::LibDir.CMDDENY);
+	while(<$RD>){
+		if(/^#/){next;}
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		~s/\$PerlSvc::NodeName/$PerlSvc::NodeName/g;
+		push(@PerlSvc::CmdDeny, $_);
+	}
+	close($RD);
+
+	open($RD,$PerlSvc::LibDir.CMDALLOW);
+	while(<$RD>){
+		if(/^#/){next;}
+		chomp;s/\r//;
+		if($_ eq ''){next;}
+		~s/\$PerlSvc::NodeName/$PerlSvc::NodeName/g;
+		push(@PerlSvc::CmdAllow, $_);
+	}
+	close($RD);
+	return(1);
+}
+#------- clientBridge: Set Aliases ---------------------------
+sub clientBridge_loadaliases{
+	%PerlSvc::AliasReal =();
+	%PerlSvc::RealAlias =();
+	my ($alias,$real);
+	my $RD = gensym();
+	open($RD,$PerlSvc::LibDir.ALIASES);
+	while(<$RD>){
+		if(/^#/){next;}
+		chomp;s/\r//;
+		($alias,$real)=split(/\s+/,$_);
+		$PerlSvc::AliasReal{$alias}=$real;
+		$PerlSvc::RealAlias{$real}=$alias;
+	}
+	close($RD);
+	return(1);
+}
+#------- clientBridge: List Aliases --------------------------
+sub clientBridge_listaliases{
+	my $buf='';
+	my $lp;
+	foreach $lp (keys(%PerlSvc::AliasReal)){
+		$buf .= " $lp,".$PerlSvc::AliasReal{$lp};
+	}
+	return($buf);
+}
+#------- clientBridge: List Nodes ----------------------------
+sub clientBridge_listnodes{
+	my @list=();
+	my $key='';
+	foreach (sort(values(%PerlSvc::NodeH))){
+		if($key eq $_){next;}else{$key=$_;}
+		foreach (keys(%{$PerlSvc::NodeSFX{$key}})){
+			push(@list,"$key\.$_");
+		}
+	}
+	return(join(" ",@list));
+}
+#------- clientBridge: Return sysdatetime --------------------
+sub clientBridge_gettime{
+	my $tm = shift(@_);
+	if($tm eq ''){$tm=time();}
+	my @tt = localtime($tm);
+	return(sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+	$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0]));
+}
+#------- clientBridge: List flgons ---------------------------
+sub clientBridge_listflgons{
+	my $buf='';
+	my $lp;
+	foreach $lp (keys(%PerlSvc::NodeFlgOn)){
+		$buf .= " $lp,".$PerlSvc::NodeFlgOn{$lp};
+	}
+	return($buf);
+}
+#------- Convert alias nodename to real -----------------
+sub getrealnode{
+	my $nodeA=shift; # coming as alias name.
+	my $dest;
+	my $nodeR;
+	my $handle='';
+	my $key;
+	my $buf;
+	my @cnt;
+	my $destA;
+	my $destR;
+
+	$nodeR=$nodeA;
+	foreach $key (reverse(sort(keys(%PerlSvc::AliasReal)))){
+		if($nodeR=~s/^$key$/$PerlSvc::AliasReal{$key}/){
+			last;
+		}elsif($nodeR=~s/^$key(\..+)/$PerlSvc::AliasReal{$key}$1/){
+			last;
+		}
+	}
+
+	$destR=$dest=$nodeR;
+	if($nodeR=~/\./){
+		foreach $key (reverse(sort(keys(%PerlSvc::NodeSFX)))){
+			$buf=$nodeR;
+			@cnt=keys(%{$PerlSvc::NodeSFX{$key}});
+			if(scalar(@cnt) eq 1){
+				if($buf=~/^$key$/){
+					$handle=$PerlSvc::NodeSFX{$key}{$cnt[0]};
+					$destR=$dest=$buf;
+					last;
+				}elsif($buf=~s/^$key(\..+)/$1/){
+					$handle=$PerlSvc::NodeSFX{$key}{$cnt[0]};
+					$buf=~s/\.$cnt[0]$//;
+					$destR=$dest="$key$buf";
+					last;
+				}
+			}elsif($buf=~s/^$key(\..+)/$1/){
+				if($buf=~s/\.([^.\s]+)$//){
+					if(defined $PerlSvc::NodeSFX{$key}{$1}){
+						$handle=$PerlSvc::NodeSFX{$key}{$1};
+						$dest="$key$buf";
+						$destR="$key$buf.$1";
+						last;
+					}
+				}
+			}
+		}
+	}
+	$destA=getaliasnode($destR);
+	if(wantarray){
+		return($handle, $dest, $nodeR, $destA, $destR);
+	}else {
+		return("dest=$dest,real=$nodeR");
+	}
+}
+#------- Convert real nodename to alias -----------------
+sub getaliasnode{
+	my $nodeR=shift;  # coming as real name.
+	my $nodeA;
+	my $handle='';
+	my $key;
+	my $buf;
+
+	$nodeA=$nodeR;
+	foreach $key (reverse(sort(keys(%PerlSvc::RealAlias)))){
+		if($nodeA=~s/^$key$/$PerlSvc::RealAlias{$key}/){
+			last;
+		}elsif($nodeA=~s/^$key(\..+)/$PerlSvc::RealAlias{$key}$1/){
+			last;
+		}
+	}
+	return($nodeA);
+}
+#------- Check command deny -----------------------------
+sub isDenyCheckCmdDeny{
+	my ($from, $to, $buf) = @_;
+	my $chk;
+	unless($buf =~ /^(\S+)( |$)/){return(1);}
+	$buf = "$from>$to $1";
+	for $chk (@PerlSvc::CmdDeny){
+		if($buf =~ /$chk/){return(1);}
+	}
+	return(0);
+}
+#------- Check command allow ----------------------------
+sub isDenyCheckCmdAllow{
+	my ($from, $to, $buf) = @_;
+	my $chk;
+	unless($buf =~ /^(\S+)( |$)/){return(1);}
+	$buf = "$from>$to $1";
+	for $chk (@PerlSvc::CmdAllow){
+		if($buf =~ /$chk/){return(0);}
+	}
+	return(1);
+}
+#------- Check and return suffix ------------------------
+sub checknode{
+	my($node,$handle) = @_;
+	if($node eq 'Debugger'){
+		if(defined $PerlSvc::NodeSFX{"$PerlSvc::NodeName.$node"}{1}){return('');
+		}else{return(1);}
+	}
+
+	my $sfx=tv_interval($PerlSvc::StartTime);
+	$sfx=~s/\.//;
+	return($sfx);
+}
+#------- Add node ---------------------------------------
+sub addnode{
+	my($handle,$buff)=@_;
+	my($node,$idmess)=split(/\s+/,$buff);
+	my $buffh;
+	my $to;
+
+	my $sfx;
+	my $aliasme=getaliasnode($PerlSvc::NodeName);
+
+	unless($sfx = checknode($node,$handle)){
+		printh($handle, "$aliasme> Er: $node already exists.\n");
+		return('');
+	}
+	
+	unless(check_term_and_host($node,$handle)){
+		printh($handle, "$aliasme> Er: Bad host for $node\n");
+		return('');
+	}
+
+	unless(check_nodekey($node,$PerlSvc::NodeIDKey{$handle},$idmess)){
+#		printh($handle, "$aliasme> $PerlSvc::KeyDir.$node.key\n");
+		printh($handle, "$aliasme> Er: Bad node name or key\n");
+		return('');
+	}
+
+	my $me=$node;
+	$node="$PerlSvc::NodeName.$node";
+	$PerlSvc::NodeH{$handle} = $node;
+	$PerlSvc::NodeHSFX{$handle}=$sfx;
+	$PerlSvc::NodeSFX{$node}{$sfx}=$handle;
+	printh($handle, "$aliasme>$me Ok:\n");
+
+#Send connected messge to listening nodes. using alias name
+	$node=getaliasnode($node);
+	foreach (keys(%PerlSvc::NodeFlgOn)){
+		if(/^$PerlSvc::NodeName$/){next;
+		}elsif($PerlSvc::NodeFlgOn{$_} =~ / $node /){
+			($buffh, $to, $_, $_, $_)=getrealnode($_);
+			printh($buffh, "$node.$sfx>$to _Connected\n");
+		}
+	}
+	return(1);
+}
+#------- Delete node ------------------------------------
+sub delnode{
+	my $handle=shift(@_);
+	my $node = $PerlSvc::NodeH{$handle};
+	my $sfx  = $PerlSvc::NodeHSFX{$handle};
+	my $buffh;
+	my $to;
+	my $lp;
+
+# reset my self
+	if($sfx){delete $PerlSvc::NodeSFX{$node}{$sfx};}
+	if($node and exists $PerlSvc::NodeSFX{$node}){
+		my @cnts=keys(%{$PerlSvc::NodeSFX{$node}});
+		if($#cnts<0){delete $PerlSvc::NodeSFX{$node};}
+	}
+	delete $PerlSvc::NodeHSFX{$handle};
+	delete $PerlSvc::NodeH{$handle};
+
+	delete $PerlSvc::NodeBuf{$handle};
+	delete $PerlSvc::NodeIDKey{$handle};
+
+	for $lp (grep(/^$node\./, keys(%PerlSvc::NodeFlgOn))){
+		if($lp=~/\.$sfx$/){
+			delete $PerlSvc::NodeFlgOn{$lp};
+		}
+	}
+
+# Send disconnected messge to listening nodes. using alias name
+	$node=getaliasnode($node);
+	foreach (keys(%PerlSvc::NodeFlgOn)){
+		if(/^$PerlSvc::NodeName$/){next;
+		}elsif($PerlSvc::NodeFlgOn{$_} =~ / $node /){
+			($buffh, $to, $_, $_, $_)=getrealnode($_);
+			printh($buffh, "$node.$sfx>$to _Disconnected\n");
+		}
+	}
+	return(1);
+}
+#------ PrinttoDebugger ---------------------------------
+sub printd{
+	my $buf=shift;
+### Y.Nagatani Updated at 2013/7/24 1 line above.	
+#	if(defined $PerlSvc::NodeSFX{"$PerlSvc::NodeName.Debugger"}){
+	if(defined ($PerlSvc::NodeSFX{"$PerlSvc::NodeName.Debugger"}{1})){
+		my $handle=$PerlSvc::NodeSFX{"$PerlSvc::NodeName.Debugger"}{1};
+		print $handle $buf;
+	}
+	return(1);
+}
+#------ Print -------------------------------------------
+sub printh{
+	($PerlSvc::Xfh,$PerlSvc::Xbuf) = @_;
+	print $PerlSvc::Xfh "$PerlSvc::Xbuf";
+	printd("$PerlSvc::Xbuf");
+	return(1);
+}
+#------ Check host for node -----------------------------
+sub check_term_and_host{
+	my $nd=shift; #nodename
+	my $hd=shift; #handle
+
+	if($::Debug){
+		print "check_term_and_host I am node $nd\n";
+	}
+	unless(-e $PerlSvc::KeyDir.$nd.'.allow'){
+		if($::Debug){
+			print "check_term_and_host not_found_ok $PerlSvc::KeyDir.$nd.allow\n";
+		}
+		return(1);
+	}
+#	if(clientBridge_checkhost($PerlSvc::KeyDir.$nd.'.allow', clientBridge_gethostname($hd))){
+	if(clientBridge_checkhost($PerlSvc::KeyDir.$nd.'.allow', clientBridge_gethostname($hd), clientBridge_gethostaddr($hd),1)){
+		return(1);
+	}
+	return(0);
+}
+#------ Check Node Key ----------------------------------
+sub check_nodekey{
+	my $nname=shift;
+	my $nkeynum=shift;
+	my $nkeyval=shift;
+
+	my $kcount=0;
+	my $lp;
+
+	my $hd = gensym();
+	open($hd, $PerlSvc::KeyDir."$nname.key") or return('');
+	while(<$hd>){$kcount++;}
+	unless($kcount){close($hd); return('');}
+	$kcount = $nkeynum % $kcount;
+	seek($hd, 0, 0);
+	for($lp=0; $lp < $kcount; $lp++){$_=<$hd>;}
+	$_=<$hd>;
+	chomp;s/\r//;
+	close($hd);
+	if($_ eq $nkeyval){return(1);}
+	return('');
+}
+#------ Make Idkey --------------------------------------
+sub get_nodeidkey{
+ return( int(rand RNDMAX) );
+}
+#------ Get Hostname ------------------------------------
+sub clientBridge_gethostname{
+	my $s = shift(@_);
+	my $host;
+	$host=gethostbyaddr($s->peeraddr(),AF_INET);
+	unless($host){
+		$host=$s->peerhost();
+	}
+	return($host);
+}
+#------ Get IPADDR ------------------------------------
+sub clientBridge_gethostaddr{
+	my $s = shift(@_);
+	my $ip='';
+	$ip=inet_ntoa($s->peeraddr());
+	return($ip);
+}
+#------ Check Host --------------------------------------
+sub clientBridge_checkhost{
+	my $l     = shift(@_);
+	my $h     = shift(@_);
+	my $ipadr = shift(@_);
+	my $unchecked=shift(@_);
+	my $RD;
+	my $con;
+	my @check=($h);
+	push(@check,$ipadr) if($h ne $ipadr);
+	
+	if($::Debug){
+		print "system_checkhost I am $h and $ipadr\n";
+	}
+	$RD = gensym();
+	open($RD,"$l");
+	while(<$RD>){
+		if(/^#/){next;}
+		chop;s/\r//;
+		if(($_ eq '') || (/^\s+$/)){next;}
+		$unchecked=0;
+		s/\*/\.\+/g;
+		if($::Debug){
+			print "system_checkhost Checking with $_\n";
+		}
+		foreach $con (@check){
+#			if($con eq $_){
+			if($con=~/^$_$/){
+				if($::Debug){
+					print "system_checkhost Matched with $_\n";
+				}
+				close($RD);
+				return(1);
+			}
+		}
+	}
+	close($RD);
+	return($unchecked);
+}

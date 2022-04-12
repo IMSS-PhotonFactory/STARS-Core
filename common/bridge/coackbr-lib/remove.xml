@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<Message Mtype="RemoveSession" IOC="#IOCNAME#">
+   <Command LogFlg="1">
+      <FromDevice>
+         <NodeDefinition ID="#TERMFROM#" ClientWinNo="#TERMFROM#-W1"/>
+      </FromDevice>
+   </Command>
+</Message>

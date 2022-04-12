@@ -1,0 +1,1158 @@
+<html>
+<header>
+
+<head>
+<title>PM16C04コマンド概要</title>
+<style>
+<!--
+p.usage{font-style:italic;}
+p.body{text-indent:1em;}
+address{text-align:right}
+-->
+</style>
+</header>
+</head>
+
+<body>
+<h1>PM16C04 STARS I/O Clientコマンド概要</h1> 
+2006-12-01 暫定版
+<h2>はじめに</h2>
+<p class="body">ツジ電子製PM16C04は16台のパルスモータを同時に4台まで駆動可能なパルスモータコントローラですが、「チャンネルにモータを選んで駆動する」といった動作が必要となるために若干扱いが面倒です。このSTARSクライアント(I/O Client)を使うとチャンネルの選択はpm16c04 Client側で自動で行ってくれるので、ユーザは「どのモータを選んで」などという事を考える必要がなくなります。</p> 
+<p class="body">PM16C04 STARS I/O Client(以下、単にPM16C04とします)の作りはコントローラの先にモータが接続されているとような形をイメージしていているので、各モータへの命令は、送り先を&quot;PM16C4.dth1&quot;のように階層化したような形式にします。</p> 
+<pre>
+  -------    (コントローラ)   (モータ名)
+ |STARS  |------PM16C04---------th
+ | Server|                 |
+  -------                  +----dth1
+                           |
+                           +----al1
+                           :
+                           : 略
+
+</pre>
+<h3>変更履歴</h3>
+<p class="body">2006-11-21 PM16C04 STARS I/O Clientは、ツジ電子製<A HREF="#PM16C-04X">PM16C-04X</A>に対応しました。</p>
+<p class="body">2006-12-01 PM16C-04Xについて、ファームウェアの障害に対応しました。</p>
+<p class="body">2007-09-18 PM16C-04Xの新機能「Auto Change Drive」に対応しました。</p>
+
+<p class="example">
+<hr width="70%" align="left">
+<b>例: term1というUser ClientからPM16C04に接続されたdth1というモータのポジションを取得</b><br> 
+[term1から]<br>
+<i>PM16C04.dth1 GetValue</i><br>
+<br>
+[PM16C04からの返事]<br>
+<i>PM16C04.dth1&gt;term1 @GetValue 12345</i><br>
+<hr width="70%" align="left">
+
+<p class="body">また、コントローラであるPM16C04自身もコマンドを持っていますのでそれにアクセスする場合には<br><br>
+[term1から PM16Cの状態(Remote or Local)の取得]<br> 
+<i>PM16C04 GetFunction</i><br>
+<br>
+[PM16C04からの返事]<br>
+<i>PM16C04&gt;term1 @GetFunction 1</i><br>
+<br>
+のように送受信します。</p>
+<p>以下、ここではこのPM16C04のコマンドの概要について説明します。</p>
+<hr>
+<h2>主要コマンドおよびイベント</h2>
+<p class="body">モータへのアクセスは、&quot;はじめに&quot;で述べたとおり&quot;PM16C04.dth1&quot;のように行うわけですが、実はPM16C04自体のコマンドの中にもモータ関係のコマンドがあり、<br>
+<br>
+<i>PM16C04 GetValue 15</i>  (モータ番号15のポジションを取得)<br> 
+<br>
+とすることも可能です。しかし、&quot;主要コマンド&quot;ではこれらのコマンドについては触れず、モータを動かす上で最低限必要と思われるものについて説明します。なお、Example:はいずれも&quot;term1&quot;と言う名前を持ったUser Clientからのコマンド送信を例としています。
+</p>
+<pre>
+
+</pre>
+<h3>GetValue</h3>
+Usage:    GetValue 
+Synopsis: モータの現在値を取得。 
+Reply:    @GetValue <i>Value</i> 
+Error:    @GetValue Er: <i>Reason</i> 
+
+Example: 
+<i>PM16C04.dth1 GetValue</i> (term1から送信) 
+<i>PM16C04.dth1&gt;term1 @GetValue 12345</i> (受信) 
+
+<i>PM16C04.dth1 GetValue</i>
+<i>PM16C04.dth1&gt;term1 @GetValue Er: Timeout</i> (コントローラの電源がOFFだった等でタイムアウトした) 
+<pre>
+
+</pre>
+<h3>SetValue</h3>
+Usage:    SetValue <i>Value</i> 
+Synopsis: モータをValueの値まで動かします。 
+Reply:    @SetValue <i>Value</i> Ok: 
+Error:    @SetValue Er: <i>Reason</i> 
+Example: 
+<i>PM16C04.dth1 SetValue 12345</i> (term1から送信) 
+<i>PM16C04.dth1&gt;term1 @SetValue 12345 Ok:</i> (受信) 
+
+<i>PM16C04.dth1 SetValue 8388608</i>
+<i>PM16C04.dth1&gt;term1 @SetValue 8388608 Er: Data out of range.</i> (範囲外のためエラー) 
+
+<p class="body">SetValueを実行すると対象となるモータが動作中、あるいはコントローラがBusy状態である、コントローラが&quot;Local&quot;であるような場合以外は例で示すように&quot;Ok:&quot;をすぐに返します。 
+モータが止まったことを検知するためには&quot;IsBusy&quot;を使って問い合わせるか、あらかじめ<br>
+<br>
+<i>System flgon PM16C04.dth1</i> (term1からSystemにイベント配信要求)<br> 
+<i>System&gt;term1 @flgon Node PM16C04.dth1 has been registered.</i> (STARSサーバからの回答)<br> 
+<br>
+のようにして、モータの停止後<br>
+<br>
+<i>PM16C04.dth1&gt;term1 _ChangedIsBusy 0</i> (dth1が停止したというイベントを受信)<br> 
+<br>
+のような、イベントを受け取るようにします。
+</p>
+<pre>
+
+</pre>
+<h3>Preset</h3>
+Usage:    Preset <i>Value</i> 
+Synopsis: モータの現在値をプリセットします。 
+Reply:    @Preset <i>Value</i> Ok: 
+Error:    @Preset Er: <i>Reason</i> 
+Example: 
+<i>PM16C04.dth1 Preset 12345</i> (term1から送信) 
+<i>PM16C04.dth1&gt;term1 @Preset 12345 Ok:</i> (受信) 
+
+<i>PM16C04.dth1 Preset 8388608</i>
+<i>PM16C04.dth1&gt;term1 @Preset 8388608 Er: Data out of range.</i> (範囲外のためエラー) 
+<pre>
+
+</pre>
+
+<h3>IsBusy</h3>
+Usage:    IsBusy 
+Synopsis: モータが駆動可能であるかの問い合わせ。1=Busy、0=駆動可能 
+Reply:    @IsBusy <i>Value</i> 
+Example: 
+<i>PM16C04.dth1 IsBusy</i> (term1から送信) 
+<i>PM16C04.dth1&gt;term1 @IsBusy 1</i> (受信：動作中である) 
+<pre>
+
+</pre>
+<h3>Stop</h3>
+Usage:    Stop 
+Synopsis: モータを台形駆動の設定に沿って減速停止させる。 
+Reply:    @Stop Ok: 
+Example: 
+<i>PM16C04.dth1 Stop</i> (term1から送信) 
+<i>PM16C04.dth1&gt;term1 @Stop Ok:</i> (受信) 
+<pre>
+
+</pre>
+<h3>StopEmergency</h3>
+Usage:    StopEmergency 
+Synopsis: モータを台形駆動の設定に関係なく瞬時に停止させる。 
+Reply:    @StopEmergency Ok: 
+Example: 
+<i>PM16C04.dth1 StopEmergency</i> (term1から送信) 
+<i>PM16C04.dth1&gt;term1 @StopEmergency Ok:</i> (受信) 
+<pre>
+
+</pre>
+<h3>Standby(コントローラのコマンド)</h3>
+Usage:    Standby 
+Synopsis: 同時駆動のために全チャンネルをStandby状態にする。 
+Reply:    @Standby Ok: 
+Error:    @Standby Er: <i>Reason</i> 
+Example: 
+<i>PM16C04 Standby</i> (term1から送信) 
+<i>PM16C04&gt;term1 @Standby Ok:</i> (受信) 
+<i>PM16C04.m1u SetValue 12345</i> (m1uを12345へ、まだ駆動は開始しない) 
+<i>PM16C04.m1u&gt;term1 @SetValue 12345 Ok:</i> (受信) 
+<i>PM16C04.m1d SetValue 12345</i> (m1dを12345へ、まだ駆動は開始しない) 
+<i>PM16C04.m1d&gt;term1 @SetValue 12345 Ok:</i> (受信) 
+<i>PM16C04 SyncRun</i> (駆動開始)) 
+<i>PM16C04&gt;term1 @SyncRun Ok:</i> (受信) 
+<pre>
+
+</pre>
+<h3>SyncRun(コントローラのコマンド)</h3>
+Usage:    SyncRun 
+Synopsis: 同時駆動の開始。 
+Reply:    @SyncRun Ok: 
+Error:    @SyncRun Er: <i>Reason</i> 
+Example:  Standbyの項を参照 
+<pre>
+
+</pre>
+<h3>_ChangedIsBusyイベント</h3>
+Event:    _ChangedIsBusy <i>Value</i> 
+Synopsis: PM16C04配下のモータが駆動を開始したときや停止したときにはSTARSサーバ(System)に 
+          その旨を示すイベントが送信されます。 
+          &quot;System flgon PM16C04.dth1&quot;のようにあらかじめ設定することでUser Clientで 
+          受信が可能となります。モータが動き始めた場合にはValueが1、停止した場合にはValueが0 
+          として送られてきます。 
+Example: 
+<i>System flgon PM16C04.dth1</i> (term1からflgon) 
+<i>System&gt;term1 @flgon Node pm16c04.th has been registered.</i> (受信) 
+<i>PM16C04.dth1 SetValue 1000</i> (term1からdth1にSetValueコマンド) 
+<i>PM16C04.dth1&gt;term1 _ChangedIsBusy 1</i> (dth1が駆動開始したというイベントを受信) 
+<i>PM16C04.dth1&gt;term1 @SetValue 1000 Ok:</i>
+<i>PM16C04.dth1&gt;term1 _ChangedValue 351</i> (Valueが変化した事を示すイベントを受信) 
+<i>PM16C04.dth1&gt;term1 _ChangedValue 899</i>
+<i>PM16C04.dth1&gt;term1 _ChangedValue 999</i> 
+<i>PM16C04.dth1&gt;term1 _ChangedValue 1000</i> 
+<i>PM16C04.dth1&gt;term1 _ChangedIsBusy 0</i> (dth1が停止した事を示すイベントを受信) 
+<pre>
+
+</pre>
+<h3>_ChangedValueイベント</h3>
+Event:    _ChangedValue <i>Value</i> 
+Synopsis: PM16C04配下のモータのValueが変化するとSTARSサーバに現在のValueデータが 
+          イベントととして定期的に送られます。 
+          &quot;System flgon PM16C04.dth1&quot;のようにあらかじめ設定することでUser Clientで 
+          受信が可能となります。 
+Example:  _ChangedIsBusyイベントの項を参照 
+<pre>
+
+</pre>
+<h3>_ChangedCtlIsBusyイベント(コントローラ)</h3>
+Event:    _ChangedCtlIsBusy <i>Value</i> 
+Synopsis: PM16C04配下のモータのモータが同時に4台以上動きはじめこれ以上他のモータを動かせなく 
+          なった場合(Busy)、あるいは4つのうちのモータのどれかが停止しし、駆動命令受付が可能と 
+          なった場合(Free)、コントローラからイベントがSTARSサーバに送信されます。 
+          &quot;System flgon PM16C04.dth1&quot;のようにあらかじめ設定することでUser Clientで 
+          受信が可能となります。Busyになった場合にはValueが1、Freeの場合にはValueが0 
+          として送られてきます。 
+Example: 
+<i>System flgon PM16C04</i> (term1からflgon) 
+<i>System&gt;term1 @flgon Node PM16C04 has been registered.</i> (Systemから受信) 
+<i>PM16C04&gt;term1 _ChangedCtlIsBusy 1</i> (同時にモータが4台駆動してBusyとなった) 
+<i>PM16C04&gt;term1 _ChangedCtlIsBusy 0</i> (コントローラがFreeとなった。) 
+<pre>
+
+</pre>
+<h3>_ChangedFunctionイベント(コントローラ)</h3>
+Event:    _ChangedFunction <i>Value</i> 
+Synopsis: PM16C04のFUNCTIONがREM(Remote)あるいはLOC(Local)に変化するとSTARSサーバにイベントが 
+          送出されます。 
+          &quot;System flgon PM16C04&quot;のようにあらかじめ設定することでUser Clientで 
+          受信が可能となります。Remoteになった場合にはValueが1、Localの場合にはValueが0 
+          として送られてきます。 
+Example: 
+<i>System flgon PM16C04</i> (term1からflgon) 
+<i>System&gt;term1 @flgon Node PM16C04 has been registered.</i> (Systemから受信) 
+<i>PM16C04&gt;term1 _ChangedFunction 0</i> (Localになった旨を示すイベントを受信) 
+<i>PM16C04&gt;term1 _ChangedFunction 1</i> (Remoteになった旨を示すイベントを受信) 
+<pre>
+
+</pre>
+<hr>
+<h2>他のコマンド</h2>
+<p class="body">上記以外のコマンドは比較的使用頻度が低いと思われるため、ここにまとめました。</p>
+<pre>
+
+Usage: hello
+STARSの通信が行われているかをチェックするコマンド。単に@hello nice to meet you.の文字列を返す。
+例:
+PM16C04 hello
+PM16C04&gt;term1 @hello nice to meet you.
+
+Usage: help [Commmand]
+コマンドの一覧をスペース区切りで表示、また、&quot;Command&quot;を指定すると
+そのコマンドに関する説明を整形された形で返す。この時改行文字は&quot;\n&quot;で示される。
+例:
+PM16C04 help
+PM16C04&gt;term1 @help hello GetValue SetValue ...
+</pre>
+
+<pre>
+
+-------------------------- 以下 Command Helpより ---------------------------
+
+#Status
+
+Usage: flushdata
+Target: Controller
+    Get all status of PM16C-04 and sends event messages to "System".
+
+Usage: flushdatatome
+Target: Controller
+    Get all status of PM16C-04 and sends event messages to me.
+
+Usage: GetFunction
+Target: Controller
+    Get function "1=Remote/0=Local".
+
+Usage: GetCtlIsBusy
+Target: Controller
+	Check, is controller busy? 
+
+Usage: IsBusy Channel|MotorNumber
+Target: Controller
+    Check, is motor busy?
+
+Usage: GetFunctionStatus
+Target: Controller
+    Get limit switch and "remote/local" status on channel A and B.
+    bit 0: C POS CW LS, 1: C POS CCW LS, 2: C POS Z. LS,
+        4: D POS CW LS, 5: D POS CCW LS, 6: D POS Z. LS,
+        8: A POS CW LS, 9: A POS CCW LS, A: A POS Z. LS, B: STATUS CPU/MANU
+        C: B POS CW LS, D: B POS CCW LS, E: B POS Z. LS
+
+Usage: GetStatus Channel
+Target: Controller
+    Get status register value of "Channel" (A, B, C, D). 
+    bit 0: BUSY, 1: DRIVE, 2: not used, 3: not used
+        4: COMERR, 5: LDEND, 6: SSEND, 7: ESEND
+
+Usage: GetSelected Channel|MotorNumber
+Target: Controller
+    Get selected channel (A, B, C, D or N = not selected) with
+    "MotorName" or "MotorNumber" (0 to 16) or get selected motor number with
+    "Channel" (A, B, C, D).
+
+Usage: GetSelected
+Target: Motor
+    Get selected channel (A, B, C, D or N = not selected).
+
+Usage: GetValue Channel MotorNumber
+Target: Controller
+    Get postion data of "Channle" (A, B, C, D) or "MotorNumber" (0 to 16).
+
+#Select
+
+Usage: Remote
+Target: Controller
+    Set function to "Remote". (Same as "SetFunction 1")
+
+Usage: Local
+Target: Controller
+    Set function to "Local". (Same as "SetFunction 0")
+
+Usage: SetFunction 1|0
+Target: Controller
+    Set function (Remote=1, Local=0).
+
+Usage: Select Channel MotorNumber
+Target: Controller
+    Select "MotorName" or "MotorNumber" (0 to 16) on "Channel" (A, B, C, D).
+
+Usage: SpeedHigh
+Target: Controller
+    Set speed to "High".
+
+Usage: SpeedMiddle
+Target: Controller
+    Set speed to "Middle".
+
+Usage: SpeedLow
+Target: Controller
+    Set speed to "Low".
+
+Usage: SetHold Channel 1|0
+Target: Controller
+    Set hold (=1) or free (=0) motor on "Channel" (A, B, C, D).
+
+#Information
+
+Usage: GetMotorList
+Target: Controller
+    List motor names.
+
+Usage: GetMotorName MotorNumber
+Target: Controller
+    Get motor name of "MotorNumber".
+
+Usage: GetMotorNumber MotorName
+Target: Controller
+    Get motor number of "MotorName".
+
+Usage: GetMotorNumber
+Target: Motor
+    Get motor number of motorname.
+
+Usage: GetSpeedList
+Target: Controller, Motor
+    Get list of settable motor speed.
+
+Usage: GetAccRateList
+Target: Controller, Motor
+    Get list of settable motor acceleration rate.
+
+Usage: GetRomVersion
+Target: Controller
+    Get firmware virsion of PM16C-04.
+
+#Setup paramaters
+
+Usage: GetLimits MotorNumber
+Target: Controller
+    Get limit switches value of "MotorNumber" (0 to 16) in register.
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: GetLimits
+Target: Motor
+    Get limit switches value in register.
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: GetDigitalCwLs MotorName|MotorNumber
+Target: Controller
+    Get CW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16).
+
+Usage: GetDigitalCwLs
+Target: Motor
+    Get CW software limit switch (DIGITAL LS).
+
+Usage: GetDigitalCcwLs MotorNumber
+Target: Controller
+    Get CCW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16).
+
+Usage: GetDigitalCcwLs
+Target: Motor
+    Get CCW software limit switch (DIGITAL LS).
+
+Usage: GetHighSpeed MotorNumber
+Target: Controller
+    Get high speed value of "MotorNumber" (0 to 16).
+
+Usage: GetHighSpeed
+Target: Motor
+    Get high speed value.
+
+Usage: GetMiddleSpeed MotorNumber
+Target: Controller
+    Get middle speed value of "MotorNumber" (0 to 16).
+
+Usage: GetMiddleSpeed
+Target: Motor
+    Get middle speed value.
+
+Usage: GetLowSpeed MotorNumber
+Target: Controller
+    Get low speed value of "MotorNumber" (0 to 16).
+
+Usage: GetLowSpeed
+Target: Motor
+    Get low speed value of "MotorName" or "MotorNumber" (0 to 16).
+
+Usage: GetAccRate MotorNumber
+Target: Controller
+    Get acceleration rate of "MotorNumber" (0 to 16).
+
+Usage: GetAccRate
+Target: Motor
+    Get acceleration rate.
+
+Usage: GetAccRateCode MotorNumber
+Target: Controller
+    Get acceleration rate code of "MotorNumber" (0 to 16).
+
+Usage: GetAccRateCode
+Target: Motor
+    Get acceleration rate code.
+
+Usage: GetJogPulse MotorNumber
+Target: Controller
+    Get jog pulse value of "MotorNumber" (0 to 16).
+
+Usage: GetJogPulse
+Target: Motor
+    Get jog pulse value.
+
+Usage: GetCancelBacklash MotorNumber
+Target: Controller
+    Get cancel backlash of "MotorNumber" (0 to 16).
+
+Usage: GetCancelBacklash
+Target: Motor
+    Get cancel backlash.
+
+Usage: SetLimits MotorNumber Value
+Target: Controller
+    Set limit switches value of "MotorNumber" (0 to 16) into "Value".
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: SetLimits Value
+Target: Motor
+    Set limit switches value into "Value".
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: SetDigitalCwLs MotorNumber Value
+Target: Controller
+    Set CW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16)
+    into "Value".
+
+Usage: SetDigitalCwLs Value
+Target: Motor
+    Set CW software limit switch (DIGITAL LS) into "Value".
+
+Usage: SetDigitalCcwLs MotorNumber Value
+Target: Controller
+    Set CCW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16)
+    into "Value".
+
+Usage: SetDigitalCcwLs Value
+Target: Motor
+    Set CCW software limit switch (DIGITAL LS) into "Value".
+
+Usage: SetHighSpeed MotorNumber Value
+Target: Controller
+    Set high speed of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetHighSpeed Value
+Target: Motor
+    Set high speed into "Value".
+
+Usage: SetMiddleSpeed MotorNumber Value
+Target: Controller
+    Set middle speed of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetMiddleSpeed Value
+Target: Motor
+    Set middle speed into "Value".
+
+Usage: SetLowSpeed MotorNumber Value
+Target: Controller
+    Set low speed of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetLowSpeed Value
+Target: Motor
+    Set low speed into "Value".
+
+Usage: SetAccRate MotorNumber Value
+Target: Controller
+    Set acceleration rate of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetAccRate Value
+Target: Motor
+    Set acceleration rate into "Value".
+
+Usage: SetJogPulse MotorNumber Value
+Target: Controller
+    Set jog pulse value of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetJogPulse Value
+Target: Motor
+    Set jog pulse value into "Value".
+
+Usage: SetCancelBacklash MotorNumber Value
+Target: Controller
+    Set cancel backlash value of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetCancelBacklash Value
+Target: Motor
+    Set cancel backlash value into "Value".
+
+Usage: Preset MotorNumber Value
+Target: Controller
+    Set motor position data of "MotorNumber" (0 to 16) into "Value".
+
+#Motion
+
+Usage: SetValue Channel|MotorNumber Value
+Target: Controller
+    Move motor which is shown "MotorNumber" or "Channel" to "Value" absolutely.
+
+Usage: SetValueREL Channel|MotorNumber Value
+Target: Controller
+    Move motor which is shown "MotorNumber" or "Channel" to "Value" relatively.
+
+Usage: JogCw Channel|MotorNumber
+Target: Controller
+    Send CW jog command to "Channel" (A, B, C, D) or "MotorNumber" (0 to 16).
+
+Usage: JogCw
+Target: Motor
+    Send CW jog command.
+
+Usage: JogCcw Channel|MotorNumber
+Target: Controller
+    Send CCW jog command to "Channel" (A, B, C, D) or "MotorNumber" (0 to 16).
+
+Usage: JogCcw
+Target: Motor
+    Send CCW jog command.
+
+Usage: ScanCw Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A, B, C, D) or "MotorNumber" (0 to 16) to "CW" with scan mode.
+
+Usage: ScanCw
+Target: Motor
+    Move "CW" direction with scan mode.
+
+Usage: ScanCcw Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A, B, C, D) or "MotorNumber" (0 to 16) to "CCW" with scan mode.
+
+Usage: ScanCcw
+Target: Motor
+    Move "CCW" direction with scan mode.
+
+Usage: ScanCwConst Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A, B, C, D) or "MotorNumber" (0 to 16) to "CW" with
+    constant scan mode.
+
+Usage: ScanCwConst
+Target: Motor
+    Move "CW" direction with constant scan mode.
+
+Usage: ScanCcwConst Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A, B, C, D) or "MotorNumber" (0 to 16) to "CCW" with
+    constant scan mode.
+
+Usage: ScanCcwConst
+Target: Motor
+    Move "CCW" direction with constant scan mode.
+
+Usage: ScanCwHome Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A, B, C, D) or "MotorNumber" (0 to 16) to "CW" for finding
+    home position.
+
+Usage: ScanCwHome
+Target: Motor
+    Move "CW" direction for finding home position.
+
+Usage: ScanCcwHome Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A, B, C, D) or "MotorNumber" (0 to 16) to "CCW" for finding
+    home position.
+
+Usage: ScanCcwHome
+Target: Motor
+    Move "CCW" direction for finding home position.
+
+Usage: Stop [Channel|MotorNumber]
+Target: Controller
+    Stop motors(s) which shown "Channel" or "MotorNumber". If they are
+    not specified, all motors will be stopped.
+
+Usage: StopEmergency [Channel|MotorNumber]
+Target: Controller
+    Make a sudden stop which shown "Channel" or "MotorNumber". If they are
+    not specified, all motors will be stopped.
+</pre>
+<hr>
+<A NAME="PM16C-04X">
+<h2>PM16C-04Xの独自コマンド</h2>
+<p class="body">PM16C04 STARS I/O ClientはPM16C-04Xに対応しています。PM16C-04Xの独自コマンドは次のとおりです。 
+</p>
+<pre>
+<h3>１．チャンネルのステータス照会</h3>
+Usage: GetChannelStatus 
+Target: Controller 
+    Return information of selected channels. 
+    Return Data Format: [R|L]abcd/PNNS/VVVV/HHJJKKLL/+-uu.../+-vv.../+-ww.../+-xx... 
+    &quot;R&quot; or &quot;L&quot;  Remote or Local 
+    &quot;abcd&quot;      Selected MotorNumbers(0 - F) of Channel A,B,C,D 
+    &quot;PNNS&quot;      Drive status (&quot;P&quot;:cw &quot;N&quot;:ccw &quot;S&quot;:Stop) of Channel A,B,C,D 
+    &quot;VVVV&quot;      Ls status and Hold off Status (bit0:cw ls bit1:ccw ls bit2:hp ls bit3:hold off(1/hold off 0/hold on) of Channel A,B,C,D 
+    &quot;HHJJKKLL&quot;  Motor current status 
+        bit 0: BUSY, 1: Pulse output running, 2: Accelerating, 3: Decelerating 
+            4: Error, 5: Stopped by LS, 6: Stopped slowly 7: Stopped fastly 
+    &quot;+-uu...&quot;   current of Channel A 
+    &quot;+-vv...&quot;   current of Channel B 
+    &quot;+-ww...&quot;   current of Channel C 
+    &quot;+-xx...&quot;   current of Channel D 
+
+
+<h3>２．モータの基本設定</h3>
+  PM16C-04Xでは、モータ移動形式として台形駆動／Ｓ字駆動／定速設定が選択できるようになりました。 
+
+Usage: SetMotorSetup MotorNumber ABCD 
+Target: Controller 
+    Set motor basic properties 4 digits value of &quot;MotorNumber&quot; (0 to 16) into &quot;ABCD&quot; as 
+        A: 1/drive enable 0/drive disable 
+        B: 1/hold on 0/hold off 
+        C: 0/const 1/trapezoidal 2/S character 
+        D: 0/Pulse-Pulse 1/Pulse-Direction 
+
+Usage: SetMotorSetup ABCD 
+Target: Motor 
+    Set motor basic properties 4 digits value into &quot;ABCD&quot; as 
+        A: 1/drive enable 0/drive disable 
+        B: 1/hold on 0/hold off 
+        C: 0/const 1/trapezoidal 2/S character 
+        D: 0/Pulse-Pulse 1/Pulse-Direction 
+
+Usage: SetStopMode MotorNumber AB 
+Target: Controller 
+    Set stop mode 2 digits value of &quot;MotorNumber&quot; (0 to 16) into &quot;AB&quot; as 
+        A: how to stop for cw/ccw limit switch, 0/LS slow stop 1/LS fast stop 
+        B: how to stop for panel stop button , 0/PB slow stop 1/PB fast stop 
+
+Usage: SetStopMode AB 
+Target: Motor 
+    Set stop mode 2 digits value into &quot;AB&quot; as 
+        A: how to stop for cw/ccw limit switch, 0/LS slow stop 1/LS fast stop 
+        B: how to stop for panel stop button , 0/PB slow stop 1/PB fast stop 
+
+Usage: GetMotorSetup MotorNumber 
+Target: Controller 
+    Return motor basic properties 4 digits value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetMotorSetup 
+Target: Motor 
+    Return motor basic properties 4 digits value. 
+
+Usage: GetStopMode MotorNumber 
+Target: Controller 
+    Get stop mode 2 digits value of &quot;MotorNumber&quot;. 
+
+Usage: GetStopMode 
+Target: Motor 
+    Get stop mode 2 digits value. 
+
+
+<h3>３．モータの動作速度</h3>
+  PM16C-04Xでは各モータ毎に動作速度(&quot;Low&quot;,&quot;Middle&quot;,&quot;High&quot;)を設定できるようになりました。 
+  また、モータが動作中に速度を変更できるコマンドが追加されました。 
+
+
+Usage: SpeedLow [MotorNumber] 
+Target: Controller 
+    Set speed to "Low" to "MotorNumber" (0 to 16). 
+    If it's not specified, all motors will be set to "Low". 
+
+Usage: SpeedLow 
+Target: Motor 
+    Set speed to "Low". 
+
+Usage: SpeedMiddle [MotorNumber] 
+Target: Controller 
+    Set speed to "Middle" to "MotorNumber" (0 to 16). 
+    If it's not specified, all motors will be set to "Middle". 
+
+Usage: SpeedMiddle 
+Target: Motor 
+    Set speed to "Middle". 
+
+Usage: SpeedHigh [MotorNumber] 
+Target: Controller 
+    Set speed to "High" to "MotorNumber" (0 to 16). 
+    If it's not specified, all motors will be set to "High". 
+
+Usage: SpeedHigh 
+Target: Motor 
+    Set speed to "High". 
+
+Usage: GetSpeedSelected MotorNumber 
+Target: Controller 
+    Return selected speed (&quot;H&quot; (high), &quot;M&quot; (middle), &quot;L&quot; (low)) of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetSpeedSelected 
+Target: Motor 
+    Return selected speed (&quot;H&quot; (high), &quot;M&quot; (middle), &quot;L&quot; (low)). 
+
+Usage: SetSpeedCurrent MotorNumber SpeedValue 
+Target: Controller 
+    Change speed to &quot;SpeedValue&quot; of &quot;MotorNumber&quot; (0 to 16) only while motor is running. 
+
+Usage: SetSpeedCurrent SpeedValue 
+Target: Motor 
+    Change speed to &quot;SpeedValue&quot; only while motor is running. 
+
+
+<h3>４．原点検出関連</h3>
+Usage: SetHPMode MotorNumber 0XYZ 
+Target: Controller 
+    Set home position scan mode and status 4 digits value of &quot;MotorNumber&quot; (0 to 16) into &quot;0XYZ&quot; as 
+        0: preserved, always 0 
+        X: found status, 0/not found 1/found 
+        Y: found direction, 0/cw 1/ccw 
+        Z: auto start direction, 0/cw 1/ccw 
+
+Usage: SetHPMode 0XYZ 
+Target: Motor 
+    Set home position scan mode and status 4 digits value into &quot;0XYZ&quot; as 
+        0: preserved, always 0 
+        X: found status, 0/not found 1/found 
+        Y: found direction, 0/cw 1/ccw 
+        Z: auto start direction, 0/cw 1/ccw 
+
+Usage: SetHomePosition MotorNumber Value 
+Target: Controller 
+    Write home position pulse of &quot;MotorNumber&quot; (0 to 16) into &quot;Value&quot;. 
+
+Usage: SetHomePosition Value 
+Target: Motor 
+    Write home position pulse into &quot;Value&quot;. 
+
+Usage: SetHPOffset MotorNumber Value 
+Target: Controller 
+    Set home position offset value used in rescanning of &quot;MotorNumber&quot; (0 to 16) into &quot;Value&quot;. 
+
+Usage: SetHPOffset Value 
+Target: Motor 
+    Set home position offset value used in rescanning into &quot;Value&quot;. 
+
+Usage: GetHPMode MotorNumber 
+Target: Controller 
+    Return home position scan mode and status 4 digits value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetHPMode 
+Target: Motor 
+    Return home position scan mode and status 4 digits value. 
+
+Usage: GetHomePosition MotorNumber 
+Target: Controller 
+    Return home position pulse value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetHomePosition 
+Target: Motor 
+    Return home position pulse value. 
+
+Usage: GetHPOffset MotorNumber 
+Target: Controller 
+    Return home position offset value used in rescanning of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetHPOffset 
+Target: Motor 
+    Return home position offset value used in rescanning. 
+
+Usage: ScanHome MotorNumber
+Target: Controller
+    Move "MotorNumber" (0 to 16) for finding home position.
+
+Usage: ScanHome
+Target: Motor
+    Move for finding home position.
+
+Usage: ReScanHome MotorNumber 
+Target: Controller 
+    Move &quot;MotorNumber&quot; (0 to 16) near to the home position previously found fastly, then start finding home position. 
+
+Usage: ReScanHome 
+Target: Motor 
+    Move near to the home position previously found fastly, then start finding home position. 
+
+
+<h3>５．タイミングパルス出力</h3>
+  PM16C-04Xではタイミングパルス出力機能が追加されました。 
+
+Usage: SetTimingOutMode MotorNumber Value 
+Target: Controller 
+    Set timing out mode value of &quot;MotorNumber&quot; (0 to 16) into &quot;Value&quot;. 
+    Value 0: disable, 1: TTL gate , 2: TTL interval 200ns 
+          3: TTL interval 10us 4: TTL interval 100us, 5: TTL interval 1ms 
+
+Usage: SetTimingOutMode Value 
+Target: Motor 
+    Set timing out mode value into &quot;Value&quot;. 
+    Value 0: disable, 1: TTL gate , 2: TTL interval 200ns 
+          3: TTL interval 10us 4: TTL interval 100us, 5: TTL interval 1ms 
+
+Usage: SetTimingOutStart MotorNumber Value 
+Target: Controller 
+    Set timing out start position value of &quot;MotorNumber&quot; (0 to 16) into &quot;Value&quot;. 
+
+Usage: SetTimingOutStart Value 
+Target: Motor 
+    Set timing out start position value into &quot;Value&quot;. 
+
+Usage: SetTimingOutEnd MotorNumber Value 
+Target: Controller 
+    Set timing out end position value of &quot;MotorNumber&quot; (0 to 16) into &quot;Value&quot;. 
+
+Usage: SetTimingOutEnd Value 
+Target: Motor 
+    Set timing out end position value into &quot;Value&quot;. 
+
+Usage: SetTimingOutInterval MotorNumber Value 
+Target: Controller 
+    Set timing out interval value of &quot;MotorNumber&quot; (0 to 16) into &quot;Value&quot;. 
+
+Usage: SetTimingOutInterval Value 
+Target: Motor 
+    Set timing out interval value into &quot;Value&quot;. 
+
+Usage: SetTimingOutReady MotorNumber 0|1 
+Target: Controller 
+    Set timing out ready (set=1, clear=0) of "MotorNumber" (0 to 16). 
+
+Usage: SetTimingOutReady 0|1 
+Target: Motor 
+    Set timing out ready (set=1, clear=0). 
+
+Usage: GetTimingOutMode MotorNumber 
+Target: Controller 
+    Return timing out mode value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetTimingOutMode 
+Target: Motor 
+    Return timing out mode value. 
+
+Usage: GetTimingOutStart MotorNumber 
+Target: Controller 
+    Return timing out start position value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetTimingOutStart 
+Target: Motor 
+    Return timing out start position value. 
+
+Usage: GetTimingOutEnd MotorNumber 
+Target: Controller 
+    Return timing out end position value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetTimingOutEnd 
+Target: Motor 
+    Return timing out end position value. 
+
+Usage: GetTimingOutInterval MotorNumber 
+Target: Controller 
+    Return timing out interval value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetTimingOutInterval 
+Target: Motor 
+    Return timing out interval value. 
+
+Usage: GetTimingOutReady MotorNumber 
+Target: Controller 
+    Return timing out ready value of &quot;MotorNumber&quot; (0 to 16). 
+
+Usage: GetTimingOutReady 
+Target: Motor 
+    Return timing out ready value. 
+
+
+<h3>６．２軸補間</h3>
+  PM16C-04Xでは２軸補間機能が追加されました。 
+
+
+Usage: DrawLine [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY 
+Target: Controller 
+    Draw straight line, using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to absolute "EndValueX", 
+    and "MotorNumberY" (0 to 16) from it's current to absolute "EndValueY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawLineREL [ChannelSet] MotorNumberX MotorNumberY ValueX ValueY 
+Target: Controller 
+    Draw straight line, using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to relative "ValueX", 
+    and "MotorNumberY" (0 to 16) from it's current to relative "ValueY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawCircularCw [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY CenterValueX CenterValueY 
+Target: Controller 
+    Draw cw direction circlular with absolute center position data("CenterValueX", "CenterValueY"), 
+    using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to absolute "EndValueX", 
+    and "MotorNumberY" (0 to 16) from it's current to absolute "EndValueY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawCircularCwREL [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY CenterValueX CenterValueY 
+Target: Controller 
+    Draw cw direction circlular with relative center position data("CenterValueX", "CenterValueY"), 
+    using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to relative "EndValueX", 
+    and "MotorNumberY" (0 to 16) from it's current to relative "EndValueY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawCircularCcw [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY CenterValueX CenterValueY 
+Target: Controller 
+    Draw ccw direction circlular with absolute center position data("CenterValueX", "CenterValueY"), 
+    using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to absolute "EndValueX", 
+    and "MotorNumberY" (0 to 16) from it's current to absolute "EndValueY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawCircularCcwREL [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY CenterValueX CenterValueY 
+Target: Controller 
+    Draw ccw direction circlular with relative center position data("CenterValueX", "CenterValueY"), 
+    using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to relative "EndValueX", 
+    and "MotorNumberY" (0 to 16) from it's current to relative "EndValueY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawArc [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY ByPassPointX ByPassPointY 
+Target: Controller 
+    Draw arc using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to absolute "EndValueX" passing by absolute "ByPassPointX", 
+    and "MotorNumberY" (0 to 16) from it's current to absolute "EndValueY" passing by absolute "ByPassPointY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawArcREL [ChannelSet] MotorNumberX MotorNumberY EndValueX EndValueY ByPassPointX ByPassPointY 
+Target: Controller 
+    Draw arc using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to relative "EndValueX" passing by relative "ByPassPointX", 
+    and "MotorNumberY" (0 to 16) from it's current to relative "EndValueY" passing by relative "ByPassPointY". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawCircle [ChannelSet] MotorNumberX MotorNumberY ByPassPointX1 ByPassPointY1 ByPassPointX2 ByPassPointY2 
+Target: Controller 
+    Draw arc using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to current passing by absolute "ByPassPointX1" and "ByPassPointX2", 
+    and "MotorNumberY" (0 to 16) from it's current passing by absolute "ByPassPointY1" and "ByPassPointY2". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+Usage: DrawCircleREL [ChannelSet] MotorNumberX MotorNumberY ByPassPointX1 ByPassPointY1 ByPassPointX2 ByPassPointY2 
+Target: Controller 
+    Draw arc using "ChannelSet" ({AB or 0} or {CD or 1}) 
+    by moving "MotorNumberX" (0 to 16) from it's current to current passing by relative "ByPassPointX1" and "ByPassPointX2", 
+    and "MotorNumberY" (0 to 16) from it's current passing by relative "ByPassPointY1" and "ByPassPointY2". 
+	"ChannelSet" can be omitted to be selected automatically. 
+
+
+<h3>７．Auto Change Drive機能</h3>
+  PM16C-04XではAuto Change Drive機能が追加されました。 
+
+
+Usage: SetAutoChangeSpeed MotorNumber DataNumber ConditionCode ConditionValue FunctionCode FunctionValue
+Target: Controller
+    Set parameters of Auto-Change-Speed function of "MotorNumber" (0 to 16).
+
+        DataNumber    0 to 127.
+
+        ConditionCode ConditionValue     Set condition to execute function.
+        ----------------------------------------------------------------------------
+            "ADD"   within +-2147483647  relative address from start point.   
+            "TIM"      0 to 65535        relative time(ms) from previous point.   
+            "ACC"     1 to 5000000       speed data(pps) while acceleration.
+            "DEC"     1 to 5000000       speed data(pps) while deceleration.
+            "END"      N/A,ignored       End of record.
+
+        FunctionCode FunctionValue       Action speed.
+        -----------------------------------------------------------------------
+            "SPD"     1 to 5000000       speed in pps.   
+            "RTE"      0 to 115          rate code number.   
+            "SLW"      N/A,ignored       slow stop.
+            "FST"      N/A,ignored       fast stop.
+            "NOP"      N/A,ignored       no operation.
+         N/A,ignored   N/A,ignored       when "ConditionCode" equals "END".
+
+Usage: SetAutoChangeSpeed DataNumber ConditionCode ConditionValue FunctionCode FunctionValue
+Target: Motor
+    Set parameters of Auto-Change-Speed function.
+
+        DataNumber    0 to 127.
+
+        ConditionCode ConditionValue     Set condition to execute function.
+        ----------------------------------------------------------------------------
+            "ADD"   within +-2147483647  relative address from start point.   
+            "TIM"      0 to 65535        relative time(ms) from previous point.   
+            "ACC"     1 to 5000000       speed data(pps) while acceleration.
+            "DEC"     1 to 5000000       speed data(pps) while deceleration.
+            "END"      N/A,ignored       End of record.
+
+        FunctionCode FunctionValue       Action speed.
+        -----------------------------------------------------------------------
+            "SPD"     1 to 5000000       speed in pps.   
+            "RTE"      0 to 115        rate code number.   
+            "SLW"      N/A,ignored       slow stop.
+            "FST"      N/A,ignored       fast stop.
+            "NOP"      N/A,ignored       no operation.
+         N/A,ignored   N/A,ignored       when "ConditionCode" equals "END".
+
+Usage: SetAutoChangeSpeedReady MotorNumber 1|0
+Target: Controller
+    Set Auto-Change-Speed function ready (set=1, clear=0) of "MotorNumber" (0 to 16).
+
+Usage: SetAutoChangeSpeedReady 1|0
+Target: Motor
+    Set Auto-Change-Speed function ready (set=1, clear=0).
+
+Usage: GetAutoChangeSpeed MotorNumber DataNumber
+Target: Controller
+    Get parameters of Auto-Change-Speed function of "DataNumber" of "MotorNumber" (0 to 16).
+
+        DataNumber    0 to 127.
+
+    Return Value:
+        ConditionCode ConditionValue     Set condition to execute function.
+        ----------------------------------------------------------------------------
+            "ADD"   within +-2147483647  relative address from start point.   
+            "TIM"      0 to 65535        relative time(ms) from previous point.   
+            "ACC"     1 to 5000000       speed data(pps) while acceleration.
+            "DEC"     1 to 5000000       speed data(pps) while deceleration.
+            "END"      N/A,ignored       End of record.
+
+        FunctionCode FunctionValue       Action speed.
+        -----------------------------------------------------------------------
+            "SPD"     1 to 5000000       speed in pps.   
+            "RTE"      0 to 115          rate code number.   
+            "SLW"      N/A,ignored       slow stop.
+            "FST"      N/A,ignored       fast stop.
+            "NOP"      N/A,ignored       no operation.
+         N/A,ignored   N/A,ignored       when "ConditionCode" equals "END".
+
+Usage: GetAutoChangeSpeed DataNumber
+Target: Motor
+    Get parameters of Auto-Change-Speed function of "DataNumber".
+
+        DataNumber    0 to 127.
+
+    Return Value:
+        ConditionCode ConditionValue     Set condition to execute function.
+        ----------------------------------------------------------------------------
+            "ADD"   within +-2147483647  relative address from start point.   
+            "TIM"      0 to 65535        relative time(ms) from previous point.   
+            "ACC"     1 to 5000000       speed data(pps) while acceleration.
+            "DEC"     1 to 5000000       speed data(pps) while deceleration.
+            "END"      N/A,ignored       End of record.
+
+        FunctionCode FunctionValue       Action speed.
+        -----------------------------------------------------------------------
+            "SPD"     1 to 5000000       speed in pps.   
+            "RTE"      0 to 115          rate code number.   
+            "SLW"      N/A,ignored       slow stop.
+            "FST"      N/A,ignored       fast stop.
+            "NOP"      N/A,ignored       no operation.
+         N/A,ignored   N/A,ignored       when "ConditionCode" equals "END".
+
+Usage: GetAutoChangeSpeedReady MotorNumber
+Target: Controller
+    Get Auto-Change-Speed function ready (set=1, clear=0) of "MotorNumber" (0 to 16).
+
+Usage: GetAutoChangeSpeedReady
+Target: Motor
+    Get Auto-Change-Speed function ready (set=1, clear=0).
+
+</pre>
+
+<hr>
+<h2>PM16C-04Xで使用できないPM16C04のコマンド</h2>
+<pre>
+</pre>
+<h3>GetSpeedList</h3>
+Usage: GetSpeedList 
+Target: Controller, Motor 
+    Get list of settable motor speed. 
+<p class="body">
+PM16C-04では速度の値はコード表に基づいて設定されていましたが、PM16C-04Xから速度を1～5,000,000まで
+の値を直接設定できるようになったので、速度のコード表を参照する必要がなくなりました。
+</p>
+
+<hr>
+<h2>PM16C-04とPM16C-04Xで仕様の異なるコマンド</h2>
+<pre>
+</pre>
+<h3>GetHighSpeed/GetMiddleSpeed/GetLowSpeed/SetHighSpeed/SetMiddleSpeed/SetLowSpeed</h3>
+<p class="body">PM16C-04では速度はコード表に基づいた値を設定しますが、PM16C-04Xでは1～5,000,000までの値を設定するようになりました。
+</p>
+<pre>
+</pre>
+<h3>GetAccRateList/GetAccRate/SetAccRate</h3>
+<p class="body">PM16C-04、PM16C-04Xともに加減速レートはコード表に基づいた値を設定しますが、設定する加減速レートのコード表が変わりました。
+</p>
+
+<pre>
+</pre>
+<h3>GetLimits/SetLimits</h3>
+<p class="body">PM16C-04とPM16C-04Xで設定する値の仕様が変わりました。
+</p>
+
+<pre>
+</pre>
+<h3>GetValue/SetValue/SetValueREL/Preset/GetDigitalCwLs/SetDigitalCwLs/GetDigitalCcwLs/SetDigitalCcwLs</h3>
+<p class="body">PM16C-04Xで設定できる値の範囲が -2147483647 から 2147483647 まで拡張されました。 
+</p>
+
+<pre>
+</pre>
+<h3>Select</h3>
+<p class="body">PM16C-04ではモータのチャンネル選択をおこなう際に既に別チャンネルでモータが選択されていると選択できませんでしたが、PM16C-04Xでは選択可能となり前に選択されていたチャンネルには別のモータが自動選択されます。
+</p>
+</body>
+</html>

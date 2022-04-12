@@ -1,0 +1,457 @@
+#! /usr/bin/perl
+#########################################################
+## Control panel for PM16C 2005-06-20 Takashi Kosuge     
+##-------------------------------------------------------
+## CVS $Revision: 1.1 $ $Date: 2010-01-19 02:55:50 $ $Author: yasukon $
+##-------------------------------------------------------
+## Updated
+##  2006-04-07 For_NPM4C05A_Compatible Nagatani
+#########################################################
+use strict;
+use Getopt::Long;
+use Tk;
+use stars;
+#################################################################
+# pm16ccntlpnl
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'pm16ccntlpnl';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::OS         = 'Windows';          #Windows or other
+$::Interval   = 18;                 #Interval time for handler.
+$::PM16C      = 'pm16c04';          #I/O Client name of PM16C
+@::MotorEnable=qw(1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1); #Set 1 if Mt init enable
+#################################################################
+$::Debug      = '';  #This variable is used for debug mode.
+                     # You can use like..
+                     # if($::Debug){blha-blah-blah;}
+%::MNum = ();        # Motorname to motornumber
+$::NumberOfMotor=16; # Number_Of_Motor AddedByNaga NPM4C05A Compati
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'c=s'    => \$::PM16C,
+'h'      => \&usage,
+'allow=s'   => \$::ALLOWLIST,
+'deny=s'   => \$::DENYLIST
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+if($::Debug){
+	print "Stars Server#$::Server#\n";
+	print "This NodeName#$::NodeName#\n";
+	print "PMC NodeName#$::PM16C#\n";
+}
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+	
+## AddByNaga NPM4C05A Compatible =>START
+$_=$::tak->act("$::PM16C GetMotorList");
+(undef,undef,$_) = split(/\s+/, $_, 3);
+unless(/^Er:/){
+	my @l=split(/\s+/, $_);
+	$::NumberOfMotor=scalar(@l);
+	if($::Debug){print "Number_Of_Motor#$::NumberOfMotor#\n";}
+	for(my $lp=$#{@::MotorEnable}+1;$lp<=$::NumberOfMotor-1;$lp++){
+		push(@::MotorEnable,1);
+	}
+}else{
+	die "Could not get list of motors[$_]";
+}
+## AddByNaga NPM4C05A Compatible <=END
+
+## Add for Motor Enable Settings =>START
+my $lp;
+if(uc($::ALLOWLIST)=~/^ALL$/){
+	if($::Debug){print "Allow all motors.\n";}
+	for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+		$::MotorEnable[$lp]=1;
+	}	
+}elsif($::ALLOWLIST ne ""){
+	for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+		$::MotorEnable[$lp]=0;
+	}	
+	foreach (split(/\,/, $::ALLOWLIST)){
+		$lp = $_+0;
+		if($::Debug){print "Allow motor $lp.\n";}
+		if($lp<=($::NumberOfMotor-1)){
+			$::MotorEnable[$lp]=1;
+		}
+	}
+}
+if(uc($::DENYLIST)=~/^ALL$/){
+	if($::Debug){print "Deny all motors.\n";}
+	for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+		$::MotorEnable[$lp]=0;
+	}	
+}elsif($::DENYLIST ne ""){
+	if($::ALLOWLIST eq ""){
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			$::MotorEnable[$lp]=1;
+		}	
+	}
+	foreach (split(/\,/, $::DENYLIST)){
+		$lp = $_+0;
+		if($::Debug){print "Deny motor $lp.\n";}
+		if($lp<=($::NumberOfMotor-1)){
+			$::MotorEnable[$lp]=0;
+		}
+	}
+}
+## Add for Motor Enable Settings <=END
+
+### Make Widgets ###
+my $mw;
+$mw=MainWindow->new;
+$mw->title("$::PM16C Control Pannel");
+
+$mw->Label(-text=>'Enable')->grid(-row=>0, -column=>0);
+
+$mw->Label(-text=>'Name')->grid(-row=>0, -column=>1+1);
+$mw->Label(-text=>'Status')->grid(-row=>0, -column=>2+1);
+$mw->Label(-text=>'Present')->grid(-row=>0, -column=>3+1);
+$mw->Label(-text=>'Absolute')->grid(-row=>0, -column=>5+1, -columnspan=>2);
+$mw->Label(-text=>'  ')->grid(-row=>0, -column=>7+1);
+$mw->Label(-text=>'Relative')->grid(-row=>0, -column=>8+1, -columnspan=>3);
+
+$mw->Label(-textvariable=>\$::RLvalue, -relief=>'ridge', -width=>8)->grid(-row=>0, -column=>11+1);
+
+$mw->Button(-text=>'Rem/Loc', -command=>\&clicked_RL)
+         ->grid(-row=>0, -column=>12+1);
+
+
+my $row;
+
+for($lp=0; $lp<=$::NumberOfMotor-1; $lp++){
+	$row=$lp+1;
+
+#	$::MotorEnable[$lp]=0;
+
+	eval("\$::IPTEnable[\$lp]=\$mw->Checkbutton(-text=>'', -command=>sub{clicked_MotorEnable($lp);},-variable=>\\\$::MotorEnable[$lp], -state=>'normal')");
+	$::IPTEnable[$lp]->grid(-row=>$row, -column=>0);
+
+#	$mw->Checkbutton(-text=>'',-command=>sub{clicked_MotorEnable($lp);}
+#	             ,-variable=>\$::SelectMotor[$lp], -state=>'disabled')
+#	  ->grid(-row=>$row, -column=>0);
+
+	
+	$mw->Label(-text=>"$lp:", -anchor=>'e')->grid(-row=>$row, -column=>0+1);
+	$::Name[$lp]="Motor $lp";
+	$mw->Label(-textvariable=>\$::Name[$lp])->grid(-row=>$row, -column=>1+1);
+
+	$::Status[$lp]=$mw->Label(-text=>'???');
+	$::Status[$lp]->grid(-row=>$row, -column=>2+1);
+
+	$::Value[$lp]=$lp;
+	$mw->Label(-textvariable=>\$::Value[$lp],-width=>12, -anchor=>'e', -relief=>'ridge')
+	  ->grid(-row=>$row, -column=>3+1);
+
+	$mw->Label(-text=>'=>')->grid(-row=>$row, -column=>4+1);
+
+	$::Destination[$lp]='???';
+#	$mw->Entry(-textvariable=>\$::Destination[$lp],-width=>12, -justify=>'right')
+#	  ->grid(-row=>$row, -column=>5+1);
+
+	eval("\$::IPTDEST[\$lp]=\$mw->Entry(-textvariable=>\\\$::Destination[$lp], -width=>12, -justify=>'right')");
+	$::IPTDEST[$lp]->grid(-row=>$row, -column=>5+1);
+
+	eval("\$::Go[\$lp]=\$mw->Button(-text=>'Go', -width=>6, -state=>'disabled',
+	     -command=>sub{clicked_Go($lp);})");
+	$::Go[$lp]->grid(-row=>$row, -column=>6+1);
+
+	eval("\$::GoCcw[\$lp]=\$mw->Button(-text=>'CCW(-)', -width=>6, -state=>'disabled',
+	     -command=>sub{clicked_GoCcw($lp);})");
+	$::GoCcw[$lp]->grid(-row=>$row, -column=>8+1);
+
+	$::Step[$lp]=0;
+#	$mw->Entry(-textvariable=>\$::Step[$lp], -width=>12, -justify=>'right')
+#	   ->grid(-row=>$row, -column=>9+1);
+	eval("\$::IPTSTEP[\$lp]=\$mw->Entry(-textvariable=>\\\$::Step[$lp], -width=>12, -justify=>'right')");
+	$::IPTSTEP[$lp]->grid(-row=>$row, -column=>9+1);
+
+	eval("\$::GoCw[\$lp]=\$mw->Button(-text=>'CW(+)', -width=>6, -state=>'disabled',
+	     -command=>sub{clicked_GoCw($lp);})");
+	$::GoCw[$lp]->grid(-row=>$row, -column=>10+1);
+
+	eval("\$::Stop[\$lp]=\$mw->Button(-text=>'Stop', -width=>10, -command=>sub{clicked_Stop($lp);})");
+	$::Stop[$lp]->grid(-row=>$row, -column=>11+1, -columnspan=>2);
+}
+
+rcvd_ChangedFunction(0);
+
+if($::OS eq 'Windows'){
+	$mw->repeat($::Interval,\&handler);
+}else{
+	my $fh = $::tak->gethandle();
+	$mw->fileevent($fh, 'readable', [\&handler]);
+}
+
+$::tak->Send("GetMotorList", $::PM16C);
+MainLoop;
+
+exit(1);
+
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: $::NodeName [-h] [-d] [-c ControllerName] [-node MyNodeName] [StarsServer]\n";
+  print "       -h    Show this help.\n";
+  print "       -d    Run with debug mode.\n";
+  print "       -c ControllerName      Define PMC terminal name, which is controlled\n";
+  print "             by this GUI client. Default=\"pm16c04\"\n";
+  print "       -node MyNodeName       Define this GUI client terminal name.\n";
+  print "                                 Default=\"pm16ccntlpnl\"\n";
+  print "       -allow all             Input allowed for all motors initially.\n";
+  print "       -allow motorNumberList(delimiter with commas)\n";
+  print "                              Input allowed for motors in list initially.\n";
+  print "                              ex) -allow 0,1,2,3.\n";
+  print "       -deny all              Input denied for all motors initially.\n";
+  print "       -deny motorNumberList(delimiter with commas)\n";
+  print "                              Input denied for motors in list initially.\n";
+  print "                              ex) -deny 12,13,14,15.\n";
+  print "\n";
+  exit(0);
+}
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+#	my ($from, $to, $mess) = @_;
+	my ($from, $to, $mess) = $::tak->Read();
+	if($from eq ''){return();}
+
+	my $rt;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Motor names and Motor numbers.
+	my $mn=-1;
+	my $mname=$from;
+	$mname =~ s/$::PM16C\.//;
+
+	if(defined($::MNum{$mname})){
+		$mn=$::MNum{$mname};
+	}
+
+## Handle received messges ##
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess eq 'help'){
+		$rt="help hello";
+	}elsif($mess =~ s/^\@GetMotorList //){
+		my @mlist=split(/\s+/, $mess);
+		my $lp;
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			$::Name[$lp]=$mlist[$lp];
+			$::MNum{$mlist[$lp]}=$lp;
+		}
+		$::tak->act("System flgon $::PM16C");
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			$::tak->act("System flgon $::PM16C.$mlist[$lp]");
+		}
+			$::tak->Send("$::PM16C flushdatatome");
+		return;
+	}elsif($mn>=0 and $mess =~ s/^_ChangedValue //){
+		$::Value[$mn]=$mess;
+		if($::Destination[$mn] eq '???'){$::Destination[$mn]=$mess;}
+		return;
+	}elsif($mess =~ s/^_ChangedCtlIsBusy //){
+		rcvd_ChangedCtlIsBusy($mess);
+		return;
+	}elsif($mn>=0 and $mess =~ s/^_ChangedIsBusy //){
+		rcvd_ChangedIsBusy($mess, $mn);
+		return;
+	}elsif($mess =~ s/^_ChangedFunction //){
+		rcvd_ChangedFunction($mess);
+		return;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+sub clicked_MotorEnable{
+	my $lp=shift;
+#	print $lp,";",$::MotorEnable[$lp],"\n";
+	if($::RLvalue eq 'Local'){return;}
+	if(!$::MotorEnable[$lp]){
+		$::IPTDEST[$lp]->configure(-state=>'disabled');
+		$::IPTSTEP[$lp]->configure(-state=>'disabled');
+		$::Go[$lp]->configure(-state=>'disabled');
+		$::GoCw[$lp]->configure(-state=>'disabled');
+		$::GoCcw[$lp]->configure(-state=>'disabled');
+		$::Stop[$lp]->configure(-state=>'disabled');
+		return;
+	}
+	if($::Status[$lp]->cget(-text) eq 'Stop'){
+		$::IPTDEST[$lp]->configure(-state=>'normal');
+		$::IPTSTEP[$lp]->configure(-state=>'normal');
+		$::Stop[$lp]->configure(-state=>'disabled');
+		if($::CtlBusy){
+			$::Go[$lp]->configure(-state=>'disabled');
+			$::GoCw[$lp]->configure(-state=>'disabled');
+			$::GoCcw[$lp]->configure(-state=>'disabled');
+			return;
+		}
+		$::Go[$lp]->configure(-state=>'normal');
+		$::GoCw[$lp]->configure(-state=>'normal');
+		$::GoCcw[$lp]->configure(-state=>'normal');
+		return;
+	}else{
+		$::IPTDEST[$lp]->configure(-state=>'normal');
+		$::IPTSTEP[$lp]->configure(-state=>'normal');
+		$::Go[$lp]->configure(-state=>'disabled');
+		$::GoCw[$lp]->configure(-state=>'disabled');
+		$::GoCcw[$lp]->configure(-state=>'disabled');
+		$::Stop[$lp]->configure(-state=>'normal');
+	}
+}
+
+sub rcvd_ChangedIsBusy{
+	my $f=shift;
+	my $mn=shift;
+	#Stop to Busy
+	if($f){
+		$::Status[$mn]->configure(-text=>'Run', -foreground=>'red');
+		if($::MotorEnable[$mn]){
+			$::Go[$mn]->configure(-state=>'disabled');
+			$::GoCw[$mn]->configure(-state=>'disabled');
+			$::GoCcw[$mn]->configure(-state=>'disabled');
+			$::Stop[$mn]->configure(-state=>'normal');
+		}
+	#Busy to Stop
+	}else{
+		if($::RLvalue eq 'Remote'){
+			if($::MotorEnable[$mn]){
+				$::Go[$mn]->configure(-state=>'normal');
+				$::GoCw[$mn]->configure(-state=>'normal');
+				$::GoCcw[$mn]->configure(-state=>'normal');
+				$::Stop[$mn]->configure(-state=>'disabled');
+			}
+		}
+		$::Status[$mn]->configure(-text=>'Stop', -foreground=>'black');
+	}
+}
+
+sub rcvd_ChangedCtlIsBusy{
+	my $f=shift;
+	my $lp;
+
+	#All Busy
+	if($f){
+		$::CtlBusy=1;
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			if($::MotorEnable[$lp]){
+				$::Go[$lp]->configure(-state=>'disabled');
+				$::GoCw[$lp]->configure(-state=>'disabled');
+				$::GoCcw[$lp]->configure(-state=>'disabled');
+			}
+		}
+	#Busy Canceled
+	}else{
+		$::CtlBusy=0;
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			if($::Status[$lp]->cget(-text) eq 'Stop'){
+				if($::MotorEnable[$lp]){
+					$::Go[$lp]->configure(-state=>'normal');
+					$::GoCw[$lp]->configure(-state=>'normal');
+					$::GoCcw[$lp]->configure(-state=>'normal');
+				}
+			}
+		}
+	}
+}
+
+sub rcvd_ChangedFunction{
+	my $lp;
+	#2Remote
+	if(shift){
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			$::RLvalue='Remote';
+#			$::IPTEnable[$lp]->configure(-state=>'normal');
+			if($::MotorEnable[$lp]){
+				$::IPTDEST[$lp]->configure(-state=>'normal');
+				$::IPTSTEP[$lp]->configure(-state=>'normal');
+#				if($::Status[$lp]->cget(-text) eq 'Stop'){
+#					$::Go[$lp]->configure(-state=>'normal');
+#					$::GoCw[$lp]->configure(-state=>'normal');
+#					$::GoCcw[$lp]->configure(-state=>'normal');
+#					$::Stop[$lp]->configure(-state=>'disabled');
+#				}
+			}
+		}
+	#2Local
+	}else{
+		for($lp=0;$lp<=$::NumberOfMotor-1;$lp++){
+			$::RLvalue='Local';
+#			$::IPTEnable[$lp]->configure(-state=>'normal');
+			$::IPTDEST[$lp]->configure(-state=>'disabled');
+			$::IPTSTEP[$lp]->configure(-state=>'disabled');
+			$::Go[$lp]->configure(-state=>'disabled');
+			$::GoCw[$lp]->configure(-state=>'disabled');
+			$::GoCcw[$lp]->configure(-state=>'disabled');
+			$::Stop[$lp]->configure(-state=>'disabled');
+		}
+	}
+}
+
+sub clicked_Go{
+	my $mn=shift;
+#	$::tak->Send("$::PM16C SetValue $mn $::Destination[$mn]");
+	$::tak->Send("$::PM16C.$::Name[$mn] SetValue $::Destination[$mn]");
+}
+
+sub clicked_GoCw{
+	my $mn=shift;
+#	$::tak->Send("$::PM16C SetValueREL $mn $::Step[$mn]");
+	$::tak->Send("$::PM16C.$::Name[$mn] SetValueREL $::Step[$mn]");
+}
+
+sub clicked_GoCcw{
+	my $mn=shift;
+	my $step=$::Step[$mn] * (-1);
+#	$::tak->Send("$::PM16C SetValueREL $mn $step");
+	$::tak->Send("$::PM16C.$::Name[$mn] SetValueREL $step");
+}
+
+sub clicked_Stop{
+	my $mn=shift;
+#	$::tak->Send("$::PM16C Stop $mn");
+	$::tak->Send("$::PM16C.$::Name[$mn] Stop");
+}
+
+sub clicked_RL{
+	if($::RLvalue eq 'Remote'){
+		$::tak->Send("SetFunction 0", $::PM16C);
+	}else{
+		$::tak->Send("SetFunction 1", $::PM16C);
+	}
+}

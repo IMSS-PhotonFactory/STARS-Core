@@ -1,0 +1,61 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.2 $
+              $Date: 2011-02-17 02:47:30 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  Show program list of scriptclient.
+Please use "ProgramName -h" for more help.
+';
+#####################################################
+$::Offline= 1;
+$::Param = 'Script_Name';
+require 'scriptlib.pl';
+
+if(@ARGV){
+	my $filename;
+	($filename) = stSetParam();
+	if(-e $filename){
+		system("perl $filename -h");
+		exit(0);
+	}
+}
+
+my $outbuf = '';
+while(<DATA>){$outbuf .= $_;}
+
+## Get program list.
+opendir(DIR, "./") or die $!;
+my @allfiles = readdir(DIR);
+closedir(DIR);
+
+my @files = ();
+my $f;
+for $f (@allfiles){
+	if($f =~ /\./){next;}
+	if($f =~ /~$/){next;}
+	if(-d $f){next;}
+	push(@files, $f);
+}
+
+my $filecount = @files;
+
+$f = '';
+while(@files){
+	$f .= sprintf("%-25s %-25s %-25s\n", shift(@files), shift(@files), shift(@files));
+}
+$f =~ s/\n$//;
+
+$outbuf =~ s/<<FILECOUNT>>/$filecount/;
+$outbuf =~ s/<<FILES>>/$f/g;
+
+
+print $outbuf;
+
+__DATA__
+
+STARS script client: <<FILECOUNT>> programs exist.
+-------------------------------------------------------------------------------
+<<FILES>>
+-------------------------------------------------------------------------------
+Please enter "ProgramName -h" for more help.

@@ -1,0 +1,293 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=Windows-1252" />
+    <title>Console.Terminal1</title>
+  </head>
+  <body>
+  <h1>ConsoleTerminal1 Reference</h1>
+  <h1>Project Member</h1>
+  <table width="70%" border="0" cellpadding="4" cellspacing="0" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+<PRE>Solution 'ConsoleTerminal1'
+ |
+ +--+ Project 'ConsoleTerminal1'
+    |
+    +-- Reference Includes
+    |   +-- StarsInterface   
+    |   +-- System
+    |
+    +-- Program.cs
+</PRE>
+  </td>
+  </tr></table>
+  &nbsp;
+  <table border="1" cellspacing="0" >
+    <tr valign="top" >
+      <td rowspan=2>Reference Includes</td>
+      <td  >StarsInterface</td>
+      <td >Directive for StarsInterface.<br>
+        Add for using Stars .NET.</td>
+    </tr>
+    <tr valign="top" >
+      <td >System</td>
+      <td  >Directive for System libraries.</td>
+    </tr>
+    <tr>
+      <td >Program Files</td>
+      <td ><a href="#Program.cs">Program.cs</a></td>
+      <td  >Console Application Code</td>
+    </tr>
+  </table>
+
+  <hr>
+  <h1><A NAME="ConsoleTerminal1">ConsoleTerminal1</A> Namespace</h1>
+  <h3>Classes</h3>
+  <table border="1" cellspacing="0">
+  <tr valign="top" >
+                    <td ><a href="#Program">Program</a></td>
+                    <td>Represents an Stars Console Application Main
+                      class.</td>
+  </tr>
+  </table>
+  <h1>Using Directive</h1>
+  <table border="1" cellspacing="0">
+    <tr valign="top" >
+      <td >System</td>
+      <td >Directive for System.</td>
+    </tr>
+    <tr valign="top" >
+      <td >Stars</td>
+      <td >Directive for Stars. Add for using Stars .NET</td>
+    </tr>
+  </table>
+    <hr>
+  <h1><A NAME="Program.cs">About Program.cs</a><A></h1>
+  <h3>Code View</h3>
+  <table width="70%" border="0" cellpadding="4" cellspacing="0" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+ <PRE>using System;
+using STARS;
+
+namespace ConsoleTerminal1
+{
+    /// <summary>Represents an Stars Console Application Main class.</summary>
+    class Program
+    {
+        /// <summary>This field is a stars interface.</summary>
+        </a><a href="#Program.stars">private static StarsInterface stars;</a>
+
+        /// <summary>Here is Application Entrance.</summary>
+        /// <seealso cref="Stars_Message_Received"/>
+        /// <param name="args">Used to indicate command parameters.
+        /// <example>
+        /// <code>
+</code></example>        <a href="#Program.Main">static void Main(string[] args)</a>
+        {
+            string[] starsargs = new string[] { &quot;csterm&quot;, &quot;localhost&quot; };
+
+            // Step1. Connect to Stars.
+            stars = new StarsInterface(starsargs[0], starsargs[1]);
+            try
+            {
+                stars.Connect();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                return;
+            }
+
+            // Step2. Add the stars handler named 'Stars_Message_Received' 
+            //   which is called when arriving stars messages via TCP/IP socket.
+            stars.StartCbHandler(new StarsCbHandler(Stars_Message_Received));
+
+            // Step3. Waiting for the input from console.
+            //  until entering 'Quit' or 'Exit'.
+            Console.WriteLine(&quot;Input Stars Message, or help.&quot;);
+            String buf;
+            while (true)
+            {
+                buf = Console.ReadLine();
+                if (buf == &quot;&quot;)
+                {
+                    continue;
+                }
+                switch (buf.ToUpper())
+                {
+                    case &quot;QUIT&quot;:
+                        break;
+                    case &quot;EXIT&quot;:
+                        break;
+                    case &quot;HELP&quot;:
+                        Console.WriteLine(&quot;Enter [help|quit|exit|'Stars Message to be send']&quot;);
+                        continue;
+                    default:
+                        Console.WriteLine(&quot;SEND#&quot; + buf + &quot;#&quot;);
+                        stars.Send(buf);
+                        continue;
+                }
+                break;
+            }
+            return;
+        }
+        /// <summary>This method is called when arriving stars messages.</summary>
+        /// <param name="cb">Used to access the Stars object which contains received data.
+        /// 
+        <a href="#Program.Stars_Message_Received">static private void Stars_Message_Received(object sender, StarsCbArgs cb)</a>
+        {
+            // No Message
+            if (cb.Message.Trim() == &quot;&quot;)
+            {
+                Console.WriteLine(&quot;RECV#{0}&quot;, cb.allMessage + &quot;#&quot;);
+                string sendbuf;
+                sendbuf = cb.from + &quot; @&quot; + cb.Message + &quot; Er: Bad command.&quot;;
+                stars.Send(sendbuf);
+                Console.WriteLine(&quot;RPLY#&quot; + sendbuf);
+            }
+            // Event has come.
+            else if (cb.command[0] == '_')
+            {
+                Console.WriteLine(&quot;EVNT#{0}&quot;, cb.allMessage);
+            }
+            // Reply has come.
+            else if (cb.command[0] == '@')
+            {
+                Console.WriteLine(&quot;RECV#{0}&quot;, cb.allMessage);
+            }
+            // Stars Request has come.
+            else
+            {
+                Console.WriteLine(&quot;RECV#{0}&quot;, cb.allMessage + &quot;#&quot;);
+                string sendbuf;
+
+                //Check request and send reply message
+                switch (cb.Message)
+                {
+                    case &quot;hello&quot;:
+                        sendbuf = cb.from + &quot; @&quot; + cb.Message + &quot; hello nice to meet you&quot;;
+                        stars.Send(sendbuf);
+                        Console.WriteLine(&quot;RPLY#&quot; + sendbuf);
+                        break;
+                    case &quot;help&quot;:
+                        sendbuf = cb.from + &quot; @&quot; + cb.Message + &quot; hello help&quot;;
+                        stars.Send(sendbuf);
+                        Console.WriteLine(&quot;RPLY#&quot; + sendbuf);
+                        break;
+                    default:
+                        sendbuf = cb.from + &quot; @&quot; + cb.Message + &quot; Er: Bad command or parameter.&quot;;
+                        stars.Send(sendbuf);
+                        Console.WriteLine(&quot;RPLY#&quot; + sendbuf);
+                        break;
+                }
+            }
+            return;
+        }
+    }
+}
+</PRE></td>
+  </tr></table>
+
+  <h1><A NAME="Program">Program</A> Class</h1>
+      Represents an Stars Console Application Main class.<BR>
+  For a list of all members of this type, see <a href="#Program Members">Program Members</a>.
+  <p>
+        internal class Program</p>
+      <p>
+  <b>Namespace: </b>        <a href="#ConsoleTerminal1">ConsoleTerminal1</a>  </p>
+        <hr>
+        <h1><A NAME="Program Members"></A>Program Members</h1>
+        <h4>Private Static Fields</h4>
+        <table border="1" cellspacing="0">
+<tr VALIGN="top"><td><a href="#Program.stars">stars</a></td>
+<td>This field is a stars interface.</td>
+</tr></table>
+      <h4>Private Static Methods</h4>
+        <table cellspacing="0" border="1">
+<tr VALIGN="top"><td><a href="#Program.Main">Main</a></td>
+<td>Here is Application Entrance.</td></tr>
+<tr VALIGN="top"><td><a href="#Program.Stars_Message_Received">Stars_Message_Received</a></td>
+<td>This method is called when arriving stars messages.</td>
+</tr></table>
+        <h1><A NAME="Program.stars">Program.stars</A> Field</h1>
+  <p>This field is a stars interface.</p>
+            <h4>Usage</h4>
+            private&nbsp;static&nbsp;StarsInterface&nbsp;stars;
+            <h1><A NAME="Program.Main">Program.Main</A>&nbsp;Method&nbsp;</h1>
+        <p>Here is Application Entrance.</p>
+        <h4>Usage</h4>
+      private static void Main(<br /> 
+        String[] <i>args</i><br />);
+      <h4>Parameters</h4>
+      <dl>
+        <dt>
+          <i>args</i>
+        </dt>
+        <dd>Used to indicate command parameters.</dd>
+      </dl>
+      <h4>Example</h4>
+Example for Stars connection.
+<table width="70%" border="0" cellpadding="4" cellspacing="0" bgcolor="#e8e8e8">
+  <tr>
+  <td>
+             <pre>static void Main(string[] args)
+{
+     // Step1. Connect to Stars.
+     stars = new StarsInterface(&quot;csterm&quot;, &quot;localhost&quot;);
+     try
+     {
+         stars.Connect();
+     }
+     catch (Exception e)
+     {
+         Console.WriteLine(e.Message);
+         return;
+     }
+     
+ // Step2. Add the stars handler named 'Stars_Message_Received' which is called when arriving stars messages.
+     stars.StartCbHandler(new StarsCbHandler(Stars_Message_Received));
+ 
+ // Step3. Waiting for the input from console.
+     Console.WriteLine(&quot;Input Stars Message, or help.&quot;);
+     String buf;
+     while (true)
+     {
+         buf = Console.ReadLine();
+         // Add code for break...
+     }
+}</pre>
+</td></tr></table>
+
+        <hr>
+        <h1><A NAME="Program.Stars_Message_Received">Program.Stars_Message_Received</A>&nbsp;Method</h1>
+
+      <p>This method is called when arriving stars messages.</p>
+      <h4>Usage</h4>
+      private&nbsp;static&nbsp;void&nbsp;Stars_Message_Received(<br />
+      &nbsp;&nbsp;&nbsp;Object&nbsp;<i>sender</i>,<br />&nbsp;&nbsp;&nbsp;StarsCbArgs&nbsp;<i>cb</i><br />);
+      <h4>Parameters</h4>
+      <dl>
+        <dt>
+          <i>sender</i>
+        </dt>
+        <dd>
+        </dd>
+        <dt>
+          <i>cb</i>
+        </dt>
+        <dd>Used to access the Stars object which contains received data.</dd>
+      </dl>
+      <h4>Example</h4>
+<table width="70%" border="0" cellpadding="4" cellspacing="0" bgcolor="#e8e8e8">
+  <tr><td><PRE>static private void Stars_Message_Received(object sender, StarsCbArgs cb)
+{
+   //For check arriving &quot;hello&quot; 
+   if(cb.Message == &quot;hello&quot;)
+   {
+       // Send Stars reply message to sender.
+       stars.Send(cb.from + &quot; @&quot; + cb.Message &quot; hello nice to meet you&quot;);
+   }</pre>
+</td></tr></table>
+  </body>
+</html>

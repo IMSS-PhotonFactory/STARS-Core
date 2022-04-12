@@ -1,0 +1,351 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+#################################################################
+# breaker
+$::Version  = '$Revision: 2.0 $';
+$::Version .= '$Date: 2013/04/15 10:43:00 $';
+# History
+# 2010/01/19	Version 1.1	1st Edition: Bug fixed version. By naga.
+# 2013/04/15	Version 2.0	2nd Edition: Add sleep function. By naga.
+$::Version =~ s/\$//g;
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'breaker';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::ServerPort = '';
+$::ServerServerKeyfile = '';
+$::Debug      = ''; #This variable is used for debug mode.
+#################################################################
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      		  => \$::Debug,
+'node=s' 		  => \$::NodeName,
+'nodename=s'      => \$::NodeName,
+'starsserver=s'   => \$::Server,
+'starsport=i' 	  => \$::ServerPort,
+'starskeyfile=s'  => \$::ServerKeyfile,
+'h'				  => \&usage,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+## Open Stars server. $::tak is a Stars object.
+if($::Debug){
+	print "STARS CONNECT: $::NodeName, $::Server, $::ServerPort, $::ServerKeyfile\n";
+}
+$::tak = stars->new($::NodeName, $::Server, $::ServerPort, $::ServerServerKeyfile)
+	or die "Could not connect Stars server";
+
+%::BreakClientList=();
+%::BreakClientLog=();
+
+%::helpcntrl=();
+$|=1;
+set_help_list();
+
+$::tak->addcallback(\&handler);
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h] [-d] [-(node|nodename) MyNodeName] [-starsserver StarsServer]  [-starsport StarsServerPort]  [-starskeyfile StarsKeyFile] [StarsServer]
+       -h   Show this help.
+       -d   Run with debug mode.
+__USAGE__
+
+exit(0);
+}
+
+sub myResetCmd{
+	my($caller)=(shift);
+	$::BreakClientList{$caller}='';
+	undef($::BreakClientList{$caller});
+	my $rt=$::tak->act("System flgoff $caller");
+	unless(($rt=~/removed/) or $rt=~/void/){return($rt);}
+	return('Ok:');
+}
+
+sub mySetCmdCheck{
+	my($caller,$cmdlist,$initflg)=(shift,shift,shift);
+	$cmdlist=~s/\\t/\t/g;
+	my @cmds=split(/\t/,$cmdlist);
+	my $buf;
+	my $rt='Er: Command invalid.';
+	my $from;
+	my $to;
+	
+	if($initflg){
+		if(defined($::BreakClientList{$caller})){
+			myResetCmd($caller);
+		}
+	}
+
+	my $cmdcount=0;
+	my $setflg=0;
+	foreach $buf (@cmds){
+		if($buf=~/^\s*$/){next;}
+		if($buf=~/^\s*(\d+)\s*$/){
+			if(defined($::BreakClientList{$caller})){
+				$::BreakClientList{$caller}.="\t";
+			}
+			$::BreakClientList{$caller}.="$1";
+		}else{
+			my($from,$to)=('','');
+			if($buf =~ s/^([a-zA-Z_0-9.\-]+)>//){
+				$from="$1>";
+				if($::Debug){print "FROM: $from\n";}
+			}
+			unless($buf =~ s/^([a-zA-Z_0-9.\-]+)\s*//){
+				if($::Debug){print "TO_ERROR: $buf\n";}
+				return("$rt $from$buf");
+			}
+			$to = $1;
+			if(($buf eq '') or ($buf=~/^@/)){
+				if($::Debug){print "MESG_ERROR: $buf\n";}
+				return("$rt $from$to $buf");
+			}
+			unless($setflg){$setflg=1;}
+			if(defined($::BreakClientList{$caller})){
+				$::BreakClientList{$caller}.="\t";
+			}
+			$::BreakClientList{$caller}.="$from$to $buf";
+		}
+		$cmdcount++;
+	}
+	if($cmdcount<=0){
+		return("Er: No command.");
+	}
+	if($setflg){
+		$rt=$::tak->act("System flgon $caller");
+		unless(($rt=~/registered/) or $rt=~/already in the list/){return($rt);}
+	}
+	return('Ok:');
+}
+
+sub myListCmd{
+	my($caller)=(shift);
+	my $rt='Er: No list.';
+	
+	if(defined($::BreakClientList{$caller})){
+		$rt=$::BreakClientList{$caller};
+	}
+	return($rt);
+}
+
+sub myListLog{
+	my($caller)=(shift);
+	my $rt='Er: No list.';
+	
+	if(defined($::BreakClientLog{$caller})){
+		$rt=$::BreakClientLog{$caller};
+	}
+	return($rt);
+}
+
+sub myDoBreaker{
+	my($caller)=(shift);
+	my @cmds;
+	my $cmd;
+	my($dest,$mesg);
+	my $rt='Er: No list.';
+	
+	if(defined($::BreakClientList{$caller})){
+		$::BreakClientLog{$caller}='';
+		@cmds=split(/\t/,$::BreakClientList{$caller});
+		foreach $cmd (@cmds){
+			if($cmd=~/^(\d+)$/){
+				$::BreakClientLog{$caller}.="\tSleep $1 msec";
+				$::tak->Sleep("$1");
+				next;
+			}
+			($dest,$mesg)=split(/\s/,$cmd,2);
+			if($mesg=~/^[_]/){
+				$::BreakClientLog{$caller}.="\t$dest $mesg";
+				$::tak->Send("$dest $mesg");
+			}elsif($mesg=~/^[@]/){
+			}else{
+				$::BreakClientLog{$caller}.="\t$dest $mesg";
+				$rt=$::tak->act("$dest $mesg");
+				$::BreakClientLog{$caller}.="\t$rt";
+			}
+		}
+		$::BreakClientLog{$caller}=~s/^\t//;
+		$rt=myResetCmd($caller);
+	}
+	return($rt);
+}
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	my $rt;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess=~/^help$/)        {$rt=get_help_list('Cntrl');
+	}elsif($mess=~/^help\s+(\S+)/) {$rt=get_help_list('Cntrl', $1);
+	}elsif($mess eq 'getversion'){
+		$rt=$::Version;
+	}elsif($mess=~/^setcmd\s+(.+)/){
+		$rt=mySetCmdCheck($from,$1,1);
+	}elsif($mess=~/^addcmd\s+(.+)/){
+		$rt=mySetCmdCheck($from,$1,0);
+	}elsif($mess=~/^resetcmd$/){
+		$rt=myResetCmd($from);
+	}elsif($mess=~/^listcmd$/){
+		$rt=myListCmd($from);
+	}elsif($mess=~/^listlog$/){
+		$rt=myListLog($from);
+	}elsif($mess=~/^resetcmd\s+(.+)$/){
+		$rt=myResetCmd($1);
+	}elsif($mess=~/^listcmd\s+(.+)/){
+		$rt=myListCmd($1);
+	}elsif($mess=~/^listlog\s+(.+)$/){
+		$rt=myListLog($1);
+	}elsif($mess =~ /^_Disconnected\s*/){
+		myDoBreaker($from);
+		return;
+	}elsif($mess =~ /^[_]/){
+		return;
+	}elsif($mess =~ /^[@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+sub get_help_list{
+	my $target = shift;
+	my $cmd = shift;
+	if($target eq 'Cntrl'){
+		unless($cmd){return(join(" ", sort(keys(%::helpcntrl))));}
+		unless(defined($::helpcntrl{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";
+			return('');
+		}
+		return($::helpcntrl{$cmd});
+	}else{
+		unless($cmd){return(join(" ", sort(keys(%::helpmotor))));}
+		unless(defined($::helpmotor{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";
+			return('');
+		}
+		return($::helpmotor{$cmd});
+	}
+}
+
+sub set_help_list{
+	my $title='';
+	my $titlenew;
+	my $buf='';
+	my $target='';
+	while(<DATA>){
+		if(/^(?:Usage|Event): (\w+)( |$)/){
+			$titlenew = $1;
+			if($title){
+				$buf =~ s/\r//gm;
+				$buf =~ s/\n/\\n/gm;
+				if($target =~ /Motor/){
+					$::helpmotor{$title} = $buf;
+				}
+				if($target =~ /Controller/){
+					$::helpcntrl{$title} = $buf;
+				}
+				$buf = '';
+			}
+			$title = $1;
+		}
+		if(/Target: (.+)/){
+			$target=$1;
+			next;
+		}
+		$buf .= $_;
+	}
+	$buf =~ s/\r//gm;
+	$buf =~ s/\n/\\n/gm;
+	if($target =~ /Motor/){
+		$::helpmotor{$title} = $buf;
+	}
+	if($target =~ /Controller/){
+		$::helpcntrl{$title} = $buf;
+	}
+}
+
+__DATA__
+#STARS Commands
+Usage: help [Commmand]
+Target: Controller
+    List commands or show usage (with "command")
+
+Usage: hello
+Target: Controller
+    The client returns "@hello nice to meet you."
+
+Usage: getversion
+Target: Controller
+    Get a version number of this program.
+
+Usage: setcmd
+Target: Controller
+    Set the strings of commands which are executed when a caller has disconnected.
+    The commands set before get cleared.
+    <tab character> or character '\t' is used as a command delimiter.
+    If "Version>=2.0" strings of number used wait msec.
+
+Usage: addcmd
+Target: Controller
+    Add the strings of commands which are executed when a caller has disconnected.
+    <tab character> or character '\t' is used as a command delimiter.
+    If "Version>=2.0" strings of number used wait msec.
+
+Usage: resetcmd [caller]
+Target: Controller
+	Parameter 'caller' omitted: Sender is 'caller'.
+    The commands set get cleared.
+
+Usage: listcmd [caller]
+Target: Controller
+	Parameter 'caller' omitted: Sender is 'caller'.
+    List the commands which are executed when a caller has disconnected.
+    Use <tab character> as a command delimiter.
+
+Usage: listlog [caller]
+Target: Controller
+	Parameter 'caller' omitted: Sender is 'caller'.
+    List the result of the executing commands when a caller has disconnected.
+    Use <tab character> as a command delimiter.

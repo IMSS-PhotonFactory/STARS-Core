@@ -1,0 +1,231 @@
+<HTML>
+<HEAD>
+<TITLE>STARS.NET interface library - StarsInterfaceWinForm.dll</TITLE>
+<STYLE>
+<!--
+P.usage{font: bold}
+ADDRESS{text-align:right}
+.style3 {color: #000000}
+.style4 {color: #FFFFFF}
+-->
+</STYLE>
+</HEAD>
+
+<BODY>
+<H1>Readme for StarsInterfaceWinForm.dll - Stars .NET Interface library</H1>
+<ADDRESS>
+2006-12-15 Takashi Kosuge<br>
+Yasuko Nagatani</ADDRESS>
+<H2>SYNOPSIS</H2>
+
+<P>本書はStars .NET インターフェースライブラリーファイル'<strong>StarsInterfaceWinForm.dll</strong>'について解説します。<br>
+    'StarsInterfaceWinForm.dll'はStarsのフォーム用の追加ライブラリーです。
+    Starsの基本ライブラリー'<a href="./starsif.net-StarsInterface.html" target="_blank">StarsInterface.dll</a>'と合わせてお読みください。
+<H2>DESCRIPTION</H2>
+<P>Stars .NET インターフェースライブラリーファイル'StarsInterfaceWinForm.dll'には、WindowsフォームアプリケーションでStarsを利用するための機能が収められています。<br>                 
+Windowsフォームアプリケーションを作成する場合は、'StarsInterfaceWinForm.dll'に加えてＳｔａｒｓの基本ライブラリ'<a href="./starsif.net-StarsInterface.html" target="_blank">StarsInterface.dll</a>'が必要です。
+<H2>METHODS</H2>
+<H3><A NAME="STARS.WinForm.StarsCbWinForm">STARS.WinForm.StarsCbWinForm Constructor</A></h3>     
+<P CLASS="usage">Usage:<br>
+&nbsp;&nbsp;&nbsp; <a href="#STARS.WinForm.Directive">STARS.WinForm.</a>StarsCbWinForm cbStars = new                   
+<a href="#STARS.WinForm.Directive">STARS.WinForm.</a>StarsCbWinForm(form_obj, <a href="./starsif.net-StarsInterface.html#STARS.StarsInterface" target="_blank">stars</a>);                   
+</P>
+<DL>
+<DT>新たにSTARS.WinForm.StarsCbWinForm型のインスタンスを作成します。成功するとインスタンスのリファレンスを返します。<br>
+  <br>
+  cbStars</DT>
+<DD>STARS.WinForm.StarsCbWinForm型のインスタンスです。</DD>
+<dt>　</dt>
+<DT>
+  form_obj</DT>
+<DD>既生成のフォームインスタンスを指定します。</DD>
+<DT>
+  stars
+</DT>
+<DD>既生成の<a href="./starsif.net-StarsInterface.html#STARS.StarsInterface" target="_blank">STARS.StarsInterface型のインスタンス</a>を指定します。　</DD>
+</DL>
+
+<DL>
+
+<H3>                                           
+<A NAME="STARS.WinForm.StartCbHandler">STARS.WinForm.StartCbHandler</A></H3>
+<P CLASS="usage">
+Usage:<br> 
+&nbsp;&nbsp;&nbsp;&nbsp;<a href="#STARS.WinForm.StarsCbWinForm">cbStars</a>.StartCbHandler(<i><A HREF="./starsif.net-StarsInterface.html#STARS.StarsCbHandler" target="_blank">cb</A></i>);</P>
+
+<DT>STARS.NETインターフェースのCallbackモードを開始します。<br>
+  WindowsフォームアプリケーションからCallbackモードを開始する場合は、当メソッドを使用します。</DT>
+<DT>（ちなみにConsoleアプリケーションではCallbackモードを開始する場合は<a href="./starsif.net-StarsInterface.html#Stars.StarsInterface.StartCbHandler" target="_blank">STARS.StarsInterface.StartCbHandler</a>メソッドを使用します。）</DT>
+<dd>&nbsp;</dd>
+<DT></DT>
+<DT>    <br>
+    Callbackモードを開始すると、TAKサーバからデータの入力が発生するたびにhandlerで設定したサブルーチンが自動的に呼び出されるようになります。Callbackモードを開始した以降は、<A HREF="./starsif.net-StarsInterface.html#STARS.StarsInterface.Receive" target="_blank">STARS.StarsInterface.Receive</A>メソッドを利用したメッセージの受信はおこなわないでください。    <br>
+  </DT>
+<DD></DD>
+<DT>&nbsp; </DT>
+<DT>cbStars </DT>
+<DD>既生成のSTARS.WinForm.StarsCbWinForm型のインスタンスを指定します。　</DD>
+<DT>cb </DT>
+<DD>既生成の<A HREF="./starsif.net-StarsInterface.html#STARS.StarsCbHandler" target="_blank">STARS.StarsCbHandler型のインスタンス</a>を指定します。<br>
+  なお handlerはインスタンス生成時の引数として渡されています。 　</DD>
+</DL>
+<H3><A NAME="STARS.WinForm.Directive">STARS.WinForm Directive</A></H3>                                                
+<P CLASS="usage">
+Usage:&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; using STARS.WinForm;                                                                 
+</P>
+
+<P>STARS.WinFormディレクティブを宣言します。&nbsp;STARS.WinFormディレクティブを使用すると修飾子'STARS.WinForm.'の記述が省略できます。<br>
+プログラムファイルの先頭（namespace宣言より上部）に記述してください。
+</P>
+
+<H3><br>
+サンプルプログラム</H3>
+<P CLASS="usage">
+Visual Studio C# 2005によるWindowsフォームアプリケーションのサンプルです。
+</P>
+<table bgcolor="#CCCCCC">
+<tr>
+  <td>using System;<br>
+    using System.Collections.Generic;<br>
+    using System.ComponentModel;<br>
+    using System.Data;<br>
+    using System.Drawing;<br>
+    using System.Text;<br>
+    using System.Windows.Forms;<br>
+    //when activates directive 'STARS' - 'using STARS', expression 'STARS.' in this program can be omitted. <br>
+    //using STARS;<br>
+    //when activates directive 'STARS.WinForm' - 'using STARS.WinForm', expression 'STARS.WinForm.' in this program can be omitted. <br>
+    //using STARS.WinForm;
+    <p>namespace WindowsApplication1<br>
+      {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;/// &lt;summary&gt;Form1 Class&lt;/summary&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;public partial class Form1 : Form<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;summary&gt;Form1 Constructor&lt;/summary&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;public Form1()<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;InitializeComponent();<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;summary&gt;This field is a stars interface.&lt;/summary&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private STARS.StarsInterface stars;</p>
+    <p> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;summary&gt;Event of Form1 Load.&lt;/summary&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;remarks&gt;Start Stars Connection here.&lt;/remarks&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private void Form1_Load(object sender, EventArgs e)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Connect to Stars.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#Stars.StarsInterface" target="_blank">stars = new STARS.StarsInterface(&quot;csterm&quot;, &quot;localhost&quot;);</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#STARS.StarsInterface.Connect" target="_blank">stars.Connect();</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;catch (Exception se)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(se.Message);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Close();<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</p>
+    <p> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Send Stars Message &quot;System gettime&quot;.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#STARS.StarsInterface.Send" target="_blank">stars.Send(&quot;System gettime&quot;);</a></p>
+    <p> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Get reply of system time from StarsServer and Show it at messagebox.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#STARS.StarsInterface.Receive" target="_blank">STARS.StarsMessage rcvMesg = stars.Receive();</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(&quot;Reply by using ReceiveMethod: &quot; + rcvMesg.allMessage);</p>
+    <p> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Add the stars handler named 'handler' which is called when arriving stars messages.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#STARS.StarsCbHandler" target="_blank">STARS.StarsCbHandler cb = new STARS.StarsCbHandler(handler);</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#Stars.WinForm.StarsCbWinForm">STARS.WinForm.StarsCbWinForm cbStars = new STARS.WinForm.StarsCbWinForm(this, stars);</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Callback mode started. Not to use stars.Receive() method.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="#Stars.WinForm.StartCbHandler">cbStars.StartCbHandler(cb);</a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;    }</p>
+    <p> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;summary&gt;Event of button1 Click.&lt;/summary&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;remarks&gt;When click button1, send Stars Message &quot;System gettime&quot; =&gt; Reply will be catched at handler();&lt;/remarks&gt; <br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private void button1_Click(object sender, EventArgs e)<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Request getting system time to StarsServer<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#Stars.StarsInterface.Send" target="_blank">stars.Send(&quot;System gettime&quot;);</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</p>
+    <p> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;summary&gt;Callback handler().&lt;/summary&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;remarks&gt;This method is called when arriving stars messages.&lt;/remarks&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;param name=&quot;sender&quot;&gt;Indicate type Object.&lt;/param&gt;;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/// &lt;param name=&quot;ev&quot;&gt;Indicate type StarsCbArgs which is used for store data receiving from Stars Server for Stars handler() &lt;/param&gt;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="starsif.net-StarsInterface.html#handler" target="_blank">private void handler(object sender, STARS.StarsCbArgs ev)</a><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Receiving Stars message by callback mode. Show reply at messagebox.<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(&quot;Reply via callback: &quot; + ev.allMessage);<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return;<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+    }<br>
+    </p>
+    
+    </td></tr></table>
+
+<br>
+サンプルプログラムの実行結果です。<br>
+<p>はじめに、STARS.StarsInterface.Receive() メソッドで受信されたメッセージがメッセージボックスで表示されます。</p>            
+<table bgcolor="#CCCCCC">
+<tr><td bgcolor="#000099" align="right"><span class="style4">X</span></td>
+</tr>
+<tr><td>&nbsp;</td>
+<tr><td align="center"><pre class="style3">&nbsp;&nbsp;&nbsp;&nbsp;Reply by using ReceiveMethod: System&gt;csterm @gettime 2006-12-14 16:30:21&nbsp;&nbsp;&nbsp;&nbsp;</pre></td>
+<tr><td>&nbsp;</td>
+<tr><td><table align="center"><tr><td>&nbsp;</td><td bordercolor="#666666" bgcolor="#999999">&nbsp;&nbsp;&nbsp;&nbsp;Ok&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td>&nbsp;</td></tr></table></td>
+<tr><td>&nbsp;</td>
+</tr></table>
+<p>次にフォーム画面が表示されます。</p>
+<table bgcolor="#CCCCCC" cellspacing="0">
+  <tr>
+    <td bgcolor="#000099" align="left"><span class="style4">Form1</span></td>
+	<td bgcolor="#000099" align="right"><span class="style4">X</span></td>
+  </tr>
+  <tr><td colspan="2">&nbsp;</td></tr>
+  <tr>
+    <td colspan="2"><table align="center">
+        <tr>
+          <td>&nbsp;</td>
+          <td bordercolor="#666666" bgcolor="#999999">&nbsp;&nbsp;&nbsp;&nbsp;Send&nbsp;&nbsp;&nbsp;&nbsp;</td>
+          <td>&nbsp;</td>
+        </tr>
+    </table></td>
+  </tr>
+  <tr><td colspan="2">&nbsp;</td></tr>
+</table>
+<p>Sendボタンをクリックすると、&quot;System&quot;に対して現在日時を問い合わせます。<br>
+  問い合わせ結果を
+Callbackモードで受け取ってメッセージボックスで表示します。</p>            
+<table bgcolor="#CCCCCC">
+<tr><td bgcolor="#000099" align="right"><span class="style4">X</span></td>
+</tr>
+<tr><td>&nbsp;</td>
+<tr><td align="center"><pre class="style3">&nbsp;&nbsp;&nbsp;&nbsp;Reply via callback: System&gt;csterm @gettime 2006-12-14 16:45:03&nbsp;&nbsp;&nbsp;&nbsp;</pre></td>
+<tr><td>&nbsp;</td>
+<tr><td><table align="center"><tr><td>&nbsp;</td><td bordercolor="#666666" bgcolor="#999999">&nbsp;&nbsp;&nbsp;&nbsp;Ok&nbsp;&nbsp;&nbsp;&nbsp;</td>
+<td>&nbsp;</td></tr></table></td>
+<tr><td>&nbsp;</td>
+</tr></table>
+<p>Starsの別クライアントが自ノードに対してメッセージを送信すると、メッセージをCallbackモードで受信してメッセージボックスで表示します。</p>
+<table bgcolor="#CCCCCC">
+  <tr>
+    <td bgcolor="#000099" align="right"><span class="style4">X</span></td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+  <tr>
+    <td align="center"><pre class="style3">&nbsp;&nbsp;&nbsp;&nbsp;Reply via callback: term1&gt;csterm hello&nbsp;&nbsp;&nbsp;&nbsp;</pre></td>
+  <tr>
+    <td>&nbsp;</td>
+  <tr>
+    <td><table align="center">
+        <tr>
+          <td>&nbsp;</td>
+          <td bordercolor="#666666" bgcolor="#999999">&nbsp;&nbsp;&nbsp;&nbsp;Ok&nbsp;&nbsp;&nbsp;&nbsp;</td>
+          <td>&nbsp;</td>
+        </tr>
+    </table></td>
+  <tr>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+<p>（終わり）</p>
+</BODY>
+</HTML>

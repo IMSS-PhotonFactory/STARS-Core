@@ -1,0 +1,17 @@
+LIBRARY     	starsif
+DESCRIPTION 	'Direct Stars DLL Calls'
+
+HEAPSIZE			2048
+
+EXPORTS
+
+  StarsReceive      @10
+  StarsFree         @9
+  StarsClose        @8
+  StarsSetTimeout   @7
+  StarsSend         @6
+  StarsAddCallback  @5
+  StarsAct          @4
+  StarsGetTimeout   @3
+  StarsGetHandle    @2
+  StarsOpen		    @1

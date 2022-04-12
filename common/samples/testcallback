@@ -1,0 +1,85 @@
+#! /usr/bin/perl
+
+use IO::Socket;
+
+$dev=shift;
+unless($dev){die "Usage: testcallback mytermname\n";}
+
+
+my $host='localhost';
+my $port=<<DefaultPort>>;
+my $idkey;
+
+my $mess="testabckslafdasfdljkdflkeksjekelfjdkelsajeklajfksleifjdkadkefjke"
+."djkfdkdkfdaslfeiajfdkafldsafjeialfdjkoeajdhheklafjdkasjkdfasljfielafjdka"
+."klfdjkalfjidasfjkeoslfjilejakfdladfhsakslfiejafkdslajiehfdlasfjdlashkeaf"
+."fdkfdkasfeoaejfdieoahekfelaspfejiasphiesosafjkdsoajfeoafheiosafjdkleasih"
+."llaleifejiaofejoashieoapfjieoahfeioafjklfeieajfieoashiesoafjklafhioekaho"
+."kdkfaojefioaoeiaofejioasfjeiahakaoeierasjfoafeeeofeasfeafeafeajkeafeafda"
+."djkfdkdkfdaslfeiajfdkafldsafjeialfdjkoeajdhheklafjdkasjkdfasljfielafjdka"
+."klfdjkalfjidasfjkeoslfjilejakfdladfhsakslfiejafkdslajiehfdlasfjdlashkeaf"
+."fdkfdkasfeoaejfdieoahekfelaspfejiasphiesosafjkdsoajfeoafheiosafjdkleasih"
+."llaleifejiaofejoashieoapfjieoahfeioafjklfeieajfieoashiesoafjklafhioekaho"
+."kdkfaojefioaoeiaofejioasfjeiahakaoeierasjfoafeeeofeasfeafeafeajkeafeafda"
+."djkfdkdkfdaslfeiajfdkafldsafjeialfdjkoeajdhheklafjdkasjkdfasljfielafjdka"
+."klfdjkalfjidasfjkeoslfjilejakfdladfhsakslfiejafkdslajiehfdlasfjdlashkeaf"
+."fdkfdkasfeoaejfdieoahekfelaspfejiasphiesosafjkdsoajfeoafheiosafjdkleasih"
+."llaleifejiaofejoashieoapfjieoahfeioafjklfeieajfieoashiesoafjklafhioekaho"
+."kdkfaojefioaoeiaofejioasfjeiahakaoeierasjfoafeeeofeasfeafeafeajkeafeafda"
+."djkfdkdkfdaslfeiajfdkafldsafjeialfdjkoeajdhheklafjdkasjkdfasljfielafjdka"
+."klfdjkalfjidasfjkeoslfjilejakfdladfhsakslfiejafkdslajiehfdlasfjdlashkeaf"
+."fdkfdkasfeoaejfdieoahekfelaspfejiasphiesosafjkdsoajfeoafheiosafjdkleasih"
+."llaleifejiaofejoashieoapfjieoahfeioafjklfeieajfieoashiesoafjklafhioekaho"
+."kdkfaojefioaoeiaofejioasfjeiahakaoeierasjfoafeeeofeasfeafeafeajkeafeafda"
+."djkfdkdkfdaslfeiajfdkafldsafjeialfdjkoeajdhheklafjdkasjkdfasljfielafjdka"
+."klfdjkalfjidasfjkeoslfjilejakfdladfhsakslfiejafkdslajiehfdlasfjdlashkeaf"
+."fdkfdkasfeoaejfdieoahekfelaspfejiasphiesosafjkdsoajfeoafheiosafjdkleasih"
+."llaleifejiaofejoashieoapfjieoahfeioafjklfeieajfieoashiesoafjklafhioekaho"
+."kdkfaojefioaoeiaofejioasfjeiahakaoeierasjfoafeeeofeasfeafeafeajkeafeafda"
+    ;
+my $mess1="Ok";
+
+
+my $server =
+new IO::Socket::INET(PeerAddr=>$host, PeerPort=>$port, Proto=>'tcp')
+||die "Socket: $!\n";
+
+select($server);$|=1;select(STDOUT);
+
+$buf=<$server>;chop($buf);s/\r//;
+print "Key number is $buf. Enter IDKey\n";
+
+$buf=<STDIN>;
+chomp($buf);$buf=~s/\r//;
+
+print $server "$dev $buf\n";
+$buf=<$server>;chop($buf);s/\r//;
+unless($buf =~ /Ok:$/){
+	close($server);
+	die "$buf\n";
+}
+
+print "$buf\n";
+print "Input times\n";
+
+
+$tm=<STDIN>;
+print "Start\n";
+$oldtime=time();
+for($lp=1; $lp<=$tm ;$lp++){
+	printf($server "%s SetValue %s %06d\n",$dev,$mess,$lp);
+	$buf=<$server>;
+#	print $buf;
+}
+$newtime=time();
+$lp--;
+$blen=length($buf);
+$ttime=$newtime-$oldtime;
+
+printf("Sent\n%8d lines\n%8d bytes\n%8d second\n",$lp,$lp*$blen,$ttime);
+if($ttime > 0){
+	printf("%8f bytes/second\n",$lp*$blen/$ttime);
+	printf("%8f msec/command\n",$ttime/$lp*1000);
+}
+
+close($server);

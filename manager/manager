@@ -1,0 +1,548 @@
+#! /usr/bin/perl
+package PerlSvc;
+
+use strict;
+use Symbol;
+use Cwd qw(chdir abs_path);
+use stars;
+require Getopt::Long;
+#use IPC::Open2;
+use Time::HiRes qw(gettimeofday tv_interval); # Added: RETRY
+use POSIX ":sys_wait_h";					  # Added: RETRY
+
+################################################################
+# STARS manager
+################################################################
+$PerlSvc::Version  = '$Revision: 1.2 $';
+$PerlSvc::Version .= '$Date: 2011-05-13 02:48:58 $';
+################################################################
+$PerlSvc::Version =~ s/\$//g;
+
+%PerlSvc::Config    = (ServiceName => "stcmanager");
+$PerlSvc::ManConfig =  'manager.cfg';
+$PerlSvc::Port      =  6057;
+$PerlSvc::Logging   =  0;  #Control logging or not # Added: RETRY
+
+%PerlSvc::VAR=();      #Setting variables
+%PerlSvc::RHANDLE=();  #Running list
+%PerlSvc::RPID=();     #Running pid
+%PerlSvc::RDATE=();    #Command started date or ended date # Added: RETRY
+
+unless (defined &ContinueRun) {
+	*ContinueRun      = sub { return 1 };
+	*RunningAsService = sub { return 0 };
+	Interactive();
+}
+
+exit(0);
+
+#------------------------------------------------------------
+sub Interactive{
+	Install();
+	Startup();
+}
+
+sub Install{
+	Getopt::Long::GetOptions(
+	'service=s'  => \$PerlSvc::Config{ServiceName},
+	'config=s'   => \$PerlSvc::ManConfig,
+	'h'          => \&usage
+	);
+
+    $PerlSvc::Config{DisplayName} = "$PerlSvc::Config{ServiceName} STARS Client Manager Service";
+    $PerlSvc::Config{Parameters}  = "--config $PerlSvc::ManConfig";
+}
+
+sub Startup{
+	$PerlSvc::StartDir = abs_path($ENV{'PWD'});
+
+	Getopt::Long::GetOptions(
+	'config=s'   => \$PerlSvc::ManConfig
+	);
+
+	$SIG{INT}  = sub {
+		childcloser();
+#		if($PerlSvc::sv){$PerlSvc::sv->DESTROY();}
+		exit(0);
+	};
+
+#	$SIG{CHLD} = sub { wait };
+	$SIG{CHLD} = \&childcleaner;
+
+#	stars->Mainloop(\&autoclose, 1000);
+
+	$PerlSvc::sv=0;
+	my $tlap=0;
+	my $defvarflg=0;
+
+	while(ContinueRun()){
+		if($PerlSvc::sv){
+#			stars->Mainloop(sub{unless(ContinueRun()){exit;}}, 5000);
+#			stars->Mainloop(sub{unless(interval()){exit;}}, $PerlSvc::VAR{StarsInterval});
+			my $fh=stars->Mainloop(sub{unless(interval()){exit;}}, $PerlSvc::VAR{StarsInterval}, 1);
+			if($fh eq $PerlSvc::sv->gethandle()){
+				Log("Disconnected from Stars Server.");
+				unless (RunningAsService()) {last;}
+				childcloser();
+				$PerlSvc::sv->DESTROY();
+				$PerlSvc::sv=0;
+				$defvarflg=0;
+				$tlap=5;
+			}
+		}else{
+			$tlap--;
+			if($tlap<=0){
+				unless($defvarflg){
+					unless(defVAR()){
+						unless (RunningAsService()) {
+							print "$PerlSvc::Error";	# exit when unable to read cfg file
+							last;
+						}
+					}else{
+						$defvarflg=1;
+					}
+				}
+				if($defvarflg){
+					connect2stars();
+					unless($PerlSvc::sv){
+						unless (RunningAsService()) {
+							print "$PerlSvc::Error\n";
+							last;
+						}
+						$defvarflg=0;
+					}
+				}	
+				$tlap=15;
+			}else{
+				stars->Sleep(1000);
+			}
+		}
+	}
+	childcloser();
+	if($PerlSvc::sv){$PerlSvc::sv->DESTROY();}
+	return(0);
+}
+#------------------------------------------------------------
+# Added: RETRY
+# Connect to stars
+sub connect2stars{
+	if($PerlSvc::sv){return($PerlSvc::sv);}
+	Log("Connecting to Stars Server...");
+	if($PerlSvc::sv = stars->new($PerlSvc::VAR{NodeName},$PerlSvc::VAR{StarsServer},
+	    $PerlSvc::VAR{StarsPort}, $PerlSvc::VAR{StarsKey})) {
+		$PerlSvc::sv->addcallback(\&handler);
+		Log("Connected.");
+
+## 		Auto run programs
+		my @autorun = split(/\s+/, $PerlSvc::VAR{AutoRun});
+		for (@autorun){
+			if(/^\s*(\d+)\s*$/){
+				stars->Sleep($1*1000);
+			}else{
+				cmd_execute($_);
+			}
+		}
+	}else{
+		$PerlSvc::Error="Could not connect to Stars Server [$PerlSvc::VAR{NodeName},$PerlSvc::VAR{StarsServer},$PerlSvc::VAR{StarsPort},$PerlSvc::VAR{StarsKey}]";
+		Log($PerlSvc::Error);
+	}
+	return($PerlSvc::sv);
+}
+#------------------------------------------------------------
+# Added: RETRY
+# To ignore exiting child processes.
+sub childcleaner {
+	my $child;
+	while (($child = waitpid(-1, &WNOHANG)) > 0) {
+		if($PerlSvc::sv){
+			foreach (keys(%PerlSvc::RPID)) {
+				if($PerlSvc::RPID{$_} eq $child){
+					$PerlSvc::sv->Send("System _ChildExited $_");
+					last;
+				}
+			}
+		}
+	}
+	$SIG{CHLD} = \&childcleaner;
+}
+#------------------------------------------------------------
+# Added: RETRY
+# To finish child processes.
+sub childcloser{
+	my @modules = split(/\s+/, cmd_listnodes());
+	for my $drv (@modules){
+		if(cmd_getpid($drv)){
+			Log("Clearing child proccess $drv.");
+			cmd_terminate($drv);
+		}
+	}
+	return(1);
+}
+#------------------------------------------------------------
+# Added: RETRY
+# Stars Interval Program for autorestart
+sub interval{
+	my $chkinterval;
+	my $interval;
+
+	my @modules = split(/\s+/, cmd_listnodes());
+#	my @autorun = split(/\s+/, $PerlSvc::VAR{AutoRun});
+	
+	for my $drv (@modules){
+		$chkinterval=0;
+		if(defined($PerlSvc::VAR{"Dev:$drv".":AutoRestart:CheckInterval"})){
+			$chkinterval=$PerlSvc::VAR{"Dev:$drv".":AutoRestart:CheckInterval"}/1000;
+		}
+		if($chkinterval<=0){$chkinterval=15;}
+		$interval=getdateinterval($drv);
+#		print "$drv:$interval:$chkinterval\n";
+		if(($interval<0) or ($interval>=$chkinterval)){
+			if(cmd_getpid($drv)){
+				unless(cmd_isalive($drv)){
+					Log("Exited $drv.");
+					if($PerlSvc::sv){$PerlSvc::sv->Send("System _NotRunning $drv");} #Added: Retry
+					cmd_terminate($drv);
+#					print $PerlSvc::VAR{AutoRun},"\n";
+#					print $PerlSvc::VAR{'AutoRestart'},"\n";
+#					print defined($PerlSvc::VAR{"Dev:$drv".":AutoRestart"}),"\n";
+#					print $PerlSvc::VAR{"Dev:$drv".":AutoRestart"},"\n";
+					unless($PerlSvc::VAR{AutoRun}=~/(^|\s+)$drv(\s+|$)/){next;}
+					unless(lc($PerlSvc::VAR{'AutoRestart'}) eq 'yes'){next;}
+					unless(defined($PerlSvc::VAR{"Dev:$drv".":AutoRestart"})){next;}
+					unless(lc($PerlSvc::VAR{"Dev:$drv".":AutoRestart"}) eq 'yes'){next;}
+					stars->Sleep(200);
+#					print "Restart$drv\n";
+					cmd_execute($drv);
+				}
+#			}else{
+#				cmd_execute($drv);
+#				if($PerlSvc::sv){
+#					$PerlSvc::sv->Send("System _AutoStarted $drv");
+#				}
+			}
+		}
+
+		
+
+
+	}
+	return(1);
+}
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+#STARS client manager $PerlSvc::Version
+#Usage: $0 [-config ConfigFile] [-service ServiceName] [-port PortNumber]
+#    -config ConfigFile
+#                Set config file.
+#
+#    -service ServiceName
+#                Set service name of Windows. (only for windows service)
+#
+#    -port PortNumber
+#                Set port number of STARS.
+#
+#Your are able to run STARS client manager as service with Windows.
+#Install and run as service:
+#    $0 --install auto -config ConfigFile
+#Remove service:
+#    $0 --remove
+
+#If your OS is FreeBSD, Linux etc., you are able to run STARS client manager
+#with background.
+#    ./$0 &
+
+	print <<__USAGE__;
+STARS client manager $PerlSvc::Version
+Usage: perl $0 [-config ConfigFile]
+    -config ConfigFile
+                Set config file.
+
+__USAGE__
+
+ 	exit(0);
+}
+#------------------------------------------------------------------
+sub handler{
+	my($from, $to, $mess) = @_;
+	my $cmd;
+	my @par;
+	my $rt;
+
+	if($mess =~ /^[_@]/){return;}
+
+	($cmd, @par) = split(/\s+/, $mess);
+	unless($PerlSvc::VAR{'MasterNode'} =~ /(^| )$from( |$)/){
+		$rt='';
+		$PerlSvc::Error='You do not have a permission.';
+	}elsif($cmd eq 'hello'){
+		$rt='Nice to meet you.';
+	}elsif($cmd eq 'help'){
+		$rt='execute getpid getversion help hello listnodes reloadsetting'
+			.' terminate';
+	}elsif($cmd eq 'getversion'){
+		$rt=$PerlSvc::Version;
+	}elsif($cmd eq 'reloadsetting'){
+		$rt=defVAR();
+		Log("Requested reloadsetting $rt");
+	}elsif($cmd eq 'listnodes'){
+		$rt=cmd_listnodes();
+	}elsif($cmd eq 'execute'){
+		$rt=cmd_execute(@par);
+		Log("Requested executing @par $rt");
+	}elsif($cmd eq 'terminate'){
+		$rt=cmd_terminate(@par);
+		Log("Requested terminating @par $rt");
+	}elsif($cmd eq 'getpid'){
+		$rt=cmd_getpid(@par);
+# Added: RETRY
+	}elsif($cmd eq 'getrundate'){
+		$rt=cmd_getrundate(@par);
+# Added: RETRY
+	}elsif($cmd eq 'isalive'){
+		$rt=cmd_isalive(@par);
+# Added: RETRY
+	}elsif($cmd eq 'stoplogging'){
+		Log("Requested stop logging.");
+		$PerlSvc::Logging=0;
+		$rt='Ok:';
+# Added: RETRY
+	}elsif($cmd eq 'startlogging'){
+		if(!$PerlSvc::VAR{Logdir}){
+			$PerlSvc::Error='Logging directory undefined in Def file.';
+		}elsif(!(-d $PerlSvc::VAR{Logdir})){
+			$PerlSvc::Error="Logging directory '$PerlSvc::VAR{Logdir}' not found.";
+		}else{
+			$PerlSvc::Logging=1;
+			$rt='Ok:';
+			Log("Requested start logging to '$PerlSvc::VAR{Logdir}' directory.");
+		}
+	}else{
+		$rt='';
+		$PerlSvc::Error="Bad command";
+	}
+	if($rt eq ''){
+		$PerlSvc::sv->Send("$from \@$cmd Er: $PerlSvc::Error");
+	}else{
+		$PerlSvc::sv->Send("$from \@$cmd $rt");
+	}
+}
+#-------------
+sub cmd_getpid{
+	my $drv = shift;
+	if($PerlSvc::RPID{"$drv"}){
+		return($PerlSvc::RPID{"$drv"});
+	}else{
+		return(0);
+	}
+}
+sub cmd_terminate{
+	my $drv = shift;
+	my $myflg=0;
+	unless($PerlSvc::RHANDLE{"$drv"}){
+		$PerlSvc::Error = "$drv is not running.";
+		return('');
+	}
+	my $hd = $PerlSvc::RHANDLE{"$drv"};
+
+	if(cmd_isalive($drv)){
+		$myflg=1;
+	}
+
+	if(lc($PerlSvc::VAR{'UseKill'}) eq 'yes'){
+ 		# Added: Retry conditions
+		my $pid = $PerlSvc::RPID{"$drv"};
+		kill('KILL', $pid);
+		undef($PerlSvc::RPID{"$drv"});
+	}
+
+	close($hd);
+	undef($PerlSvc::RHANDLE{"$drv"});
+
+	$PerlSvc::RDATE{"$drv"}=gethiresdate(); #Set endeddate # Added: Retry
+	#Added: Retry
+	if($myflg and $PerlSvc::sv){
+		Log("Terminated $drv.");
+		$PerlSvc::sv->Send("System _Terminated $drv");
+	}
+	return('Ok:');
+}
+sub cmd_execute{
+	my $drv = shift;
+	my $pid;
+
+	my $cmd;
+
+	if($drv =~ /^(\d+)$/){
+		sleep($1);
+		return('Ok:');
+	}
+
+	unless($cmd = $PerlSvc::VAR{"Dev:$drv"}){$PerlSvc::Error="Bad drivername";return('');}
+	my $dir = $PerlSvc::VAR{"Dev:$drv".":Dir"};
+
+	if($PerlSvc::RHANDLE{"$drv"}){
+		$PerlSvc::Error = "$drv is already running.";
+		return('');
+	}
+	
+	$PerlSvc::RDATE{"$drv"}=gethiresdate(); #Set starteddate # Added: Retry
+
+	chdir "$dir";
+	my $fh=gensym;
+	unless($pid=open($fh, "|$cmd")){
+		chdir $PerlSvc::StartDir;
+		$PerlSvc::Error="Could not open $cmd";
+		return('');
+	}
+
+	$PerlSvc::RPID{"$drv"}=$pid;
+	$PerlSvc::RHANDLE{"$drv"}=$fh;
+	chdir "$PerlSvc::StartDir";
+	
+	if($PerlSvc::sv){
+		Log("Started $drv.");
+		$PerlSvc::sv->Send("System _Executed $drv");
+	} #Added: Retry
+	return('Ok:');
+}
+sub cmd_listnodes{
+	my $buf = join(" ", sort(grep(/^Dev:[^:]+$/, keys(%PerlSvc::VAR))) );
+	$buf =~ s/Dev://g;
+	return($buf);
+}
+#------------------------------------------------------------
+sub defVAR{
+	my @buf;
+	unless(open(BUF,$PerlSvc::ManConfig)){
+		$PerlSvc::Error="Could not open Def file '$PerlSvc::ManConfig'.";
+		return('');
+	}
+
+	$PerlSvc::Logging=0;
+	%PerlSvc::VAR=();
+	$PerlSvc::VAR{"StarsInterval"}=5000; #Set default interval # Added: Retry
+	while(<BUF>){
+		chomp;s/\r//;
+		if(/^#/){next;}
+		unless($_){next;}
+		@buf=split(/\s*=\s*/,$_);
+		$PerlSvc::VAR{"$buf[0]"} = $buf[1];
+	}
+	close(BUF);
+	if($PerlSvc::VAR{Logdir}){
+		if(lc($PerlSvc::VAR{'Logging'}) eq 'yes'){
+			$PerlSvc::Logging=1;
+		}
+	}
+	return('Ok:');
+}
+#-----------------------------------------------------------
+#sub autoclose{
+#		my $lp;
+#		my $fh;
+#
+#	foreach $lp (keys(%PerlSvc::RHANDLE)){
+#		$fh = $PerlSvc::RHANDLE{"$lp"};
+#		if(eof($fh)){
+#			close($fh);
+#			undef($PerlSvc::RHANDLE{"$lp"});
+#			undef($PerlSvc::RPID{"$lp"});
+#		}
+#	}
+#}
+#------------------------------------------------------------
+# Added: RETRY
+sub gethiresdate{
+	my($seconds, $microseconds) = gettimeofday;	
+	return("$seconds.$microseconds"+0.0);
+}
+
+#------------------------------------------------------------
+# Added: RETRY
+sub hires2secdate {
+    my($t) = shift;
+    my $t1 = int($t);
+    my($sec,$min,$hour,$day,$mon,$year,$wday) = localtime($t1);
+    return sprintf("%04d-%02d-%02d %02d:%02d:%02d.%06d",
+        $year+1900,$mon+1,$day, $hour, $min, $sec, ($t-$t1)*100000);
+}
+#------------------------------------------------------------
+# Added: RETRY
+sub getdateinterval{
+	my $drv=shift;
+    my $rt='';
+   	if(defined($PerlSvc::RDATE{"$drv"})){
+		$rt=gethiresdate()-$PerlSvc::RDATE{"$drv"};
+		return($rt)+0.0;
+   	}
+    return(-1);
+}
+#------------------------------------------------------------
+# Added: RETRY
+sub cmd_getrundate{
+	my $drv=shift;
+    my $pid=cmd_getpid("$drv");
+    my $rt='';
+    if($pid>0){
+		$rt="$drv started at ".hires2secdate($PerlSvc::RDATE{"$drv"});
+    }else{
+    	if(defined($PerlSvc::RDATE{"$drv"})){
+			$rt="$drv ended at ".hires2secdate($PerlSvc::RDATE{"$drv"});
+    	}else{
+			$rt="$drv has not started yet.";
+    	}
+    }
+    return($rt);
+}
+#------------------------------------------------------------
+# Added: RETRY
+sub cmd_isalive{
+	my $drv = shift;
+    my $pid=cmd_getpid("$drv");
+    my $rt;
+    if($pid>0){
+		my $hd = $PerlSvc::RHANDLE{"$drv"};
+		kill(0, $pid);
+		kill(0, $pid);
+	    if($rt=kill(0, $pid)){
+			return(1);
+		}
+    }
+	return(0);
+}
+#------------------------------------------------------------
+# Added: RETRY
+sub Log {
+    my $msg = shift;
+	my $mydate = hires2secdate(gethiresdate());
+
+	unless($PerlSvc::Logging){return(1);}
+
+    unless (RunningAsService()) {
+		print "$mydate $msg\n";
+    }
+	unless(-d $PerlSvc::VAR{Logdir}){
+		$PerlSvc::Logging=0;
+	    unless (RunningAsService()) {
+			print "$mydate Logging directory '$PerlSvc::VAR{Logdir}' not found.\n";
+			print "$mydate Stopped logging.\n";;
+    	}
+	    return(0);
+	}
+	$mydate=~/^(\S+)/;
+	my $logfile="$PerlSvc::VAR{Logdir}\\mngrlog$1.txt";
+    if(open(my $f, ">>$logfile")){
+	    print $f "$mydate $msg\n";
+    	close $f;
+    }else{
+		$PerlSvc::Logging=0;
+	    unless (RunningAsService()) {
+			print "$mydate $!\n";;
+			print "$mydate Stopped logging to $logfile.\n";;
+    	}
+	    return(0);
+    }
+    return(1);
+}

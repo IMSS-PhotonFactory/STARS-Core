@@ -1,0 +1,98 @@
+[Root]
+Most Recent Package=SetupStarsInterface
+
+
+[Package|SetupStarsInterface|Root]
+SubWizProgID=PDWizard.SetupPkgSubWiz
+BuildFolder=C:\cvs-workbench\stars\common\vb\installer\starsinterface
+Controls Design-Time Support=Yes
+
+[Package|SetupStarsInterface|Configure DAO ISAMs]
+Applicable=No
+
+[Package|SetupStarsInterface|Configure DAO ODBC]
+JetWorkspace=
+ODBCDirect=
+
+[Package|SetupStarsInterface|Files Found]
+
+[Package|SetupStarsInterface|Files Released]
+
+[Package|SetupStarsInterface|Missing Dependency Information]
+
+[Package|SetupStarsInterface|Out-of-Date Dependency Information]
+
+[Package|SetupStarsInterface|Files Added]
+c:\winnt\system32\msstkprp.dll=Ç±ÇÃÃß≤ŸÇÕ’∞ªﬁ∞ ∫›ƒ€∞ŸÇÃ√ﬁªﬁ≤›éûÇÃªŒﬂ∞ƒÇ…ïKóvÇ≈Ç∑ÅB
+
+[Package|SetupStarsInterface|Files Removed]
+
+[Package|SetupStarsInterface|Files In Project]
+C:\cvs-workbench\stars\common\vb\starsinterface\StarsInterface.ocx=Yes
+C:\WINNT\system32\msvbvm60.dll=Yes
+C:\WINNT\system32\oleaut32.dll=Yes
+C:\WINNT\system32\olepro32.dll=Yes
+C:\WINNT\system32\asycfilt.dll=Yes
+C:\WINNT\system32\stdole2.tlb=Yes
+C:\WINNT\system32\VB6JP.DLL=Yes
+C:\WINNT\system32\MSWINSCK.OCX=Yes
+C:\WINNT\system32\WINSKJP.DLL=Yes
+C:\WINNT\system32\VB6STKIT.DLL=Yes
+C:\WINNT\system32\MSSTKPRP.DLL=Yes
+C:\WINNT\system32\MSPRPJP.DLL=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=Yes
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=Yes
+
+[Package|SetupStarsInterface|Configure Registry Files]
+Applicable=No
+
+[Package|SetupStarsInterface|Configure Remote Servers]
+Applicable=No
+
+[Package|SetupStarsInterface|Install Locations]
+C:\cvs-workbench\stars\common\vb\starsinterface\StarsInterface.ocx=$(AppPath)
+C:\WINNT\system32\msvbvm60.dll=$(WinSysPathSysFile)
+C:\WINNT\system32\oleaut32.dll=$(WinSysPathSysFile)
+C:\WINNT\system32\olepro32.dll=$(WinSysPathSysFile)
+C:\WINNT\system32\asycfilt.dll=$(WinSysPathSysFile)
+C:\WINNT\system32\stdole2.tlb=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=$(WinSysPathSysFile)
+C:\WINNT\system32\VB6JP.DLL=$(WinSysPath)
+C:\WINNT\system32\MSWINSCK.OCX=$(WinSysPath)
+C:\WINNT\system32\WINSKJP.DLL=$(WinSysPath)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=$(AppPath)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=$(WinPath)
+C:\WINNT\system32\VB6STKIT.DLL=$(WinSysPathSysFile)
+C:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=$(WinPath)
+C:\WINNT\system32\MSSTKPRP.DLL=$(WinSysPath)
+C:\WINNT\system32\MSPRPJP.DLL=$(WinSysPath)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\Redist\COMCAT.DLL=$(WinSysPathSysFile)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP.EXE=$(AppPath)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\SETUP1.EXE=$(WinPath)
+D:\Program Files\Microsoft Visual Studio\VB98\Wizards\PDWizard\ST6UNST.EXE=$(WinPath)
+
+[Package|SetupStarsInterface|Configure Shared Files]
+Applicable=Yes
+C:\cvs-workbench\stars\common\vb\starsinterface\StarsInterface.ocx=Yes
+
+[Package|SetupStarsInterface|Distribution]
+Type=single
+Size=
+Title=StarsInterface
+
+[Package|SetupStarsInterface|IconGroups]
+Group0=Stars
+PrivateGroup0=False
+Parent0=$(Programs)
+
+[Package|SetupStarsInterface|Package]
+PackageFolder=C:\cvs-workbench\stars\common\vb\installer\starsinterface
+ProjectFolder=C:\cvs-workbench\stars\common\vb\starsinterface
+ServerSideCab=
+File1=C:\cvs-workbench\stars\common\vb\installer\starsinterface\setup.exe
+File2=C:\cvs-workbench\stars\common\vb\installer\starsinterface\Setup.Lst
+File3=C:\cvs-workbench\stars\common\vb\installer\starsinterface\StarsInterface.CAB
+Handler1=PDWizard.FolderDplySubWiz
+Handler2=PDWizard.WebPostDplySubWiz

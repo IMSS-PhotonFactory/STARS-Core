@@ -1,0 +1,542 @@
+#! /usr/bin/python3
+"""
+  Extended program from STARS stars.py 
+    Description: Run in single process like STARS perl library 'stars.pm'.
+    History:
+       0.1     Beta version     2016.11.09    Yasuko Nagatani
+"""
+
+# Define: program info
+__author__ = 'Yasuko Nagatani'
+__version__ = '0.1'
+__date__ = '2016-06-30'
+__license__ = 'KEK'
+
+import stars
+import sys
+import socket
+import select
+import time
+
+class StarsInterface(stars.StarsInterface):
+    """Class StarsInterface derived from stars
+         Default read timeout(sec) : DEFAULT_TIMEOUT(=10)
+         Default intervaltime(sec) : DEFAULT_INTERVALTIME(=1)
+         Use <instance>.getlasterrortext() to get error information text.
+    """
+    TCP_BUFFER_SIZE      = 4096
+    DEFAULT_TIMEOUT      =   10
+    DEFAULT_INTERVALTIME =    1
+    
+    def __init__(self, nodename, srvhost, keyfile = None, srvport = None):
+        """Initialize. Call stars.StarsInterface() internally
+        """
+        if(keyfile is None):
+            keyfile=''
+        if(srvport is None):
+            stars.StarsInterface.__init__(self, nodename, srvhost, keyfile)
+        else:
+            stars.StarsInterface.__init__(self, nodename, srvhost, keyfile, srvport)
+        self.readable = []
+        self.connectiontimeout = 3
+        self.recvtimeout = StarsInterface.DEFAULT_TIMEOUT
+        self.intervaltime = StarsInterface.DEFAULT_INTERVALTIME
+        self.termsignal = False
+        self.debug=False
+        self.error      = 'Just initialized.'
+        self.s = None
+        self.Test = False
+        if(hasattr(self,'handler')==False):
+            self.handler = {}
+        if(hasattr(self,'mode')==False):
+            self.mode = {}
+        if(hasattr(self,'buf')==False):
+            self.buf = {}
+
+    def connect(self):
+        """connect. overwrite stars : control detect exception and key error.
+        """
+        try:
+            rt = stars.StarsInterface.connect(self)
+            if isinstance(rt, str):
+                if rt.startswith('System> Er: Bad node name or key'):
+                    self.disconnect()
+                    return(False)
+                return True
+            elif isinstance(rt, bool):
+                if(rt == False):
+                    self.s = None
+                return(rt)
+            else:
+                self.error="Connect error. contact to stars.py developper. stars.connect return unknown type."
+                self._debugprint("%s\n" %self.error)
+                self.s = None
+                return(False)
+        except socket.timeout:
+            self.error="Connect error to %s:%s. [Timeout]" %(self.srvhost, self.srvport)
+            self.s = None
+            return(False)
+        except ConnectionRefusedError:
+            self.error="Connect error to %s:%s. [Timeout]" %(self.srvhost, self.srvport)
+            self.s = None
+            return(False)
+        except Exception as e:
+            self._debugprint("%s\n" %e)
+            self.error="Connect error to %s:%s. [%s]" %(self.srvhost, self.srvport, sys.exc_info()[0])
+            self.s = None
+            return(False)
+        return(False)
+
+    def disconnect(self):
+        """disconnect. overwrite stars : close safely.
+        """
+        fh = self.gethandle()
+        if(fh is not None):
+            try:
+                stars.StarsInterface.disconnect(self)
+                self.s = None
+            except Exception as e:
+                self._debugprint("%s\n" %e)
+                self.error="Disonnect error. [%s]" %(sys.exc_info()[0])
+                self.s = None
+                return(True)
+        return True
+
+    def gethandle(self):
+        """  Return STARS socket handle, None value means no socket.
+        """
+        if hasattr(self,'s'):
+            if(self.s is None):
+                self.error='No socket for STARS.'
+            return(self.s)
+        self.error='No socket for STARS.'
+        return(None)
+
+    def send(self, arg1, arg2 = '', arg3 = ''):
+        """send. overwrite stars : control detect exception.
+           Return False for send error,
+               or else return True.
+        """
+        fh = self.gethandle()
+        if(fh is not None):
+            try:
+                stars.StarsInterface.send(self,arg1,arg2, arg3)
+            except Exception as e:
+                self._debugprint("%s\n" %e)
+                self.error="Send error. [%s]" %(sys.exc_info()[0])
+                return(False)
+            return(True)
+        return(False)
+
+    def act(self, arg, exceptionret = None):
+        """act. call send and receive
+           Return argument exceptionret value, default None, for fatal error,
+               or else return received data.
+          """
+        fh = self.gethandle()
+        if(fh is not None):
+            sock = fh
+            md = 'STARS'
+            hd = None
+            if(hasattr(self,'mode')):
+                md=self.mode.get(sock, 'STARS')
+            if(hasattr(self,'buf')):
+                sbuf=self.buf.get(sock, '')
+            if(hasattr(self,'handler')):
+                hd=self.handler.get(sock, None)
+            rt=self.send(arg)
+            if(rt == False):
+                return(exceptionret)
+            
+            lap=0
+            timeout=self.recvtimeout
+            timebase = time.time()
+            while(True):
+                if((timeout-lap)<=0):
+                    break
+                rt=self.receive(timeout-lap,None)
+                if(rt is None):
+                    return(exceptionret)
+                if(rt == ""):
+                    return(rt)
+                if(md == 'STARS'):
+                    if(rt.command.startswith('@')):
+                        return(rt)
+                    if(hd is not None):
+                        hd(self,rt, sock)
+                        lap=time.time()-timebase
+                else:
+                    return(rt)
+        rmsg=''
+        rmsg = stars.StarsMessage(rmsg)
+        return(exceptionret)
+
+    def receive(self, timeout = "DEFAULT", exceptionret = None):
+        """_receive. overwrite stars :
+             Return argument exceptionret value, default None, for fatal error,
+              or return '' for timeout,
+              or else return received data.
+             Set the arguments - timeout if change temporarily the default value.
+        """
+        fh = self.gethandle()
+        if(fh is not None):
+            sock = fh
+            md = 'STARS'
+            sbuf = ''
+            if(hasattr(self,'mode')):
+                md=self.mode.get(sock, 'STARS')
+            if(hasattr(self,'buf')):
+                sbuf=self.buf.get(sock, '')
+            bufsize = StarsInterface.TCP_BUFFER_SIZE
+
+            if(self.recvtimeout<0):
+                self.settimeout()
+
+            if(isinstance(timeout, str)):
+                if(timeout == "DEFAULT"):
+                    timeout=self.recvtimeout
+                else:
+                    self.error="timeout value %s error. [TypeError]" %(timeout)
+                    return(exceptionret)
+            elif(timeout is not None):
+                bktimeout=self.recvtimeout
+                rt=self.settimeout(timeout)
+                self.recvtimeout=bktimeout
+                if(rt == False):
+                    return(exceptionret)
+
+            while True:
+                if(md == 'STARS'):
+                    dp = sbuf.find('\n')
+                    if dp >= 0:
+                        self.error=""
+                        rmsg = sbuf[:dp]
+                        sbuf = sbuf[dp+1:]
+                        self.buf.update({sock:sbuf})
+                        rmsg = rmsg.replace('\r', '')
+                        if(md == 'STARS'):
+                            rmsg = stars.StarsMessage(rmsg)
+                        if(rmsg == ''):
+                            self.error = 'No reply.'
+                        return rmsg
+                #Mode DIRECT or else
+                else:
+                    if(sbuf != ''):
+                        return sbuf
+
+                #Read socket
+                rmsg = ''
+                try:
+                    sock.settimeout(timeout)
+                    if(timeout is not None):
+                        timeout = 0.001
+                    rmsg = sock.recv(bufsize).decode()
+                    if(len(rmsg) == 0):
+                        self._debugprint("Connection closed from remote.\n")
+                        self.error="No connection"
+                        rmsg=''
+                        if(md == 'STARS'):
+                            rmsg = stars.StarsMessage(rmsg)
+                        return(exceptionret)
+                    sbuf = sbuf + rmsg;
+                except Exception as e:
+                    err = e.args[0]
+                    if err == 'timed out':
+                        self.error="Timeout"
+                        rmsg=''
+                        if(md == 'STARS'):
+                            rmsg = stars.StarsMessage(rmsg)
+                        return rmsg
+                    elif exception:
+                        raise
+                    else:
+                        rmsg=''
+                        self._debugprint("%s\n" %e)
+                        self.error="Socket recv error. [%s]" %(sys.exc_info()[0])
+                        if(md == 'STARS'):
+                            rmsg = stars.StarsMessage(rmsg)
+                        return(exceptionret)
+        rmsg=''
+        rmsg = stars.StarsMessage(rmsg)
+        return(exceptionret)
+
+    def setdebug(self, b):
+        """Set true to the argument b, print debug info to stdout.
+        """
+        if(b == True):
+            self.debug = b
+        else:
+            self.debug = False
+        return(True)
+
+    def _debugprint(self,msg):
+        if(self.debug == True):
+            #print(msg)
+            ct=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime()) 
+            sys.stdout.write(ct+' '+msg)
+
+    def getlasterrortext(self):
+        """  Return the last error string.
+        """
+        return(self.error)
+
+    def settimeout(self, timeout=None):
+        """Set the default read timeout seconds.
+             if set None, reset to the default value DEFAULT_TIMEOUT.
+           Return False if invalid arguments detected.
+        """
+        try:
+            if(timeout is None):
+                timeout=StarsInterface.DEFAULT_TIMEOUT
+            elif(timeout<0):
+                self.error="timeout value %s error. [timeout>=0]" %(timeout)
+                return(False)
+            self.recvtimeout=timeout
+        except Exception as e:
+            self._debugprint("%s\n" %e)
+            self.error="timeout value %s error. [%s]" %(timeout,sys.exc_info()[0])
+            return(False)
+        return(True)
+
+    def setintervaltime(self, intervaltime=None):
+        """Change interval seconds.
+             if set None, reset to the default value DEFAULT_INTERVALTIME.
+           Return False if invalid arguments detected.
+        """
+        try:
+            if(intervaltime is None):
+                intervaltime=StarsInterface.DEFAULT_INTERVALTIME
+            elif(intervaltime<0):
+                self.error="intervaltime value %s error. [intervaltime>=0]" %(intervaltime)
+                return(False)
+            self.intervaltime = intervaltime
+        except Exception as e:
+            self._debugprint("%s\n" %e)
+            self.error="interval value %s error. [%s]" %(interval,sys.exc_info()[0])
+            return(False)
+        return(True)
+
+    def terminateMainloop(self, b=False):
+        """Set true to the argument b, if terminate <instance>.Mainloop().
+        """
+        if(b == True):
+            self.termsignal = True
+        else:
+            self.termsignal = False
+        return(True)
+
+    def addcallback(self, handler, fh=None, mode=None):
+        """Add callback handler.
+             if the argument fh is omitted or None, use STARS socket.
+             if the argument mode is omitted or None, use 'STARS'.
+               set the argument mode by string from ('DETECT','DIRECT','STARS')
+           Return False if STARS socket not found, arguments error detected...
+               or else return True.
+        """
+        if(fh is None):
+            fh = self.gethandle()
+            if(fh is None):
+                return(False)
+        if(mode is None):
+            mode = 'STARS'
+        mode = mode.upper()
+        if(mode == 'DIRECT'):
+            rt=True
+        elif(mode == 'DETECT'):
+            rt=True
+        elif(mode == 'STARS'):
+            rt=True
+        else:
+            self.error="Select mode from ''DETECT','DIRECT','STARS'"
+            return(False)
+        self.handler.update({fh:handler})
+        self.mode.update({fh:mode})
+        if(self.buf.get(fh,None) is None):
+           self.buf.update({fh:''})
+        self.readable.append(fh)
+        if(self.Test):
+            self._debugprint("Add handler %s as %s\n" %(fh,mode))
+        return(True)
+
+    def removecallback(self,fh=None):
+        """Remove callback handler
+           Return False : No problem. Just tell the argument fh not on the callback list. 
+             or else True
+        """
+        rt=True
+        if(fh is None):
+            fh = self.gethandle()
+            if(fh is None):
+                return(False)
+        try:
+            self.readable.remove(fh)
+        except Exception as e:
+            self.error="Remove error. [%s]" %sys.exc_info()[0]
+            rt=False
+        if(hasattr(self,'handler')==True):
+            hd=self.handler.get(fh, None)
+            if(hd is not None):
+                self.handler.pop(fh)
+        if(hasattr(self,'mode')==True):
+            md=self.mode.get(fh, None)
+            if(md is not None):
+                self.mode.pop(fh)
+        if(hasattr(self,'buf')==True):
+            bf=self.buf.get(fh, None)
+            if(bf is not None):
+                self.buf.pop(fh)
+        return(rt)
+
+    def Mainloop(self, inthandler=None, intervaltime = None):
+        """Monitor start callback handler.
+             To the argument inthandler, set funciton name to execute with interval.
+               No interval function is assigned if the argument inthandler is omitted or None.
+             To the argument intervaltime, set interval time seconds.
+               if the argument intervaltime is omitted or None, use the default value.
+             Furthermore intervaltime can be changable after call this function
+               see <instance>.setintervaltime function.
+             To Stop this function,y see <instance>.terminateMainloop function.
+           Return False if error detected before start of monitoring STARS socket.
+               or else return True.
+        """
+        if(intervaltime is not None):
+            rt=self.setintervaltime(intervaltime)
+            if(rt == False):
+                return(rt)
+
+        bufsize = StarsInterface.TCP_BUFFER_SIZE
+        readfds = self.readable;
+
+        prevtimeout= self.intervaltime
+        fintimeout = -1
+        timeoutbuf = 0.04
+
+        timebase = time.time()
+        while(self.termsignal==False):
+            #Check just avoid unexceptable action
+            if(self.intervaltime<0):
+                self.setintervaltime()
+            #Check existing socket
+            if(len(readfds) <= 0):
+                #self._debugprint("No socket. force exit\n")
+                #self.terminateMainloop(True)
+                #continue
+                if(self.intervaltime>0):
+                    time.sleep(self.intervaltime)
+                    self._debugprint("No socket. Sleep:%s sec\n" %self.intervaltime)
+                if(inthandler is not None):
+                    timelap= time.time()-timebase
+                    if(self.Test):
+                        self._debugprint("Call INT handler Lap:%s>=Int:%s.\n" %(timelap,self.intervaltime))
+                    timebase =  time.time()
+                    fh = self.gethandle()
+                    inthandler(self)
+                continue
+            if(fintimeout<=0 or (self.intervaltime != prevtimeout)):
+                fintimeout=self.intervaltime
+            while(fintimeout>=0):
+                if(self.termsignal):
+                    break
+                if(fintimeout>0.04):
+                    timeoutval = 0.04
+                else:
+                    timeoutval = fintimeout
+                try:
+                    rready, wready, xready = select.select(readfds, [], [], timeoutval)
+                    if(len(rready) == 0):
+                        fintimeout=fintimeout-0.04
+                        continue
+                    break
+                except Exception as e:
+                    self._debugprint("%s\n" %e)
+                    self.error="Socket select error. [%s]" %(sys.exc_info()[0])
+                    self.terminateMainloop(True)
+                    break
+            if(self.termsignal):
+                continue
+            if(len(rready) <= 0):
+                if(inthandler is not None):
+                    timelap=time.time()-timebase
+                    if(self.Test):
+                        self._debugprint("Call INT handler Lap:%s>=Int:%s.\n" %(timelap,self.intervaltime))
+                    timebase = time.time()
+                    ### execute inthandler
+                    fh = self.gethandle()
+                    inthandler(self)
+                continue
+            #Process read socket
+            rmsg = ''
+            for sock in rready:
+                ### terminate force loop
+                if(self.termsignal==True):
+                    break
+                hd = None
+                md = None
+                sbuf = ''
+                if(hasattr(self,'handler')):
+                    hd=self.handler.get(sock, None)
+                if(hasattr(self,'mode')):
+                    md=self.mode.get(sock, 'STARS')
+
+                #Mode DETECT: skip read and just call handler to notify.
+                if(md == 'DETECT'):
+                    if(hd is not None):
+                        if(self.Test):
+                            self._debugprint("Call DETECT handler\n")
+                        hd(self, 'Detect', sock)
+                    continue
+
+                #Read socket
+                rmsg = ''
+                try:
+                    sock.settimeout(self.DEFAULT_TIMEOUT)
+                    rmsg = sock.recv(bufsize).decode()
+                except Exception as e:
+                    self._debugprint("%s\n" %e)
+                    self.error="Socket recv error. [%s]" %(sys.exc_info()[0])
+                    rmsg=''
+                    if(md == 'STARS'):
+                        rmsg = stars.StarsMessage(rmsg)
+                    if(hd is not None):
+                        hd(self, rmsg, sock)
+                    continue
+                if(len(rmsg) == 0):
+                    self._debugprint("Connection closed from remote.\n")
+                    #self.removecallback(sock)
+                    rmsg=''
+                    if(md == 'STARS'):
+                        rmsg = stars.StarsMessage(rmsg)
+                    if(hd is not None):
+                        hd(self, rmsg, sock)
+                    continue
+
+                #Mode STARS
+                if(md == 'STARS'):
+                    sbuf = self.buf.get(sock, '')
+                    sbuf = sbuf + rmsg;
+                    while(self.termsignal==False):
+                        dp = sbuf.find('\n')
+                        if dp < 0:
+                            self.buf.update({sock:sbuf})
+                            break
+                        else:
+                            rmsg = sbuf[:dp]
+                            sbuf = sbuf[dp+1:]
+                            self.buf.update({sock:sbuf})
+                            rmsg = rmsg.replace('\r', '')
+                            rmsg = stars.StarsMessage(rmsg)
+                            if(rmsg == ''):
+                                self.error = 'STARS No reply.'
+                            if(hd is not None):
+                                if(self.Test):
+                                    self._debugprint("Call STARS handler: message=[%s]\n" %rmsg)
+                                hd(self, rmsg, sock)
+                #Mode DIRECT
+                elif(md == 'DIRECT'):
+                    if(hd is not None):
+                        if(self.Test):
+                            self._debugprint("Call DIRECT handler: message=[%s]\n" %rmsg)
+                        hd(self, rmsg, sock)
+        if(self.termsignal == True):
+            self._debugprint("terminateMainloop detected.\n")
+        return(True)

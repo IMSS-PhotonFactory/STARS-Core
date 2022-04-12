@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual C++ Express 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ringEPFAR", "ringEPFAR.vcproj", "{B3DA6A81-F3AD-46EF-9C5C-2639064B4071}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ringEPF", "ringEPF.vcproj", "{4B09DE6D-2829-4606-BFC5-AD7CB4E07152}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ring", "ring.vcproj", "{6C3837BE-A42D-448A-8E4C-AD1483C35F62}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B3DA6A81-F3AD-46EF-9C5C-2639064B4071}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B3DA6A81-F3AD-46EF-9C5C-2639064B4071}.Debug|Win32.Build.0 = Debug|Win32
+		{B3DA6A81-F3AD-46EF-9C5C-2639064B4071}.Release|Win32.ActiveCfg = Release|Win32
+		{4B09DE6D-2829-4606-BFC5-AD7CB4E07152}.Debug|Win32.ActiveCfg = Debug|Win32
+		{4B09DE6D-2829-4606-BFC5-AD7CB4E07152}.Debug|Win32.Build.0 = Debug|Win32
+		{4B09DE6D-2829-4606-BFC5-AD7CB4E07152}.Release|Win32.ActiveCfg = Release|Win32
+		{6C3837BE-A42D-448A-8E4C-AD1483C35F62}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6C3837BE-A42D-448A-8E4C-AD1483C35F62}.Debug|Win32.Build.0 = Debug|Win32
+		{6C3837BE-A42D-448A-8E4C-AD1483C35F62}.Release|Win32.ActiveCfg = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

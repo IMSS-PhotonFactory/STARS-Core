@@ -1,0 +1,3 @@
+streg.BL01.MBS.Status:=Closed
+streg.BL01.BBSB.Status:=Closed
+streg.BL01.BBSA.Status:=Closed

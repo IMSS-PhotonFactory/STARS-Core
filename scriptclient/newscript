@@ -1,0 +1,114 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = 'Takashi Kosuge';
+$::Description = '
+  You can start development of STARS script client with this script.
+"newscript" generates a new file from template and executes editor.
+';
+#####################################################
+$::Offline= 1;
+$::Param  = 'Script_name Template_script';
+require 'scriptlib.pl';
+
+stLoadParam('configscript.cfg');
+$::Param{'Template_script'} = 'Default';
+
+my $filename;
+my $template;
+($filename, $template) = stSetParam();
+
+if(-e $filename){
+	die "$filename already exits. Dlete $filename first.\n";
+}
+
+my @d = gmtime(time);
+$date = sprintf("%04d/%02d/%02d %02d:%02d:%02d", $d[5]+1900, $d[4]+1, $d[3], $d[2], $d[1], $d[0]);
+
+my $outbuf;
+if($template eq 'Default'){
+	while(<DATA>){$outbuf .= $_;}
+	$outbuf =~ s/<<DATE>>/$date/g;
+	$outbuf =~ s/<<SCRIPTNAME>>/$filename/g;
+	$outbuf =~ s/<<DOLLAR>>/\$/g;
+
+}else{
+	unless(-e $template){
+		die "Error: $filename does not exist.\n";
+	}
+	open(BUF, $template) or die "Could not open template: $!\n";
+	while(<BUF>){$outbuf .= $_;}
+	close(BUF);
+	$outbuf =~ s/\$(Revision:) \d+\.\d+ /\$$1 1.0 /;
+	$outbuf =~ s/\$(Date:) \d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d /\$$1 $date /;
+
+}
+
+
+open(BUF, ">$filename") or die $!;
+print BUF $outbuf;
+close(BUF);
+
+chmod(0755, $filename);
+
+if($ENV{'OS'} eq 'Windows_NT' and stYesNo("Generate bat file?", 1)){
+	system("perl generate_bat_files $filename");
+}
+
+system("$::Param{'Editor_Program'} $filename");
+
+exit(0);
+
+__DATA__
+#! /usr/bin/perl
+#####################################################
+$::Version = '<<DOLLAR>>Revision: 1.0 <<DOLLAR>>
+              <<DOLLAR>>Date: <<DATE>> <<DOLLAR>>';
+$::Author  = '';
+$::Description = '
+  "<<SCRIPTNAME>>"
+';
+#####################################################
+## Settings ##
+$::Param    = 'Start End Step Prefix_of_data_file';
+my $srcdev  = 'System';   # Node name of motor etc.
+my $mesdev  = 'System';   # Node name of mesuring device.
+##===================================================
+
+require 'scriptlib.pl';
+
+my $start;
+my $end;
+my $step;
+
+#### Set parameters.
+stLoadParam();
+($start, $end, $step, $::DataFile) = stSetParam();
+stSaveParam();
+
+stAddSuffixDataFile();
+
+#### Initialize measuring equipment etc..
+stSendCommand("System flgon $srcdev");
+
+
+#### Print header to data file.
+my $date = stGetLocaltime();
+stFprintf("# <<SCRIPTNAME>>: Start=%s, End=%s, Step=%s\n", $start, $end, $step);
+stFprintf("# Date: %s\n", $date);
+
+
+#### Measurement loop.
+my $src;
+my $mes;
+
+for $src (stGetScanList($start, $end, $step)){
+	stSendCommand("$srcdev SetValue $src");
+	stWait("_ChangedIsBusy 0");
+
+	$mes = stSendCommand("$mesdev GetValue");
+	stFprintf("%s\t%s\n", $src, $mes);
+}
+
+stPrint("Done.\n");

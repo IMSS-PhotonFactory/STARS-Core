@@ -1,0 +1,28 @@
+#! /usr/bin/perl
+#####################################################
+$::Version = '$Revision: 1.1 $
+              $Date: 2010-01-19 04:24:07 $';
+$::Author  = '';
+$::Description = '
+  Start edit program.
+';
+#####################################################
+$::Offline  = 1;
+## Settings ##
+$::Param    = 'File_Name';
+
+require 'scriptlib.pl';
+
+stLoadParam('configscript.cfg');
+my $filename;
+($filename) = stSetParam();
+
+unless($::Param{'Editor_Program'}){
+	die "Editor Program is not defined. Plese set with \"configscript\".\n";
+}
+unless(-e $filename){
+	die "Error: $filename does not exist.\n";
+}
+
+system("$::Param{'Editor_Program'} $filename");
+

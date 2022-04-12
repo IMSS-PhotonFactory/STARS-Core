@@ -1,0 +1,263 @@
+
+                    【【【【STARS用簡易スクリプト実行ライブラリ】】】】
+
+                         $Revision: 1.0 $  $Date: 2009/01/29 09:00:00 $ Takashi Kosuge
+
+
+.概要
+本PerlライブラリはSTARS用の簡単なスクリプト(scriptclient)を作成する際に有効なライブラリです。
+なお、scriptclientは基本的にターミナル上やWindowsのコマンドプロンプト上で動作します。
+
+
+.前準備
+..キーファイルのコピー
+あらかじめ"scriptclient.key"をSTARSサーバのtakaserv-libの下にコピーしてください。
+
+
+..基本スクリプトの準備
+scriptclientにはサンプルのほかに基本的なスクリプトプログラムが用意されています。これらを使用するとテンプレートをもとに新たにスクリプトプログラムを開発するなどが可能となります。
+
+Windowsの場合は、はじめにコマンドプロンプトを開き、scriptclientのディレクトリまで移動してください。
+次に、
+perl generate_bat_files
+と入力してください。それぞれのスクリプト用にバッチファイルが生成されます。
+
+Linuxなどの場合は全てのプログラムは ./ScriptName のように実行します。あらかじめ次のようなシェルスクリプト(bashの場合)を用意しておいて ". setscript" のように実行するのもよいかと思います。
+
+シェルスクリプトの例、setscript 等の名前で保存
+
+#! /bin/bash
+# usage: Run this shell like ". setscript"
+
+SCRIPTROOT=~/scriptclient
+PS1='scriptclient>> '
+PATH=$SCRIPTROOT:$PATH
+alias help=./help
+cd $SCRIPTROOT
+
+
+次にscriptclientの設定を行います。
+configscript
+と入力します。ここでは、デフォルトのSTARSサーバのホスト名、STARSノード名、編集を行うためのエディタ、スクリプトを削除した際のバックアップディレクトリ等の設定を行ってください。
+
+
+新しいスクリプトの作成を行うには、
+newscript
+と入力します。設定が正しく行われていれば、新たにファイルが作成されエディタが立ち上がります。
+
+
+.ライブラリの利用
+
+あらかじめプログラムのはじめの部分に
+require 'scriptlib.pl';
+
+その後プログラムを実行するとSTARSへの接続等の動作は自動的に行われます。
+
+
+
+.ファンクション
+
+..[stSendCommand]
+STARSへのコマンドの送信及びReplyされた値の取得。
+
+$rt = stSendCommand("To Command");
+
+STARSのToで示されたクライアントに対してコマンドを送信し、値を受け取ります。@Commandのようなリプライメッセージは全て削除され、値のみが返されます。
+
+
+..[stSendEvent]
+STARSへのイベントメッセージの送信。
+
+stSendEvent("to _event");
+
+STARSのToで示されたクライアントに対してイベントを送信します。STARSからの受信は行いません。
+
+
+..[stWait]
+STARSメッセージの待機受信。
+
+$rt = stWait("Message", "from" [, "Message2", "from2"] [, ...]);
+
+STARSが "Message" で始まるメッセージを送信してくるまで待ちます。なお、引数が一つの場合("Message"のみの場合)、直前に実行された stSendCommand あるいは stSendEvent で指定された "To" が対象となります。
+また、"Message2"、 "from2"のように設定するとそれらのメッセージがすべて受け取られるまで待ちます。
+なお、_Event のようなメッセージ部は削除され値のみが戻されます。
+
+
+..[stSleep]
+プログラムのスリープ。
+
+stSleep(Sec);
+
+プログラムをSec秒の間、Sleepさせます。小数点以下も設定可能です。
+
+
+..[stGetLocaltime]
+現在時刻の取得
+
+$rt = stGetLocaltime();
+
+
+..[stPrint]
+画面への出力。
+
+stPrint("Print Value\n");
+
+スクリプトの進行状況などを画面に出力するために使用します。スクリプトを起動の際、-remoteスイッチで出力先のノード名が設定された場合は改行が自動的に削除され、出力先のノード名を宛先としてSTARS側に送信されます。
+
+
+..[stPrintf]
+画面への出力。
+
+stPrintf("Print Value = %d\n", $value);
+
+stPrintと同様の機能ですが、printfの形式が利用できます。スクリプトを起動の際、-remoteスイッチで出力先のノード名が設定された場合は改行が自動的に削除され、出力先のノード名を宛先としてSTARS側に送信されます。
+
+
+..[stAddSuffixDataFile]
+データファイル名へのサフィックスの追加。
+
+$::DataFile = 'Data_File_Name';
+stAddSuffixDataFile();
+
+データファイル名をユニークにするため、サフィックスを自動的に生成して付加します。
+_YYYY-MM-DD_hhmmss.txt のようなサフィックスが付加されます。
+
+
+..[stWriteFile]
+計測データの保存。
+
+stWriteFile("Print Value\n");
+
+データファイルに計測したデータ等を出力するために使用します。出力データは随時ファイルにappendされてゆきます。なお、自動で改行は付加されません。
+
+
+..[stFprintf]
+計測データの保存。
+
+stFprintf("Print Value = %d\n", $value);
+
+stWriteFileと同様の機能ですが、printfの形式が利用できます。出力データは随時ファイルにappendされてゆきます。なお、自動で改行は付加されません。
+
+
+..[stLoadParam]
+パラメータのロード。
+
+stLoadParam([File_name]);
+
+scriptclientで使用するパラメータ変数を設定ファイルより読み込みます。File_nameが指定されなければ、設定ファイル名として「スクリプト名.cfg」が使用されます。各パラメータは %::Param ハッシュ変数にセットされます。
+
+
+..[stSetParam]
+パラメータの設定。
+
+$rt   = stSetParam([Parameter_List, [Value1, [Value2] ... ]]);
+(@rt) = stSetParam([Parameter_List, [Value1, [Value2] ... ]]);
+
+スクリプトで使用するパラメータの設定を行います。Parameter_Listにはパラメータ名をスペースで区切ったリストを与えます。また、そのあとにパラメータにセットする値のリストを追加します。もし、値を与えなければ入力画面で入力が求められます。この時あらかじめ %::Param が設定されていると、その値がデフォルト値として使用されます。なお、Parameter_List、Value等を全て省略すると、Parameter_Listとしては $::Param が、Valueのリストとしては @ARGV が使用されます。
+なお、戻り値をスカラーで受け取るとセットされたパラメータの数が、リストで受け取るとセットされた値がリストとして返されます。
+
+
+..[stSaveParam]
+パラメータの保存。
+
+stSaveParam([File_name]);
+
+%::Param ハッシュ変数にセットされたパラメータを設定ファイルに保存します。File_nameが指定されなければ、設定ファイル名として「スクリプト名.cfg」が使用されます。
+
+..[stYesNo]
+Yes/Noの入力。
+
+$rt = stYesNo(Display_String [, Default]);
+
+Yes/Noの入力を求め、入力された結果を返します。Yesならば1をNoならば0を返します。なお、起動時に-remoteスイッチにてノード名が設定されていれば、そのノード宛てに "GetYesNo" コマンドを送信します。
+
+Display_String: 入力を求める際に表示する文字列を設定します。
+Default: 入力のデフォルト値を設定します。1ならばYes、0ならばNoがデフォルトとして使用されて単にEnterキーを押した場合にはそれが使用されます。なお、省略するとNoがデフォルトとして使用されます。
+
+
+..[stGetScanList]
+スキャンリストの取得。
+
+@list = stGetScanList(Start, End, Step);
+
+StartからEndまで、Stepの差分のリストを返します。
+
+例:
+for $lp (stGetScanList($start, $end, $step)){
+	stFprintf("%d %d\n", $lp, $lp*2+rand(100));
+	stSendEvent("$display _ChangedValue $lp");
+	stSleep(0.5);
+}
+
+
+..[stDie]
+プログラムの異常停止。
+
+stDie(Print_string);
+
+スクリプトプログラムを異常停止させます。Print_stringがその際スクリーンに出力されます。Print_stringは"\n"で終了していればそのままの文字列が、そうでなければ終了した行番号が付加されて出力されます。
+なお、-remoteスイッチでノード名が指定された場合は、スクリーンの代わりにそのノード宛てに "_Died" イベントを送信します。
+
+
+
+.特殊変数
+
+..[$::TimeOut]
+stWaitやstSendCommandのタイムアウトを設定します。デフォルトは10秒となっています。
+
+$::TimeOut    = 10;
+
+..[$::StarsServer]
+接続するSTARSサーバのホスト名がセットされています。
+
+..[$::NodeName]
+STARSサーバに接続する際のノード名がセットされています。
+
+..[$::DataDir]
+計測データを保存するためのファンクション stFprintf 及び stWriteFile で出力されるデータファイルを保存するディレクトリ名がセットされています。
+
+..[$::DataFile]
+stFprintf 及び stWriteFile で保存されるデータファイルの名前を格納します。これらのファンクションを呼ぶ前にあらかじめセットしておく必要があります。
+
+..[%::Param]
+stLoadParamや、stSaveParamでセットや保存されるパラメータのハッシュ変数です。
+
+..[$::Param]
+stSetParam()の引数を省略した場合に利用されるパラメータ名リストのスカラー変数です。stSetParam()を引数なしで呼び出す際にはあらかじめ設定しておく必要があります。また、スクリプトを実行の際に -h を使用してヘルプを表示させる際にも利用されます。
+
+..[$::Offline]
+$::Offline= 1;
+とするとスクリプトクライアントはSTARSサーバに接続しません。ファイルの管理プログラムなどを作成するのに便利な機能です。
+
+..[$::LibVersion]
+scliptlib.plのバージョンがセットされています。
+
+..[$::Version]
+作成するスクリプトのバージョン名等をセットするための変数です。
+
+..[$::Author]
+スクリプトプログラムの作者を設定してください。トラブルの際に呼び出されてしまう可能性がアップします。
+
+
+
+.起動オプション
+スクリプトプログラム起動時に下記のオプションを指定することができます。
+
+..[-data <データファイル保存ディレクトリ>]
+stFprintf 及び stWriteFile で保存されるデータファイルの名前を指定します。
+特殊変数[$::DataFile]に値がセットされます。
+
+..[-server <STARSサーバのホスト名>]
+接続するSTARSサーバのホスト名を指定します。
+特殊変数[$::StarsServer]に値がセットされます。
+
+..[-nodename <STARSノード名>]
+STARSサーバに接続する際のノード名を指定します。
+特殊変数[$::StarsServer]に値がセットされます。
+
+..[-remote <メッセージ出力先STARSノード名>]
+画面出力の代わりにメッセージの出力先とするSTARSノード名を指定します。
+
+..[-currentoutputflag <0|1>]
+0を指定するとデータファイル出力時に自動生成されるカレントデータファイル'currentdata.txt'の生成を無効にします。
+1を指定すると有効にします。デフォルトは有効（生成する）です。

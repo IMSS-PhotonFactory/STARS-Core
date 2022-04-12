@@ -1,0 +1,134 @@
+<html>
+<head>
+<title>STARS Java interface library - StarsJavaLibrary.jar</TITLE>
+<style>
+<!--
+.usage{font: bold}
+address{text-align:right}
+.style1 {color: #FFFFFF}
+.style2 {color: #FFFF00}
+-->
+</style>
+</head>
+
+<body>
+<h1>Readme for StarsJavaLibrary.jar - STARS Java Interface</h1>  
+<address>2013-11-27 (Wed) Takashi Kosuge</address>  
+
+<!--
+<h2>SYNOPSIS</h2>
+-->
+
+<h2>Import</h2>
+<p>
+import jp.kek.stars.*;
+</p>
+
+<!--
+<h2>DESCRIPTION</h2>
+<p></p>
+-->
+
+<h2>METHODS</h2>
+<h3>Constructor</h3>
+<p class="usage">Usage:<br>
+<i>StarsInterface</i> stars = new StarsInterface(<i>String</i> nodeName, <i>String</i> svrHost, <i>String</i> keyFile, <i>int</i> svrPort);<br>
+<i>StarsInterface</i> stars = new StarsInterface(<i>String</i> nodeName, <i>String</i> svrHost, <i>String</i> keyFile);<br>
+<i>StarsInterface</i> stars = new StarsInterface(<i>String</i> nodeName, <i>String</i> svrHost);<br>
+</p>
+
+<dl>
+<dt>Create new instance. It returns reference of instance.</dt>
+
+<dt>stars</dt>
+<dd>StarsInterface type instance.</dd>
+
+<dt>nodeName</dt>
+<dd>Node mame of client.</dd>
+
+<dt>svrHost</dt>
+<dd>Host name of STARS server. 'localhost' is used if omitted.</dd>
+
+<dt>keyFile</dt>
+<dd>Keyword file name. 'nodeName.key' is used if omitted.</dd>
+
+<dt>svrPort</dt>
+<dd>Port number of STARS. 6057 is used if omitted.</dd>
+
+</dl>
+<br>
+
+<h3>connect</h3>
+<p class="usage">Usage:<br>
+<i>void</i> stars.connect(); //throws StarsException
+</p>
+
+<dl>
+<dt>Connect to STARS server</dt>
+
+<dt>stars</dt>
+<dd>StarsInterface type instance which created by the constructor.</dd>
+</dl>
+<br>
+
+stars.keyWords
+
+<h3>send</h3>
+<p class="usage">Usage:<br>
+<i>void</i> stars.send(<i>String</i> sndTo, <i>String</i> sndCommand); //throws StarsException
+<i>void</i> stars.send(<i>String</i> sndCommand); //throws StarsException
+</p>
+
+<dl>
+<dt>Send messge to STARS</dt>
+
+<dt>stars</dt>
+<dd>StarsInterface type instance which created by the constructor.</dd>
+
+<dt>sndTo</dt>
+<dd>Destination of STARS client.</dd>
+
+<dt>sndCommand</dt>
+<dd>Message string to STARS</dd>
+
+</dl>
+<br>
+
+<h3>receive</h3>
+<p class="usage">Usage:<br>
+<i>StarsMessage</i> rt = stars.receive(<i>int</i> timeout); //throws StarsException</br>
+<i>StarsMessage</i> rt = stars.receive(); //throws StarsException<br>
+</p>
+
+<dl>
+<dt>Receive messge from STARS.</dt>
+
+<dt>rt</dt>
+<dd>StarsMessage type variable</dd>
+
+<dt>stars</dt>
+<dd>StarsInterface type instance which created by the constructor.</dd>
+
+<dt>timeout</dt>
+<dd>Time out in m second. If omitted, default value (500m second) is used.</dd>
+
+</dl>
+<br>
+
+<h3>startCallbackHandler</h3>
+<p class="usage">Usage:<br>
+<i>void</i> startCallbackHandler(<i>StarsCallback</i> sCb)</br>
+</p>
+
+<dl>
+<dt>Start callback sequence.</dt>
+
+<dt>sCb</dt>
+<dd></dd>
+: ‘Ω∏√Ê
+</dl>
+<br>
+
+
+</body>
+</html>

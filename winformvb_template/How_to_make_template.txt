@@ -1,0 +1,29 @@
+開発用ドキュメント STARSWinFormApplication.zipを作るまで。 2007-06-20 Takashi Kosuge
+
+1. 手直し
+STARSWinFormApplicatio の中のプロジェクトを開いて手直しを行います。
+
+2. テンプレートの出力
+「ファイル」→「テンプレートのエクスポート」でテンプレートファイルを出力します。
+STARSWinFormApplication.zipという名前でテンプレートが出力されます。
+
+3. MyTemplate.vstemplateの変更のためにSTARSWinFormApplication.zipを解凍
+テンプレートを使って新たにプロジェクトを作成した際、はじめにキーワードファイルの作り方
+等を説明するhtmlを表示させるためと、setup.batへプロジェクト名を反映させるために、まず、STARSWinFormApplication.zipを解凍します。
+
+3. MyTemplate.vstemplateの変更
+MyTemplate.vstemplateをテキストエディタで開いて、
+
+readme.htmlの項目と、setup.batの項目のところを
+
+<ProjectItem OpenInWebBrowser="true" ReplaceParameters="true" TargetFileName="readme.html">readme.html</ProjectItem>
+
+<ProjectItem ReplaceParameters="true" TargetFileName="setup.bat">setup.bat</ProjectItem>
+
+のように2ヶ所修正します。
+
+4. 再圧縮
+STARSWinFormApplicationの中をSTARSWinFormApplication.zipというファイルに圧縮します。
+例、cygwinなら、
+$ zip -r ../STARSWinFormApplication.zip *
+となります。

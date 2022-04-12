@@ -1,0 +1,274 @@
+<HTML>
+<HEAD>
+<TITLE>PICNIC Perl module</TITLE>
+<STYLE>
+<!--
+P.usage{font-style:italic;}
+ADDRESS{text-align:right}
+-->
+</STYLE>
+</HEAD>
+
+<BODY>
+<H1>PICNIC Perl module</H1>
+<ADDRESS>2001-05-30 Takashi Kosuge</ADDRESS>
+
+<HR></HR>
+<H2>概要</H2>
+<P>
+PICNICはネットワークを使用してパラレルポート、シリアルポート等をコントロールできるPICマイコンを利用したボードです。PICNIC Perl moduleはこのPICNICをPerlから簡単に利用出来るようにします。（多分）
+</P>
+
+<HR></HR>
+<H2>インストール及び使用</H2>
+<P>
+picnic.pmを作成するアプリケーションのあるディレクトリまたは@INCのパスの通ったディレクトリにコピーします。
+その後アプリケーションプログラムの頭のほうで<BR>
+use picnic;<BR>
+とすれば利用が可能となります。以下は幾つかの例です。
+</P>
+<H4>RBパラレルポートを読みこむ。</H4>
+<PRE>
+use picnic;
+$pic = picnic-&gt;new('192.168.0.101');
+$val = $pic-&gt;InPIO( 'b' );
+printf(&quot;%X\n&quot;,$val);
+</PRE>
+
+<H4>ADC ch4の入力を読みだす。なお、PICNICのパラレルポートが10005に設定されていた場合。</H4>
+<PRE>
+use picnic;
+$pic = picnic-&gt;new('192.168.0.101',,10005);
+$val = $pic-&gt;GetADCV(4);
+print &quot;$val V\n&quot;;
+</PRE>
+
+<HR></HR>
+<H2>Functions</H2>
+<H3>new</H3>
+<P CLASS="usage">
+Usage: $object = pinic-&gt;new('PicHost', [LCDPort], [PIOPort], [SerialPort]);
+</P>
+
+<P>
+オブジェクトのリファレンスが返されます。また、失敗するとundefが返されます。
+</P>
+<DL>
+<DT>PicHost</DD>
+<DD>PICNICのホスト名あるいはIPアドレスを指定する。</DD>
+
+<DT>LCDPort</DT>
+<DD>PICNICのLCDユニットのUDPポートの番号を指定します。省略するとLCDは使用不可となります。</DD>
+
+<DT>PIOPort</DT>
+<DD>PICNICのパラレルポートが使用するUDPポートの番号を指定します。省略すると10001が使用されます。</DD>
+
+<DT>SerialPort</DT>
+<DD>PICNICのシリアルポートが使用するUDPポートの番号を指定します。
+    省略すると10002が使用されます。</DD>
+</DL>
+
+<H3>GetSIOHandle</H3>
+<P CLASS="usage">
+Usage: $fh  = $object-&gt;GetSIOHandle();
+</P>
+<P>
+シリアルポートに使用されるファイルハンドルが返されます。
+</P>
+
+<H3>InSIO</H3>
+<P CLASS="usage">
+Usage: $val = $object-&gt;InSIO();
+</P>
+<P>
+シリアルポートからデータを読み取ります。実際に送られて来たデータがスカラーとして返されます。time out (5秒)した場合はヌル('')が返されます。
+</P>
+
+<H3>OutSIO</H3>
+<P CLASS="usage">
+Usage: @responce = $object-&gt;OutSIO( 'Strings' );
+</P>
+<P>
+シリアルポートにデータを送ります。Responceのリストが返されます。
+</P>
+<DL>
+<DT>String</DT>
+<DD>送信する文字列を指定します。</DD>
+</DL>
+
+<H3>DefSIO</H3>
+<P CLASS="usage">
+Usage: @responce = $object-&gt;DefSIO( 'Baud', 'myIPaddress' );<BR>
+</P>
+<P>
+シリアルポートの設定を行います。Responceのリストが返されます。
+</P>
+
+<DL>
+<DT>Baud</DT>
+<DD>シリアルの通信速度を指定します。
+    '9600'、'19200'、'38400'、'57600'、'115200'の指定が可能です。
+</DD>
+<DT>myIPaddress</DT>
+<DD>データを受け取るために自ホストのIPアドレスを設定します。
+</DD>
+</DL>
+
+<H3>InPIO</H3>
+<P CLASS="usage">
+Usage: $val = $object-&gt;InPIO( 'a|b' );
+</P>
+<P>
+パラレルポートからデータを読み取ります。実際に読み取ったデータが数値として返されます。
+</P>
+
+<DL>
+<DT>'a|b'</DT>
+<DD>aまたはbでポートを指定します。
+</DD>
+</DL>
+
+<H3>OutPIOW</H3>
+<P CLASS="usage">
+Usage: $val = $object-&gt;OutPIOW( 'a|b', Val );
+</P>
+<P>
+パラレルポートにデータをセットします。セットされた内容を数値で返します。
+</P>
+
+<DL>
+<DT>'a|b'</DT>
+<DD>aまたはbでポートを指定します。</DD>
+<DT>Val</DT>
+<DD>出力するデータ</DD>
+</DL>
+
+<H3>OutPIO</H3>
+<P CLASS="usage">
+Usage: $val = $object-&gt;OutPIO( 'a|b', Bit, 1|0 );
+</P>
+<P>
+パラレルポートをビット毎にコントロールします。実際の出力ポートの内容が返されます。
+</P>
+
+<DL>
+<DT>'a|b'</DT>
+<DD>aまたはbでポートを指定します。</DD>
+<DT>Bit</DT>
+<DD>出力するビットを0～7で指定します。</DD>
+<DT>1|0</DT>
+<DD>出力するデータを1か0で設定します。</DD>
+</DL>
+
+<H3>DefPIOW</H3>
+<P CLASS="usage">
+Usage: $tris = $object-&gt;DefPIOW( 'a|b', io );
+</P>
+<P>
+パラレルポートが入力であるか出力であるかの設定を一度に行います。設定したポートのTRISレジスタの値が返されます。
+</P>
+
+<DL>
+<DT>'a|b'</DT>
+<DD>aまたはbでポートを指定します。</DD>
+<DT>io</DT>
+<DD>設定する内容を指定します。1となっているビットが入力に設定されます。</DD>
+</DL>
+
+<H3>DefPIO</H3>
+<P CLASS="usage">
+Usage: $tris = $object-&gt;DefPIO( 'a|b', Bit, 'i|o' );
+</P>
+<P>
+パラレルポートが入力であるか出力であるかの設定をBit毎に行います。設定したポートのTRISレジスタの値が返されます。
+</P>
+
+<DL>
+<DT>'a|b'</DT>
+<DD>aまたはbでポートを指定します。</DD>
+<DT>Bit</DT>
+<DD>設定するビットを0～7で指定します。</DD>
+<DT>i|o</DT>
+<DD>設定する内容を'i'か'o'で指定します。'i'が入力'o'が出力です。</DD>
+</DL>
+
+<H3>GetADCV</H3>
+<P CLASS="usage">
+Usage: $calculated = $object-&gt;GetADCV( ADC_Ch [, Wait]);
+</P>
+<P>
+ADCの入力を計算し電圧の値として返します。
+</P>
+
+<DL>
+<DT>ADC_Ch</DT>
+<DD>ADCポートの番号を0～4で指定します。</DD>
+<DT>Wait</DT>
+<DD>A-D変換する前のサンプリング時間を0～255で設定します。実際の値はWait X 5マイクロ秒となります。なお、00の時には256となります。</DD>
+</DL>
+
+<H3>GetADC</H3>
+<P CLASS="usage">
+Usage: $direct = $object-&gt;GetADC( ADC_Ch [, Wait]);
+</P>
+<P>
+ADCの入力値をそのまま返します。
+</P>
+
+<DL>
+<DT>ADC_Ch</DT>
+<DD>ADCポートの番号を0～4で指定します。</DD>
+<DT>Wait</DT>
+<DD>A-D変換する前のサンプリング時間を0～255で設定します。実際の値はWait X 5マイクロ秒となります。なお、00の時には256となります。</DD>
+</DL>
+
+<H3>GetParallelStatus</H3>
+<P CLASS="usage">
+Usage: @list = $p-&gt;GetParallelStatus();
+</P>
+<P>
+パラレルポートの状態をリストとして返します。リストの内容は次の順になります。
+</P>
+<P>
+RA, RB, TRIS_RA, TRIS_RB, ADRES_H, ADRES_L, 0, 0
+</P>
+<P>
+なお、ADRES_H、ADRES_LはADCの内容
+</P>
+
+<H3>SetLcd</H3>
+<P CLASS="usage">
+Usage: @responce = $object-&gt;SetLcd( mode );
+</P>
+<P>
+LCD表示のON/OFF及びカーソルの設定を行います。0～7の数値をmodeに設定します。(LCDを使用する場合、オブジェクトの作成時にLCDポートの数値を省略することは出来ません。)
+</P>
+
+<DL>
+<DT>modeの値</DT>
+<DD>
+
+<DL>
+<DT>2<SUP><FONT SIZE="-1">0</FONT></SUP></DT>
+<DD>1の時カーソル部分のキャラクターが点滅します。</DD>
+<DT>2<SUP><FONT SIZE="-1">1</FONT></SUP></DT>
+<DD>1の時カーソルが表示されます。</DD>
+<DT>2<SUP><FONT SIZE="-1">2</FONT></SUP></DT>
+<DD>0にするとLCDの表示が消えます。</DD>
+
+</DL>
+
+</DD>
+</DL>
+
+<H3>PrintLcd</H3>
+<P CLASS="usage">
+Usage: @responce = $object-&gt;PrintLcd( 'Strings' );
+</P>
+<P>
+LCDに文字を表示します。Stringを省略すると画面のクリアのみが行われます。なお、2行目にPrintする場合は改行コード'\n'を使用します。(LCDを使用する場合、オブジェクトの作成時にLCDポートの数値を省略することは出来ません。)
+</P>
+<HR></HR>
+<ADDRESS>Takashi Kosuge</ADDRESS>
+</BODY>
+</HTML>

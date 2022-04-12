@@ -1,0 +1,256 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use stars;
+use nportserv_debug;
+#################################################################
+# tpg300
+$::Version = '$Id: tpg300 00 2017-06-20 17:10:00Z stars $';
+#
+$::Version =~ s/\$//g;
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'tpg361';        #Default node name.(Gauge name)
+$::Server     = 'localhost';        #Default stars server.
+#################################################################
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+
+require 'config.pl';		#$::NPORT_HOST='';,$::NPORT_PORT='';
+
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'h'      => \&usage,
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+##Open XPort
+$::enc = nportserv->new($::NPORT_HOST, $::NPORT_PORT)
+	or die "Could not connect Encoder";
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+
+$::tak->addcallback(\&handler);
+stars->Mainloop();
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+
+print <<__USAGE__;
+$0 $::Version
+Usage: $0 [-h] [-d] [-node MyNodeName] [StarsServer]
+       -h   Show this help.
+       -d   Run with debug mode.
+__USAGE__
+
+exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	my $rt;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Handle received messges ##
+	if($to eq $::NodeName){
+		if($mess eq 'hello'){
+			$rt="nice to meet you.";
+		}elsif($mess eq 'help'){
+			$rt="help hello getversion GetValue SetSwFuncX GetSwFuncX UNI SPS listnodes";
+		}elsif($mess eq 'getversion'){
+			$rt=$::Version;
+		}elsif($mess eq 'listnodes'){
+			$rt="1 2";
+		}elsif($mess eq 'GetValue'){
+			$rt=&Cmd("PR1");
+			my @value = split(/,/, $rt);
+			if(@value[0] == 1){
+				$rt = '';
+				$::Error = "Underrange";
+			}elsif(@value[0] == 2){
+				$rt = '';
+				$::Error = "Overrange";
+			}elsif(@value[0] == 3){
+				$rt = '';
+				$::Error = "Sensor error";
+			}elsif(@value[0] == 4){
+				$rt = '';
+				$::Error = "Sensor off";
+			}elsif(@value[0] == 5){
+				$rt = '';
+				$::Error = "No Sensor";
+			}elsif(@value[0] == 6){
+				$rt = '';
+				$::Error = "identification error";
+			}elsif(@value[0] eq ''){
+				last;
+			}else{
+				$rt = @value[1];
+				$rt=~ s/^\+//;
+			}
+		}elsif($mess =~ /SetSwFunc(1|2|3|4)/){
+			my @cm=split(/ /,$mess);
+			$rt=&Cmd("SP$1 ,$cm[1], $cm[2], $cm[3]");
+		}elsif($mess =~ /GetSwFunc(1|2|3|4)/){
+			$rt=&Cmd("SP$1");
+			my @rr=split(/,/,$rt);
+			if($rr[1] == 0){$rt="Turnedoff ".$rr[2].$rr[3];}
+			elsif($rr[1] == 1){$rt="Turnedon ".$rr[2].$rr[3];}
+			elsif($rr[1] == 2){$rt="Measurment channel 1 ".$rr[2].$rr[3];}
+			elsif($rr[1] == 3){$rt="Measurment channel 2 ".$rr[2].$rr[3];}
+		}elsif($mess eq 'SAV'){
+			$rt=&Cmd("SAV");
+			if($rt==0){$rt="Default parameters";}
+			elsif($rt==1){$rt="User parameters";}
+		}elsif($mess =~ /UNI (mbar|Torr|Pa|Micron|hPa|Volt)/){
+			if($1 eq "mbar"){
+				$rt=&Cmd("UNI, 0");
+				if($rt == 0){$rt="mbar";}
+			}elsif($1 eq "Torr"){
+				$rt=&Cmd("UNI, 1");
+				if($rt == 1){$rt="Torr";}
+			}elsif($1 eq "Pa"){
+				$rt=&Cmd("UNI, 2");
+				if($rt == 2){$rt="Pa";}
+			}elsif($1 eq "Micron"){
+				$rt=&Cmd("UNI, 3");
+				if($rt == 3){$rt="Micron";}
+			}elsif($1 eq "hPa"){
+				$rt=&Cmd("UNI, 4");
+				if($rt == 4){$rt="hPa";}
+			}elsif($1 eq "Volt"){
+				$rt=&Cmd("UNI, 5");
+				if($rt == 5){$rt="Volt";}
+			}else{
+				$::Error = "Bad command or parameter.";
+				$rt = '';
+			}
+		}elsif($mess eq 'UNI'){
+			$rt=&Cmd("UNI");
+			if($rt==0){$rt="mbar";}
+			elsif($rt==1){$rt="Torr";}
+			elsif($rt==2){$rt="Pa";}
+			elsif($rt==3){$rt="Micron";}
+			elsif($rt==4){$rt="hPa";}
+			elsif($rt==5){$rt="Volt";}
+		}elsif($mess eq 'SPS'){
+			$rt=&Cmd("SPS");
+			my @m=split(/,/,$rt);
+		}elsif($mess =~ /^[_@]/){
+			return;
+		}else{
+			$::Error = "Bad command or parameter.";
+			$rt = '';
+		}
+	}elsif($to =~ /$::NodeName\.(1|2)/){
+		if($mess eq 'hello'){
+			$rt="nice to meet you.";
+		}elsif($mess eq 'help'){
+			$rt="help hello getversion GetValue";
+		}elsif($mess eq 'getversion'){
+			$rt=$::Version;
+		}elsif($mess eq 'GetValue'){
+			$rt = &Cmd("PR$1");
+			my @value = split(/,/, $rt);
+			if(@value[0] == 1){
+				$rt = '';
+				$::Error = "Underrange";
+			}elsif(@value[0] == 2){
+				$rt = '';
+				$::Error = "Overrange";
+			}elsif(@value[0] == 3){
+				$rt = '';
+				$::Error = "Sensor error";
+			}elsif(@value[0] == 4){
+				$rt = '';
+				$::Error = "Sensor off";
+			}elsif(@value[0] == 5){
+				$rt = '';
+				$::Error = "No Sensor";
+			}elsif(@value[0] == 6){
+				$rt = '';
+				$::Error = "identification error";
+			}elsif(@value[0] eq ''){
+				last;
+			}else{
+				$rt = @value[1];
+				$rt=~ s/^\+//;
+			}
+		}elsif($mess =~ /^[_@]/){
+			return;
+		}else{
+			$::Error = "Bad command or parameter.";
+			$rt = ''; 
+		}
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = ''; 
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+sub Cmd{
+	my $enq = "\x05";
+	my $ack = "\x06";
+	my $cmd = shift;
+	my $rt;
+
+	$::enc->OutSIO("$cmd\r");
+	if($::Debug){
+		print "RD: ";
+	}
+	$::enc->InSIO(10, "\r\n");
+
+	$::enc->OutSIO($enq);
+		
+	unless($rt = $::enc->InSIO(undef, "\r\n")){
+		if($::Debug){
+			print "Device error.\n";
+		}
+		$::Error = "Device error.";
+		return('');
+	}
+	if($::Debug){
+		print "$rt\n";
+	}
+	if($rt eq ''){
+				$::Error = "interface Error.\n";
+				$rt = '';	
+	}
+	return($rt);
+}

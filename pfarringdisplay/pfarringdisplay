@@ -1,0 +1,457 @@
+#! /usr/bin/perl
+#########################################################
+## Display panel for PF-RING 2006-07-15 Y.Nagatani
+##-------------------------------------------------------
+## CVS $Revision: 1.5 $ $Date: 2009/12/01 07:01:16 $ $Author: yasukon $
+##-------------------------------------------------------
+## Updated :None
+#########################################################
+use strict;
+use Getopt::Long;
+use Tk;
+use stars;
+use Time::HiRes qw(gettimeofday tv_interval);
+#################################################################
+# pfringdisplay
+use constant PGM_VERSION 	=> 'Version: 1.0';	# PGM Ver.No
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'pfarringdisplay';        #Default node name.
+$::Server     = 'localhost';        #Default stars server.
+$::OS         = 'Windows';          #Windows or other
+$::Interval   = 5000;               #Interval time for handler.
+$::Interval2  =  500;               #Interval time for handler.
+
+$::StarsPort  = 6057;
+$::IDGATEWAY      = 'idgateway';
+$::STARS_TINE_IOC = 'tinebrg';
+$::RING = 'RingAR';
+$::RNGREADER_TAG  = '.PFRING.RNGREADER.device_0.';
+#$::TARGET		  = 'IDGATEWAY';
+$::TARGET		  = 'TINEGATEWAY';
+$::GET_COMMAND    = 'EVENT';
+$::myPollingDate=[gettimeofday];
+$::TimeoutTime=15000; #msec
+#################################################################
+$::Debug      = '';  #This variable is used for debug mode.
+                     # You can use like..
+                     # if($::Debug){blha-blah-blah;}
+$|=1;
+
+use constant FRAME_BORDERWIDTH	=>'0';
+use constant ITEM_BORDERWIDTH	=>'1';
+use constant ITEM_RELIEF		=>'sunken';
+use constant ITEM_BGCOLOR		=>'BLACK';
+use constant TITLE_WIDTH=>13;
+use constant TITLE_FGCOLOR		=>'GREEN';
+use constant DAT_FGCOLOR		=>'YELLOW';
+use constant DAT0_WIDTH=>27;
+use constant DAT10_WIDTH=>15;
+use constant DAT11_WIDTH=>5;
+
+%::BEAMMOD_DISPMSG=();
+$::BEAMMOD_DISPMSG{1}='1: STORAGE';
+$::BEAMMOD_DISPMSG{2}='2: INJECTION';
+$::BEAMMOD_DISPMSG{3}='3: ACCELERATE';
+$::BEAMMOD_DISPMSG{4}='4: USER';
+$::BEAMMOD_DISPMSG{0}='0: SHUTDOWN';
+
+my $i;
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'target=s' => \$::TARGET,
+'getby=s' => \$::GET_COMMAND,
+'idgateway=s' => \$::IDGATEWAY,
+'tinebrg=s' => \$::STARS_TINE_IOC,
+'starsport=s' => \$::StarsPort,
+'ring=s' => \$::RING,
+'timeout=s' => \$::TimeoutTime,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+
+%::val_evt=();
+$::TimeStr=();
+$::IDGAPPtr='';
+
+$::idgapprop='';
+
+if(uc($::TARGET)=~/IDGATEWAY$/){
+	@::beamprop=qw(Ring.DCCT Ring.Energy Ring.Vacuum Ring.Lifetime);
+	@::statprop=qw(Ring.Status Ring.Message);
+	$::idgapprop='Ring.IDGap';
+	$::timeprop ='Ring.DATETIME';
+	$::TARGET="$::IDGATEWAY.";
+}elsif(uc($::TARGET)=~/TINEGATEWAY$/){
+	@::beamprop=qw(BEAMCUR BEAMENE BEAMPAV BEAMLIF);
+	@::statprop=qw(BEAMMOD BEAMMES);
+###	$::idgapprop='IDGAP';
+	$::timeprop ='DATETIME';
+	$::TARGET="$::STARS_TINE_IOC$::RNGREADER_TAG";
+}elsif(uc($::TARGET)=~/RING$/){
+	@::beamprop=qw(DCCT Energy Vacuum Lifetime);
+	@::statprop=qw(Status Message);
+###	$::idgapprop='IDGap';
+	$::timeprop ='DATETIME';
+	$::TARGET="$::RING.";
+}else{
+	die "$::TARGET Invalid -target Option. \n";
+}
+%::beamprop=();
+for($i=0;$i<@::beamprop;$i++){
+	$::beamprop{$::beamprop[$i]}=$::beamprop[$i];
+}
+
+if($::Debug){
+	print "Stars Server#$::Server#\n";
+	print "This NodeName#$::NodeName#\n";
+}
+
+## Open Stars server. $::tak is a Stars object.
+	$::tak = stars->new($::NodeName, $::Server,$::StarsPort) or die "Could not connect Stars server";
+
+#####################
+## widget creation 
+##
+my 	$root = MainWindow->new();
+	$root->title("PFAR-6Gev ".PGM_VERSION);
+	
+##	my($frm_0)=$root->Frame(-borderwidth=>FRAME_BORDERWIDTH,-relief=>'raised',-background=>$::bgfrmcolor);
+##	my($frm_1)=$root->Frame(-borderwidth=>FRAME_BORDERWIDTH,-relief=>'raised',-background=>$::bgfrmcolor);
+##	my($frm_2)=$root->Frame(-borderwidth=>FRAME_BORDERWIDTH,-relief=>'raised',-background=>$::bgfrmcolor);
+	my($frm_0)=$root;
+	my($frm_1)=$root;
+	my($frm_2)=$root;
+	
+	## Creating MODE & Messages
+	my $l_mode=$root->Label(-text=>'Mode',-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>TITLE_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>TITLE_FGCOLOR);
+	my $i_mode=$root->Label(-textvariable=>\$::val_evt{$::statprop[0]},-anchor=> 'w',-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>DAT0_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>DAT_FGCOLOR);
+	my $l_mesg=$root->Label(-text=>'Message',-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>TITLE_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>TITLE_FGCOLOR);
+	my $i_mesg=$root->Label(-textvariable=>\$::val_evt{$::statprop[1]},-anchor=> 'w',-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>DAT0_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>DAT_FGCOLOR);
+	
+	## Creating BEAM Items
+	my @beamtitles = ('Beam Current','Beam Energy','Beam PAV','Beam Life');
+	my @beamunits = ('mA','GeV','Pa','min');
+	my @l_beamtitles=();
+	my @i_beamPtr=();
+	my @l_beamunits =();
+	for($i=0;$i<@::beamprop;$i++){
+		$l_beamtitles[$i]=$root->Label(-text=>$beamtitles[$i],-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>TITLE_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>TITLE_FGCOLOR);
+		$i_beamPtr[$i]=$root->Label(-textvariable=>\$::val_evt{$::beamprop[$i]},-anchor=>'e',-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>DAT10_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>DAT_FGCOLOR);
+		$l_beamunits[$i]=$root->Label(-text=>$beamunits[$i],-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>DAT11_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>TITLE_FGCOLOR);
+	}
+
+	my $l_idgap = '';
+	unless($::idgapprop eq ''){
+		## Creating IDGAP Items
+		$l_idgap = $root->Label(-text=>'IDGAP',-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>TITLE_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>TITLE_FGCOLOR);
+		my $valfont=$l_idgap->cget('-font');
+	 ##	$::IDGAPPtr = $root->Label(-textvariable=>\$::val_evt{$::idgapprop},-anchor=>'w',-borderwidth=>'2',-relief=>ITEM_RELIEF,-wraplength=>'120');
+		$::IDGAPPtr = $root->Text(-borderwidth=>ITEM_BORDERWIDTH,-relief=>ITEM_RELIEF,-width=>DAT0_WIDTH,-font=>$$valfont,-background=>ITEM_BGCOLOR,-foreground=>DAT_FGCOLOR,-height=>12);
+	}
+	## Creating TIME Items
+	my $i_time = $root->Label(-textvariable=>\$::TimeStr,-anchor=>'e',-borderwidth=>0,-relief=>'flat',-width=>TITLE_WIDTH,-background=>ITEM_BGCOLOR,-foreground=>"GRAY");
+
+##########################
+## Geometry management
+##
+	$i=0;
+	## Plotting MODE & Messages
+	$l_mode->grid(-in => $frm_0,-column => '0',-row => $i+0,-sticky=>'nsew');
+	$i_mode->grid(-in => $frm_0,-column => '1',-row => $i+0,-sticky=>'nsew',-columnspan=>2);
+	$l_mesg->grid(-in => $frm_0,-column => '0',-row => $i+1,-sticky=>'nsew');
+	$i_mesg->grid(-in => $frm_0,-column => '1',-row => $i+1,-sticky=>'nsew',-columnspan=>2);
+
+	## Plotting BEAM Items
+	for($i=0;$i<@::beamprop;$i++){
+		$l_beamtitles[$i]->grid(-in => $frm_1,-column => 0,-row =>$i+2,-sticky=>'nsew');
+		$i_beamPtr[$i]->grid(-in => $frm_1,-column => 1,-row => $i+2,-sticky=>'nsew');
+		$l_beamunits[$i]->grid(-in => $frm_1,-column => 2,-row =>$i+2,-sticky=>'nsew');
+	}
+	
+	## Plotting IDGAP Items
+	unless($::idgapprop eq ''){
+		$l_idgap->grid(-in => $frm_2,-column =>0,-row => $i+2,-sticky=>'nsew');
+		$::IDGAPPtr->grid(-in => $frm_2,-column => 1,-row => $i+2,-sticky=>'nsew',-columnspan=>2);
+	}
+	
+	## Plotting TIME Items
+	$i_time->grid(-in => $frm_2,-column => 0,-row => $i+3,-sticky=>'nsew',-columnspan=>3);
+
+	## Resize behavior management
+
+	# container $root
+	$root->gridRowconfigure(0, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(1, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(2, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(3, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(4, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(5, -weight  => 0, -minsize  => 10);
+	$root->gridRowconfigure(6, -weight  => 0, -minsize  => 10);
+	$root->gridColumnconfigure(0, -weight => 0, -minsize => TITLE_WIDTH);
+	$root->gridColumnconfigure(1, -weight => 0, -minsize => DAT10_WIDTH);
+	$root->gridColumnconfigure(2, -weight => 0, -minsize => DAT11_WIDTH);
+
+##########################
+## Start Stars
+##
+
+if(uc($::GET_COMMAND)=~/^EVENT$/){
+	my $buf;
+	$::GET_COMMAND="";
+	if($::Debug){print "System flgon $::TARGET".$::timeprop."\n";}
+	$buf=$::tak->act("System flgon $::TARGET".$::timeprop);
+	if($::Debug){print "$buf\n";}
+	
+	for($i=0;$i<@::statprop;$i++){
+		if($::Debug){print "System flgon $::TARGET".$::statprop[$i]."\n";}
+		$buf=$::tak->act("System flgon $::TARGET".$::statprop[$i]);
+		if($::Debug){print "$buf\n";}
+	}
+	for($i=0;$i<@::beamprop;$i++){
+		if($::Debug){print "System flgon $::TARGET".$::beamprop[$i]."\n";}
+		$buf=$::tak->act("System flgon $::TARGET".$::beamprop[$i]);
+		if($::Debug){print "$buf\n";}
+	}
+	unless($::idgapprop eq ''){
+		if($::Debug){print "System flgon $::TARGET".$::idgapprop."\n";}
+		$buf=$::tak->act("System flgon $::TARGET".$::idgapprop);
+		if($::Debug){print "$buf\n";}
+		unless($::TARGET=~/^$::IDGATEWAY.$/){
+#			$buf=$::tak->act("$::STARS_TINE_IOC flushdata");
+#			if($::Debug){print "$buf\n";}
+#			evthandler();
+		}
+	}
+	requestact("GetValue");
+}elsif(uc($::GET_COMMAND)=~/^GETVALUE$/){
+	$::GET_COMMAND="GetValue";
+	requestact("GetValue");
+}elsif(uc($::GET_COMMAND)=~/^(GETVALUE){0,1}POLLING$/){
+	$::GET_COMMAND="GetValuePolling";
+	requestact("GetValuePolling");
+}else{
+	die "$::GET_COMMAND Invalid -getby Option. \n";
+	return;
+}
+
+if($::OS eq 'Windows'){
+	if($::GET_COMMAND eq ""){
+		$root->repeat($::Interval2,\&evthandler);
+	}else{
+		$root->repeat($::Interval,\&requestact);
+	}
+}else{
+	my $fh = $::tak->gethandle();
+	if($::GET_COMMAND eq ""){
+		$root->fileevt($fh, 'readable', [\&handler]);
+	}else{
+		$root->fileevt($fh, 'readable', [\&requstact]);
+	}
+}
+
+MainLoop;
+
+exit(1);
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: $::NodeName [-h] [-d] [StarsServer]\n";
+  print "      -h    Show this help.\n";
+  print "      -d    Run with debug mode.\n";
+  print "      -node MyNodeName               Define this GUI client nodename.\n";
+  print "                                         Default=\"$::NodeName\"\n\n";
+  print "      -target TINEGATEWAY|IDGATEWAY|RING  Define data source.\n\n";
+  print "           TINEGATEWAY (default) : use Stars-Tine-Gateway as data source.\n";
+  print "           IDGATEWAY             : use IDGateway as data source.\n";
+  print "           RING                  : use Ring as data source.\n\n";
+  print "      -getby EVENT|GETVALUE          Define data receiving Method.\n\n";
+  print "           EVENT (default)       : use Event Method.\n";
+  print "           GETVALUE              : use GetValue Method.\n\n";
+  print "      -starsport starsServersPort   Define Stars Server's port Default=6057.\n";
+  print "      -idgateway idgateway_Nodename         Define idgateway nodename.\n";
+  print "                                                Default=\"$::IDGATEWAY\"\n";
+  print "      -ring ring_Nodename                   Define ring nodename.\n";
+  print "                                                Default=\"$::RING\"\n";
+  print "      -timeout milliseconds                 Define interval time for checking timeout.\n";
+  print "                                                Default=\"$::TimeoutTime\"\n";
+  print "      -tinebrg Stars-Tine-Gateway_NodeName  Define Stars-Tine-Gateway nodename.\n";
+  print "                                                Default=\"$::STARS_TINE_IOC\"\n";
+  exit(0);
+}
+
+##################################
+## Request to Stars
+sub requestact{
+	my $arg=shift;
+	my $i;
+	my $buf;
+	my $cmd=$::GET_COMMAND;
+
+	if($arg ne ""){
+		$cmd=$arg;
+	}elsif($cmd eq ""){
+		return;
+	}
+
+	while(1){
+		my ($from, $to, $mess) = $::tak->Read();
+		if($from eq ''){last;}
+		handler($from,$to,$mess);
+	}
+
+	$::myPollingDate=[gettimeofday];
+	for($i=0;$i<@::beamprop;$i++){
+		$buf = $::tak->act("$::TARGET".$::beamprop[$i]." ".$cmd);
+		(undef,undef,$buf) = split(/\s+/, $buf, 3);
+		if(!($buf=~/Er:/)){
+			if($i eq 2){
+				$::val_evt{$::beamprop[$i]}=$buf+0;
+			}else{
+				$::val_evt{$::beamprop[$i]}=$buf+0;
+			}
+		}else{$::val_evt{$::beamprop[$i]}="$buf";}
+	}
+
+	unless($::idgapprop eq ''){
+		$buf = $::tak->act("$::TARGET".$::idgapprop." ".$cmd);
+		(undef,undef, $buf) = split(/\s+/, $buf, 3);
+		if(!($buf=~/Er:/)){
+			$buf=~s/[\[|\]\s]//g;
+			$buf=~s/:/\t/g;
+			my @datas=split(/\,/, $buf);
+			$::val_evt{$::idgapprop}=join("\n", @datas);
+			$::IDGAPPtr->configure(-state=>'normal');
+			$::IDGAPPtr->configure(-height=>scalar(@datas));
+			$::IDGAPPtr->delete('1.0','end');$::IDGAPPtr->insert('1.0',$::val_evt{$::idgapprop});
+			$::IDGAPPtr->configure(-state=>'disabled');
+		}else{
+			$::IDGAPPtr->configure(-state=>'normal');
+			$::IDGAPPtr->delete('1.0','end');$::IDGAPPtr->insert('1.0',"$buf");
+			$::IDGAPPtr->configure(-state=>'disabled');
+		}
+
+#		if($st=~/Ok:/){
+#			$buf=~s/[\[|\]\s]//g;
+#			my @datas=split(/\,/, $buf);
+#			$::val_evt{$::idgapprop}=join("\n", @datas);
+#		}else{$::val_evt{$::idgapprop}="$st $buf";}
+	}
+
+	$buf=$::tak->act("$::TARGET".$::statprop[0]." ".$cmd);
+	(undef,undef, $buf) = split(/\s+/, $buf, 3);
+	if(!($buf=~/Er:/)){
+		if($buf=~/^[0-4]$/){
+			$::val_evt{$::statprop[0]}=$::BEAMMOD_DISPMSG{$buf};
+		}else{
+			$::val_evt{$::statprop[0]}="$buf ??????";
+		}
+	}else{$::val_evt{$::statprop[0]}="$buf";}
+
+	$buf=$::tak->act("$::TARGET".$::statprop[1]." ".$cmd);
+	(undef,undef, $buf) = split(/\s+/, $buf, 3);
+	if(!($buf=~/Er:/)){
+		$::val_evt{$::statprop[1]}=$buf;
+	}else{$::val_evt{$::statprop[1]}="$buf";}
+	
+	$buf=$::tak->act("$::TARGET".$::timeprop." ".$cmd);
+	(undef,undef, $buf) = split(/\s+/, $buf, 4);
+	if(!($buf=~/Er:/)){
+		my($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst)=localtime($buf);
+		$::TimeStr=sprintf("updated %04d-%02d-%02d %02d:%02d:%02d",$year+1900,$mon+1,$mday,$hour,$min,$sec); 
+	}else{$::TimeStr="$buf";}
+}
+
+##################################
+## Receive from Stars
+# Command handler from Stars server ------------------------
+sub evthandler{
+	while(1){
+		my ($from, $to, $mess) = $::tak->Read();
+		if($from eq ''){
+			if((tv_interval($::myPollingDate)*1000)>$::TimeoutTime){
+				requestact("GetValue");
+			}
+			last;
+		}
+		handler($from,$to,$mess);
+	}
+}
+
+##################################
+## Receive from Stars
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	if($from eq ""){
+		($from, $to, $mess) = $::tak->Read();
+		if($from eq ''){
+			if((tv_interval($::myPollingDate)*1000)>$::TimeoutTime){
+				requestact("GetValue");
+			}
+			return();
+		}
+	}
+
+	my $rt;
+	if($::Debug){print "STARS RCV: $from>$to $mess\n";}
+
+## Handle received messges ##
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess =~/^_ChangedValue (.*)$/){
+		$::myPollingDate=[gettimeofday];
+		my $buf=$1;
+		if($from=~/^$::TARGET($::statprop[0])$/){
+			if($buf=~/^[0-4]$/){
+				$::val_evt{$::statprop[0]}=$::BEAMMOD_DISPMSG{$buf};
+			}else{
+				$::val_evt{$::statprop[0]}="$buf ??????";
+			}
+		}elsif($from=~/^$::TARGET($::statprop[1])$/){
+				$::val_evt{$::statprop[1]}=$buf;
+		}elsif($from=~/^$::TARGET($::timeprop)$/){
+			my($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst)=localtime($buf);
+			$::TimeStr=sprintf("updated %04d-%02d-%02d %02d:%02d:%02d",$year+1900,$mon+1,$mday,$hour,$min,$sec); 
+		}elsif($::idgapprop and $from=~/^$::TARGET($::idgapprop)$/){
+			$buf=~s/[\[|\]\s]//g;
+			$buf=~s/:/\t/g;
+			my @datas=split(/\,/, $buf);
+			$::val_evt{$::idgapprop}=join("\n", @datas);
+			$::IDGAPPtr->configure(-state=>'normal');
+			$::IDGAPPtr->configure(-height=>scalar(@datas));
+			$::IDGAPPtr->delete('1.0','end');$::IDGAPPtr->insert('1.0',$::val_evt{$::idgapprop});
+			$::IDGAPPtr->configure(-state=>'disabled');
+		}elsif($from=~/^$::TARGET(\S+)$/ and defined($::beamprop{$1})){
+			$::val_evt{$1}=$buf+0;
+		}
+		return;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){print "STARS SND: $to>$from \@$mess Er: $::Error\n";}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){print "STARS SND: $to>$from \@$mess $rt\n";}
+	}
+	return;
+}

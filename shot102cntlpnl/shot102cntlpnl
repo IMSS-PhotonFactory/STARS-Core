@@ -1,0 +1,612 @@
+#! /usr/bin/perl
+#################################################################
+# Control panel for SHOT102 
+# shot102 STARS client
+# $Revision: 1.1 $';
+# $Date: 2010/01/19 01:55:15 $;
+# 2010-06-18 Yasuko Nagatani
+# Update	yyyy-mm-dd	Description
+# Program Internal Parameters : Do not change.
+###########################################################
+use strict;
+use Getopt::Long;
+use Tk;
+use stars;
+#################################################################
+# npm2ccntlpnl
+#################################################################
+## ToDo: Set parameters here.
+$::NodeName   = 'shot102cntlpnl';     #Default node name.
+$::Server     = 'localhost';          #Default stars server.
+$::OS         = 'Windows';            #Windows or other
+$::shot102      = 'shot102';               #I/O Client name of npm2c
+#################################################################
+$::Interval   = 200;                 #Interval time for handler.
+$::Debug      = ''; #This variable is used for debug mode.
+                    # You can use like..
+                    # if($::Debug){blha-blah-blah;}
+%::MNum = ();       # Motorname to motornumber
+@::BusyNum=(1,1);
+$::IsBusyStatus=0;
+$::SpdSelectFunction='';
+@::FunctionStatus=('1','1');
+$::SpeedWindowManager;
+$::IsConnected=0;
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'      => \$::Debug,
+'node=s' => \$::NodeName,
+'server=s' => \$::Server,
+'os=s' => \$::OS,
+'c=s'    => \$::shot102,
+'h'      => \&usage
+) or die "Bad switch.\n";
+
+if($_ = shift(@ARGV)){$::Server = $_;}
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+
+sub message_window {
+	my($f,$t)=@_;
+	$::mw->messageBox(-type=>'ok',-icon=>'warning',-title=>'Speed Selection has Chaneged',-message=>"Speed Selection has Changed to $t by other client. Check Before Running.");
+}
+
+sub message_windowstd {
+	my($title,$mesg)=@_;
+	$::mw->messageBox(-type=>'ok',-icon=>'warning',-title=>$title,-message=>"$mesg");
+}
+
+sub speed_window {
+	my $sub_win=$::SpeedWindowManager;
+	if(Exists($sub_win)){
+		if($::IsConnected and $::SelectShowSpeed){
+			my $lp;
+			my $row;
+			for($lp=0,$row=$lp+1; $lp<=1; $lp++,$row++){
+				$::UpdateSpeedAccTime[$lp]=$::SpeedAccTime[$lp];
+			}
+			$sub_win->deiconify;
+		}else{
+			$::SelectShowSpeed=0;
+			$sub_win->withdraw;
+		}
+	}elsif($::IsConnected and $::SelectShowSpeed){
+		my $mw=$::mw;
+		my $topx=$mw->rootx+10;
+		my $topy=$mw->rooty+10;
+		$sub_win=$::SpeedWindowManager = $mw->Toplevel();
+#		$sub_win->Message( -text => 'message'.$topx.$topy )->pack();
+        $sub_win->protocol( 'WM_DELETE_WINDOW', sub {$sub_win->withdraw;$::SelectShowSpeed=0} );
+		$sub_win->title("SpeedAccTime Setting Window");
+		$sub_win->geometry("+$topx+$topy");
+		#Layout
+		$sub_win->Label(-text=>'Name')->grid(-row=>0, -column=>1);
+		$sub_win->Label(-text=>'Present settings')->grid(-row=>0, -column=>2);
+		$sub_win->Label(-text=>'SpeedAccTime')->grid(-row=>0, -column=>4);
+		my $lp;
+		my $row;
+		for($lp=0,$row=$lp+1; $lp<=1; $lp++,$row++){
+			$sub_win->Label(-text=>"$lp:", -anchor=>'e')->grid(-row=>$row, -column=>0);
+			$sub_win->Label(-text=>"$::Name[$lp]")->grid(-row=>$row, -column=>1);
+			$sub_win->Label(-textvariable=>\$::SpeedAccTime[$lp],-width=>12, -anchor=>'e', -relief=>'ridge')
+		  	->grid(-row=>$row, -column=>2);
+			$sub_win->Label(-text=>'=>')->grid(-row=>$row, -column=>3);
+			$::UpdateSpeedAccTime[$lp]=$::SpeedAccTime[$lp];
+			$sub_win->Entry(-textvariable=>\$::UpdateSpeedAccTime[$lp],-width=>12, -justify=>'right')
+			 ->grid(-row=>$row, -column=>4);
+			eval("\$::GoSpeedAccTime[\$lp]=\$sub_win->Button(-text=>'Update', -width=>6, -state=>'disabled',
+		     -command=>sub{clicked_GoSpeedAccTime($lp);})");
+			$::GoSpeedAccTime[$lp]->grid(-row=>$row, -column=>5);
+			if($::IsBusyStatus){
+				$::GoSpeedAccTime[$lp]->configure(-state=>'disabled');
+			}else{
+				$::GoSpeedAccTime[$lp]->configure(-state=>'normal');
+			}
+		}
+	}else{
+		$::SelectShowSpeed=0;
+	}
+  return;
+}
+
+### Make Widgets ###
+my $mw;
+$mw=MainWindow->new;
+#$mw->title("shot102 Control Pannel");
+$mw->title("$::shot102 Control Pannel");
+$::mw=$mw;
+
+
+# menu creation 
+my $m = $mw->Menu( -type => 'menubar' );
+$mw->configure( -menu => $m );
+my $m3 = $m->cascade(-label => 'SelectSyncRun',  -under => 0, -tearoff => 0);
+my $m1 = $m->cascade(-label => 'ShowSpeedAccTime',  -under => 0, -tearoff => 0);
+my $m2 = $m->cascade(-label => 'EnableHoldOffInput',  -under => 0, -tearoff => 0);
+
+$::SelectShowSpeed=0;
+$m1->radiobutton(-label=>'Show',-value=>'1',-variable=>\$::SelectShowSpeed,-command=>\&speed_window);
+$m1->radiobutton(-label=>'Hide',-value=>'0',-variable=>\$::SelectShowSpeed,-command=>\&speed_window);
+
+$::SelectEnableHoldonoff='0';
+$m2->radiobutton(-label=>'Enabled' ,-value=>'1',-variable=>\$::SelectEnableHoldonoff,-command => \&select_EnableHoldonoff);
+$m2->radiobutton(-label=>'Disabled',-value=>'0',-variable=>\$::SelectEnableHoldonoff,-command => \&select_EnableHoldonoff);
+
+$::SyncRunMode=0;
+$m3->radiobutton(-label=>'Enabled' ,-value=>'1',-variable=>\$::SyncRunMode,-command => \&select_SyncRunMode);
+$m3->radiobutton(-label=>'Disabled',-value=>'0',-variable=>\$::SyncRunMode,-command => \&select_SyncRunMode);
+
+$mw->Label(-text=>'Name')->grid(-row=>0, -column=>1);
+$mw->Label(-text=>'Status')->grid(-row=>0, -column=>2);
+$mw->Label(-text=>'Present')->grid(-row=>0, -column=>3);
+$mw->Label(-text=>'Absolute')->grid(-row=>0, -column=>5, -columnspan=>2);
+$mw->Label(-text=>'  ')->grid(-row=>0, -column=>7);
+$mw->Label(-text=>'Relative')->grid(-row=>0, -column=>8, -columnspan=>3);
+#$mw->Button(-text=>'Standby', -command=>\&clicked_Standby,-width=>10  )->grid(-row=>0, -column=>11);
+$mw->Label(-text=>'Ls Status')->grid(-row=>0, -column=>14, -columnspan=>3);
+$mw->Label(-text=>'Hold Off')->grid(-row=>0, -column=>18);
+
+#$mw->Label(-textvariable=>\$::RLvalue, -relief=>'ridge', -width=>8)->grid(-row=>0, -column=>11);
+
+#$mw->Button(-text=>'Rem/Loc', -command=>\&clicked_RL)
+#         ->grid(-row=>0, -column=>12);
+
+#
+#Sync Button
+#
+eval("\$::GoSync=\$mw->Button(-text=>'Go', -width=>6, -state=>'disabled',-command=>sub{clicked_GoSync();})");
+$::GoSync->grid(-row=>1, -column=>6,-rowspan=>2,  -sticky => 'ns');
+eval("\$::GoCcwSync=\$mw->Button(-text=>'CCW(-)', -width=>6, -state=>'disabled', -command=>sub{clicked_GoCcwSync();})");
+$::GoCcwSync->grid(-row=>1, -column=>8,-rowspan=>2,  -sticky => 'ns');
+eval("\$::GoCwSync=\$mw->Button(-text=>'CW(+)', -width=>6, -state=>'disabled', -command=>sub{clicked_GoCwSync();})");
+$::GoCwSync->grid(-row=>1, -column=>10,-rowspan=>2,  -sticky => 'ns');
+eval("\$::StopSync=\$mw->Button(-text=>'Stop', -width=>6, -state=>'normal', -command=>sub{clicked_StopSync();})");
+$::StopSync->grid(-row=>1, -column=>11,-rowspan=>2,-columnspan=>2,  -sticky => 'nsew');
+
+
+my $lp;
+my $row;
+for($lp=0,$row=$lp+1; $lp<=1; $lp++,$row++){
+	$mw->Label(-text=>"$lp:", -anchor=>'e')->grid(-row=>$row, -column=>0);
+	$::Name[$lp]="Motor $lp";
+	$mw->Label(-textvariable=>\$::Name[$lp])->grid(-row=>$row, -column=>1);
+
+	$::Status[$lp]=$mw->Label(-text=>'Down');
+	$::Status[$lp]->grid(-row=>$row, -column=>2);
+
+	$::Value[$lp]=$lp;
+	$mw->Label(-textvariable=>\$::Value[$lp],-width=>12, -anchor=>'e', -relief=>'ridge')
+	  ->grid(-row=>$row, -column=>3);
+
+	$mw->Label(-text=>'=>')->grid(-row=>$row, -column=>4);
+
+	$::Destination[$lp]='???';
+	$mw->Entry(-textvariable=>\$::Destination[$lp],-width=>12, -justify=>'right')
+	  ->grid(-row=>$row, -column=>5);
+
+	eval("\$::Go[\$lp]=\$mw->Button(-text=>'Go', -width=>6, -state=>'disabled',
+	     -command=>sub{clicked_Go($lp);})");
+	$::Go[$lp]->grid(-row=>$row, -column=>6);
+
+	eval("\$::GoCcw[\$lp]=\$mw->Button(-text=>'CCW(-)', -width=>6, -state=>'disabled',
+	     -command=>sub{clicked_GoCcw($lp);})");
+	$::GoCcw[$lp]->grid(-row=>$row, -column=>8);
+
+	$::Step[$lp]=0;
+	$mw->Entry(-textvariable=>\$::Step[$lp], -width=>12, -justify=>'right')
+	   ->grid(-row=>$row, -column=>9);
+
+	eval("\$::GoCw[\$lp]=\$mw->Button(-text=>'CW(+)', -width=>6, -state=>'disabled',
+	     -command=>sub{clicked_GoCw($lp);})");
+	$::GoCw[$lp]->grid(-row=>$row, -column=>10);
+
+	eval("\$::Stop[\$lp]=\$mw->Button(-text=>'Stop', -width=>10, -command=>sub{clicked_Stop($lp);})");
+	$::Stop[$lp]->grid(-row=>$row, -column=>11, -columnspan=>2);
+
+#	$mw->Label(-text=>' ')->grid(-row=>$row, -column=>13);
+#	$::LsHp[$lp]=$mw->Button(-text=>'HP', -width=>3, -state=>'disabled',-relief=>'ridge',-disabledforeground=>'black');
+#	$::LsHp[$lp]->grid(-row=>$row, -column=>14);
+	$::LsCcw[$lp]=$mw->Button(-text=>'Ccw', -width=>3, -state=>'disabled',-relief=>'ridge',-disabledforeground=>'black');
+	$::LsCcw[$lp]->grid(-row=>$row, -column=>15);
+	$::LsCw[$lp]=$mw->Button(-text=>'Cw', -width=>3, -state=>'disabled',-relief=>'ridge',-disabledforeground=>'black');
+	$::LsCw[$lp]->grid(-row=>$row, -column=>16);
+
+#	$mw->Label(-text=>' ')->grid(-row=>$row, -column=>17);
+
+	eval("\$::HldOff[\$lp]=\$mw->Checkbutton(-text=>'',-command=>sub{clicked_Holdoff($lp);})");
+	$::HldOff[$lp]->configure(-variable=>\$::SelectHoldOff[$lp], -state=>'disabled');
+	$::HldOff[$lp]->grid(-row=>$row, -column=>18);
+}
+
+select_EnableHoldonoff();
+
+$::BufInterval=125;
+if($::OS eq 'Windows'){
+	$mw->repeat($::Interval,\&handler);
+}else{
+	my $fh = $::tak->gethandle();
+	$mw->fileevent($fh, 'readable', [\&handler]);
+}
+
+$::RLvalue='Remote';
+$::tak->Send("GetMotorList", $::shot102);
+
+MainLoop;
+
+exit(1);
+
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: npm2ccntlpnl [-h] [-d] [-c ControllerName] [-node MyNodeName] [StarsServer]\n";
+  print "       -h   Show this help.\n";
+  print "       -d   Run with debug mode.\n";
+  print "       -c ControllerName   Define npm2c terminal name, which is controlled\n";
+  print "            by this GUI client. Default=\"npm2c04\"\n";
+  exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my ($from, $to, $mess) = @_;
+	while(1){
+		($from, $to, $mess) = $::tak->Read(0.001);
+		if($from eq ''){
+			if(($::BusyNum[0]+$::BusyNum[1]) eq 0){
+				if($::BufInterval <= 0){
+#					$::tak->Send("GetSpeedSelect", $::shot102);
+					$::BufInterval=125;
+				}else{
+					$::BufInterval=$::BufInterval-1;
+				}
+			}
+			return();
+		}
+		subhandler($from,$to,$mess);
+#		if($mess=~/ChangedValue/){return();}
+	}
+}
+sub subhandler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+## Please substitute return value of your own function into "$rt".
+## Or, if "error", please substitute ''.
+##  $::Error is used for error message.
+
+	my $rt;
+	my ($from, $to, $mess) = @_;
+	if($::Debug){
+		print "STARS RCV: $from>$to $mess\n";
+	}
+
+## Motor names and Motor numbers.
+	my $mn=2;
+	my $mname=$from;
+	$mname =~ s/$::shot102\.//;
+
+	if(defined($::MNum{$mname})){
+		$mn=$::MNum{$mname};
+	}else{
+		$mn=-1;
+	}
+	if($::Debug){print "Motor:$mn\n";}
+
+## Handle received messges ##
+	if($mess eq 'hello'){
+		$rt="nice to meet you.";
+	}elsif($mess eq 'help'){
+		$rt="help hello";
+	}elsif(($from eq $::shot102) and ($mess =~ /^_Connected$/)){
+		$::tak->Send("GetMotorList", $::shot102);
+		return;
+	}elsif(($from eq $::shot102) and ($mess =~ /^_Disconnected$/)){
+		$::IsConnected=0;
+		for($lp=0;$lp<=1;$lp++){
+			$::Status[$lp]->configure(-text=>'Down', -foreground=>'red');
+		}
+		speed_window();
+		return;
+	}elsif(($from eq $::shot102) and ($mess =~ s/^\@Standby //)){
+		if($mess=~/Ok/){
+			if($::SyncFunction eq 'GoSync'){
+				for($lp=0;$lp<=1;$lp++){
+					clicked_Go($lp);
+				}
+				$::tak->Send("SyncRun", $::shot102);
+			}elsif($::SyncFunction eq 'GoCwSync'){
+				for($lp=0;$lp<=1;$lp++){
+					clicked_GoCw($lp);
+				}
+				$::tak->Send("SyncRun", $::shot102);
+			}elsif($::SyncFunction eq 'GoCcwSync'){
+				for($lp=0;$lp<=1;$lp++){
+					clicked_GoCcw($lp);
+				}
+				$::tak->Send("SyncRun", $::shot102);
+			}else{
+			}
+		}
+		$::SyncFunction="";
+	}elsif(($from eq $::shot102) and ($mess =~ s/^\@GetMotorList //)){
+		$::IsConnected=1;
+		my @mlist=split(/\s+/, $mess);
+		my $lp;
+		for($lp=0;$lp<=1;$lp++){
+			$::Name[$lp]=$mlist[$lp];
+			$::MNum{$mlist[$lp]}=$lp;
+		}
+#		(undef,undef,$::SelectSpeed2)=split(/ /,$::tak->act("$::shot102 GetSpeedSelect"));
+#		$::SelectSpeed=$::SelectSpeed2;
+		for($lp=0;$lp<=1;$lp++){
+			$::tak->Send("$::shot102.$mlist[$lp] GetLimitStatus");
+			$::tak->Send("$::shot102.$mlist[$lp] GetSpeedAccTime");
+		}
+		$::tak->act("System flgon $::shot102");
+		for($lp=0;$lp<=1;$lp++){
+			$::tak->Send("System flgon $::shot102.$mlist[$lp]");
+		}
+		$::tak->Send("$::shot102 flushdatatome");
+		return;
+	}elsif(($mess =~ /^\@SetValue(REL)? /) and ($mess =~ /Er:\s*(.*)/)){
+		message_windowstd("Move error",$1);
+		return;
+#	}elsif($mess =~ s/^_ChangedFunctionStatus //){
+#		rcvd_ChangedFunctionStatus($mn,$mess);
+#		return;
+	}elsif($mess =~ s/^_ChangedIsLimit //){
+		$::tak->Send("$from GetLimitStatus");
+		return;
+	}elsif(($mn eq -1) and $mess =~ s/^\@GetSpeedAccTime (\d+) //){
+		rcvd_ChangedSpeedAccTime($mess, $1);
+		return;
+	}elsif($mess =~ s/^\@GetSpeedAccTime //){
+		rcvd_ChangedSpeedAccTime($mess, $mn);
+		return;
+	}elsif(($mn eq -1) and $mess =~ s/^\@SetSpeedAccTime (\d+) //){
+		$::tak->Send("$::shot102 GetSpeedAccTime $1");
+		return;
+	}elsif($mess =~ s/^\@SetSpeedAccTime //){
+		$::tak->Send("$::shot102 GetSpeedAccTime $mn");
+		return;
+	}elsif($mess =~ s/^\@GetLimitStatus //){
+		rcvd_ChangedIsLimit($mess, $mn);
+		return;
+	}elsif($mess =~ s/^_ChangedValue //){
+		$::Value[$mn]=$mess;
+		if($::Destination[$mn] eq '???'){$::Destination[$mn]=$mess;}
+		return;
+	}elsif($mess =~ s/^_ChangedIsBusy //){
+		rcvd_ChangedIsBusy($mess, $mn);
+		return;
+#	}elsif($mess =~ /^\@GetSpeedSelect\s([H|M|L])/){
+#		if($::SelectSpeed2 eq $1){
+#			$::SelectSpeed=$::SelectSpeed2;
+#		}
+#		if($::SelectSpeed ne $1){
+#			$::SpdSelectFunction='';
+#			$_=$::SelectSpeed;
+#			$::SelectSpeed=$1;
+#			$::SelectSpeed2=$1;
+#			message_window($_,$1);
+#		}elsif($::SpdSelectFunction ne ''){
+#			$::tak->Send($::SpdSelectFunction);
+#			$::SpdSelectFunction='';
+#		}
+#		return;
+#	}elsif($mess =~ /^\@Speed[High|Middle|Low]/){
+#		$::SelectSpeed=$::SelectSpeed2;
+#		return;
+	}elsif($mess =~ /^[_@]/){
+		return;
+	}else{
+		$::Error = "Bad command or parameter.";
+		$rt = '';
+	}
+
+## Response ##
+	if($rt eq ''){
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess Er: $::Error\n";
+		}
+	}else{
+		$::tak->Send("$to>$from \@$mess $rt"); 
+		if($::Debug){
+			print "STARS SND: $to>$from \@$mess $rt\n";
+		}
+	}
+}
+
+sub rcvd_ChangedIsBusy{
+	my $f=shift;
+	my $mn=shift;
+	$::IsBusyStatus=$f;
+	if($::Debug){
+		print "Motor:$mn Busy:$f\n";
+	}
+	if($f){
+		$::Status[$mn]->configure(-text=>'Run', -foreground=>'red');
+		$::Go[$mn]->configure(-state=>'disabled');
+		$::GoCw[$mn]->configure(-state=>'disabled');
+		$::GoCcw[$mn]->configure(-state=>'disabled');
+		$::HldOff[$mn]->configure(-state=>'disabled');
+		$::BufInterval=10000;
+		$::BusyNum[$mn]=1;
+		if(Exists($::SpeedWindowManager)){
+			$::GoSpeedAccTime[$mn]->configure(-state=>'disabled');
+		}
+		$::GoSync->configure(-state=>'disabled');
+		$::GoCwSync->configure(-state=>'disabled');
+		$::GoCcwSync->configure(-state=>'disabled');
+	}else{
+		if($::RLvalue eq 'Remote'){
+			$::Go[$mn]->configure(-state=>'normal');
+			$::GoCw[$mn]->configure(-state=>'normal');
+			$::GoCcw[$mn]->configure(-state=>'normal');
+			$::HldOff[$mn]->configure(-state=>'normal');
+			$::GoSync->configure(-state=>'normal');
+			$::GoCwSync->configure(-state=>'normal');
+			$::GoCcwSync->configure(-state=>'normal');
+		}
+		select_EnableHoldonoff();
+		if(Exists($::SpeedWindowManager)){
+			$::GoSpeedAccTime[$mn]->configure(-state=>'normal');
+		}
+		$::BusyNum[$mn]=0;
+		if(($::BusyNum[0]+$::BusyNum[1]) eq 0){
+			$::BufInterval=125;
+		}
+		$::Status[$mn]->configure(-text=>'Stop', -foreground=>'black');
+	}
+}
+
+sub clicked_GoSync{
+	$::tak->Send("$::shot102 Standby");
+	$::SyncFunction="GoSync";
+}
+sub clicked_GoCwSync{
+	$::tak->Send("$::shot102 Standby");
+	$::SyncFunction="GoCwSync";
+}
+sub clicked_GoCcwSync{
+	$::tak->Send("$::shot102 Standby");
+	$::SyncFunction="GoCcwSync";
+}
+
+sub clicked_Go{
+	my $mn=shift;
+	$::SpdSelectFunction="$::shot102 SetValue $mn $::Destination[$mn]";
+	$::tak->Send($::SpdSelectFunction);
+#	$::tak->Send("GetSpeedSelect", $::shot102);
+
+}
+
+sub clicked_GoCw{
+	my $mn=shift;
+	$::SpdSelectFunction="$::shot102 SetValueREL $mn $::Step[$mn]";
+	$::tak->Send($::SpdSelectFunction);
+#	$::tak->Send("GetSpeedSelect", $::shot102);
+}
+
+sub clicked_GoCcw{
+	my $mn=shift;
+	my $step=$::Step[$mn] * (-1);
+	$::SpdSelectFunction="$::shot102 SetValueREL $mn $step";
+	$::tak->Send($::SpdSelectFunction);
+#	$::tak->Send("GetSpeedSelect", $::shot102);
+}
+
+sub clicked_Holdoff{
+	my $mn=shift;
+	if($::SelectHoldOff[$mn] eq 1){$::tak->Send("$::shot102 SetHold $mn 0");
+	}else{$::tak->Send("$::shot102 SetHold $mn 1");}
+}
+
+sub clicked_StopSync{
+	$::tak->Send("$::shot102 Stop");
+}
+sub clicked_Stop{
+	my $mn=shift;
+	$::tak->Send("$::shot102 Stop $mn");
+}
+
+sub clicked_GoSpeedAccTime{
+	my $mn=shift;
+	my $value=$::UpdateSpeedAccTime[$mn];
+	$::tak->Send("$::shot102 SetSpeedAccTime $mn $value");
+}
+
+sub rcvd_ChangedFunctionStatus{
+	my($lp,$value)=@_;
+	$::FunctionStatus[$lp]=$value;
+	if($::Debug){print "FunctionStatus#$lp#$_#\n";}
+	~/^([^,]+),([^,]+)([^,]+)([^,]+)([^,]+)$/;
+	
+	if($1){$::HldOff[$lp]->select();
+	}else{$::HldOff[$lp]->deselect();}
+
+	if($2){$::LsHp[$lp]->configure(-background=>'red');
+	}else{$::LsHp[$lp]->configure(-background=>'gray');}
+	
+	if($3){$::LsCcw[$lp]->configure(-background=>'red');
+	}else{$::LsCcw[$lp]->configure(-background=>'gray');}
+	
+	if($4){$::LsCw[$lp]->configure(-background=>'red');
+	}else{$::LsCw[$lp]->configure(-background=>'gray');}
+}
+
+sub rcvd_ChangedIsLimit{
+	my($value,$lp)=@_;
+
+	if($value=~/[-\?]/){
+		$::LsCcw[$lp]->configure(-background=>'red');
+	}else{
+		$::LsCcw[$lp]->configure(-background=>'gray');
+	}
+	
+	if($value=~/[+\?]/){
+		$::LsCw[$lp]->configure(-background=>'red');
+	}else{
+		$::LsCw[$lp]->configure(-background=>'gray');
+	}
+}
+
+sub rcvd_ChangedSpeedAccTime{
+	my($value,$lp)=@_;
+	$::SpeedAccTime[$lp]=$value;
+}
+
+sub select_Speed{
+	if(($::BusyNum[0]+$::BusyNum[1]) ne 0){$::SelectSpeed2=$::SelectSpeed;return;}
+	if($::SelectSpeed2 eq 'H'){
+		$::tak->Send("$::shot102 SpeedHigh");
+	}elsif($::SelectSpeed2 eq 'M'){
+		$::tak->Send("$::shot102 SpeedMiddle");
+	}else{
+		$::tak->Send("$::shot102 SpeedLow");
+	}
+	$::tak->Sleep($::Interval/2);
+}
+
+sub select_EnableHoldonoff{
+		for($lp=0;$lp<2;$lp++){
+			if($::SelectEnableHoldonoff){$::HldOff[$lp]->configure(-state=>'normal');;
+			}else{$::HldOff[$lp]->configure(-state=>'disabled');;}
+		}
+}
+sub select_SyncRunMode{
+	for($lp=0;$lp<2;$lp++){
+		if($::SyncRunMode){
+			$::Go[$lp]->lower();
+			$::GoCw[$lp]->lower();
+			$::GoCcw[$lp]->lower();
+			$::Stop[$lp]->lower();
+			$::GoSync->raise();
+			$::GoCcwSync->raise();
+			$::GoCwSync->raise();
+			$::StopSync->raise();
+		}else{
+			$::Go[$lp]->raise();
+			$::GoCw[$lp]->raise();
+			$::GoCcw[$lp]->raise();
+			$::Stop[$lp]->raise();
+			$::GoSync->lower();
+			$::GoCcwSync->lower();
+			$::GoCwSync->lower();
+			$::StopSync->lower();
+		}
+	}
+}

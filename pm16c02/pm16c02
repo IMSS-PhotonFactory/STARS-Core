@@ -1,0 +1,2574 @@
+#! /usr/bin/perl
+#################################################################
+# pm16c02 STARS client
+# 2004-03-25 Takashi Kosuge
+#----------------------------------------------------------------
+# 2012-06-14 Add limitstatusenable optional function by naga
+# 2012-06-21 Add motorautoholdoffenable optional function by naga
+#----------------------------------------------------------------
+# CVS $Date: 2012-06-21 06:46:07 $ $Revision: 1.2 $
+#################################################################
+use strict;
+use Getopt::Long;
+use stars;
+use Time::HiRes qw(gettimeofday tv_interval);
+#################################################################
+## ToDo: Set parameters here.
+$::Server     = 'localhost';        #Default stars server.
+$::Debug      = '';
+#$::Elaps      = [gettimeofday];
+#$::PM16C_RAW_ENABLE = 0;
+$::PM16C_LIMITSTATUS_ENABLE = 0;
+$::PM16C_AUTOHOLDSWITCH_ENABLE = 0;
+$::PM16C_AUTOHOLDSWITCH_ENABLE_LIST = "";
+@::PM16C_AutoHoldSwitchEnable = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+#################################################################
+use constant WAIT_MEMWRITE  =>   40;   # Wait for  Write to memories.
+use constant WAIT_HOLD_ON   =>  100;   # Motor hold on
+use constant WAIT_HOLD_OFF  =>  500;   # Motor hold off
+use constant WAIT_SELECT    =>   40;   # Ctl_Select command
+use constant INTERVAL_STOP  => 2000;
+use constant INTERVAL_RUN   =>  100;
+use constant REFRESH_RUN    =>  500;
+
+## ToDo: You can set option switchs. See help 'Getopt::Long'.
+GetOptions(
+'d'        => \$::Debug,
+'h'        => \&usage,
+'limitstatusenable'=>\$::PM16C_LIMITSTATUS_ENABLE,
+'autoholdoffmotorallowlist=s'=>\$::PM16C_AUTOHOLDSWITCH_ENABLE_LIST,
+) or die "Bad switch.\n";
+
+$|=1;
+
+if($_ = shift(@ARGV)){$::NodeName = $_;}
+
+require 'config.pl';
+
+################################################################
+# Interface library
+# Prease include your own interface library.
+# "device_read", "device_write" and "device_init" must be included
+# in the library.
+require 'nportsvr.pl';    #For nport server
+################################################################
+
+@::Flg_LimitStatus = ();
+$::Flg_remote = '';
+$::Flg_Busy_A = '';
+$::Flg_Busy_B = '';
+$::Interval_Time = INTERVAL_STOP;
+$::Buf_Interval = int(REFRESH_RUN/INTERVAL_RUN);
+my $i;
+for($i=0; $i<16; $i++){
+	$::MotorName{$::MotorName[$i]}=$i;
+#	$::Flg_LimitStatus[$i] = 7;
+	$::Flg_LimitStatus[$i] = 0;
+}
+
+#### SET HOLDONOFF
+if(uc($::PM16C_AUTOHOLDSWITCH_ENABLE_LIST)=~/^ALL$/){
+	if($::Debug){print pm16c_getnow() ."Allow auto hold off to all motors.\n";}
+	for($i=0; $i<16; $i++){
+		$::PM16C_AutoHoldSwitchEnable[$i]=1;
+	}	
+	$::PM16C_AUTOHOLDSWITCH_ENABLE=1;
+}elsif($::PM16C_AUTOHOLDSWITCH_ENABLE_LIST=~/^SYNC$/){
+	for($i=0; $i<16; $i++){
+		$::PM16C_AutoHoldSwitchEnable[$i]=0;
+	}	
+	$::PM16C_AUTOHOLDSWITCH_ENABLE=1;
+}elsif($::PM16C_AUTOHOLDSWITCH_ENABLE_LIST ne ""){
+	for($i=0; $i<16; $i++){
+		$::PM16C_AutoHoldSwitchEnable[$i]=0;
+	}	
+	foreach $i (split(/\,/, $::PM16C_AUTOHOLDSWITCH_ENABLE_LIST)){
+		unless($i=~/^\s*(\d+)\s*$/){
+			die "Invalid motor '$i' on auto hold off motor list.\n";
+		}
+		$i=$i+0;
+		if($i<16){
+			if($::Debug){print pm16c_getnow() ."Allow auto hold off to motor $i.\n";}
+			$::PM16C_AutoHoldSwitchEnable[$i]=1;
+		}else{
+			die "Invalid motor '$i' on auto hold off motor list.\n";
+		}
+	}
+	$::PM16C_AUTOHOLDSWITCH_ENABLE=1;
+}
+
+#speed data
+@::speed=(5,10,25,50,75,100,150,200,250,300
+,  350,  400,  450,  500,  550,  600,  650,  700,  750,  800
+,  900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800
+, 1900, 2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800
+, 2900, 3000, 3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800
+, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4600, 4700, 4800
+, 4900, 5000, 5100, 5200, 5300, 5400, 5500, 5600, 5700, 5800
+, 5900, 6000, 6100, 6200, 6300, 6400, 6500, 6600, 6700, 6800
+, 6900, 7000, 7100, 7200, 7300, 7400, 7500, 7600, 7700, 7800
+, 7900, 8000, 8200, 8400, 8600, 8800, 9000, 9200, 9400, 9600
+, 9800,10000,10200,10400,10600,10800,11010,11210,11410,11600
+,11800,11990,12200,12400,12600,12790,12990,13200,13400,13620
+,13810,14000,14200,14400,14620,14830,15010,15200,15390,15580
+,15770,15970,16180,16400,16610,16830,17060,17240,17420,17600
+,17800,17990,18180,18380,18660,18940,19230,19530,19840,20160
+,20500,20830,21190,12550,21930,22320,22730,23150,23590,24040
+,24510,25000,25510,26040,26600,27170,27620,28090,28570,29070
+,29590,30120,30680,31250,31850,32470,33110,33780,34480,35210
+,35970,36500,37040,37600,38170,38760,39370,40000);
+
+#Acceleration rate
+@::rate=(1000,800,600,500,400,300,200,150,125,100,75,50,30,20,15,10,7.5,5,3);
+
+%::helpcntrl=();
+set_help_list();
+
+## Init device
+device_init();
+while(mydevread() ne ''){} #Clear Buffer
+
+## Open Stars server. $::tak is a Stars object.
+$::tak = stars->new($::NodeName, $::Server)
+	or die "Could not connect Stars server";
+
+#Add ReadError Backlash Added 05/10/20 Backlash
+@::CancelBacklash = ();
+$_=IsFILECancelBacklash();
+if($_ eq ''){
+	die "Could not Rom Version.";
+}elsif($_ eq 1){
+	open(BUFREG, "./$::ReadCancelBacklash") or die "Read Backlash File Error.\n";
+	for($i=0; $i<16;$i++){
+		$_ = <BUFREG>;
+		chomp;s/\r//;
+		unless(~/[+|-]/ or ~/-*%d+/ ) {
+			die "Read Backlash Error"
+		}
+		$::CancelBacklash[$i] = $_;
+	}
+}
+
+$::tak->addcallback(\&handler);
+
+if($::Debug){print pm16c_getnow() ."Started with debug mode.\n";}
+pm16c_flushdata();
+if($::Flg_Busy_A ne '' or $::Flg_Busy_B ne ''){
+	if($::Interval_Time eq INTERVAL_STOP){
+		$::Interval_Time = INTERVAL_RUN ;
+	}
+}
+stars->Mainloop(\&interval, \$::Interval_Time);
+exit(1);
+
+########## Added at 2012.6 #######
+# Get currentdata for log format
+sub pm16c_getnow{
+	my ($sec, $mcsec) = gettimeofday;
+#	my @tt = localtime($sec);
+#return(sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d",
+#$tt[5]+1900,$tt[4]+1,$tt[3],$tt[2],$tt[1],$tt[0],int($mcsec/1000)));
+
+	my ($s,$mn,$h,$d,$m,$y,$wday,$yday,$isdst) = localtime($sec);
+	my $rt=sprintf("%04d/%02d/%02d %02d:%02d:%02d.%03d",$y+1900,$m+1,$d,$h,$mn,$s,int($mcsec/1000));
+	return("\[$rt\] ");
+}
+
+########## Added at 2012.6 #######
+# device_read with log format
+sub mydevread{
+	my $tmout=shift;
+	my $rt;
+	while(1){
+		if($::Debug){print pm16c_getnow();}
+		$rt=device_read($tmout);
+		unless(defined($rt)){die "Disconnected. $::NodeName session killed.\n";}
+		last;
+	}
+#	if($::Debug){print pm16c_getnow()."$rt\n";}
+	return($rt);
+}
+########## Added at 2012.6 #######
+sub mydevwrite{
+	my $cmd=shift;
+	if($::Debug){print pm16c_getnow();}
+	my $rt=device_write($cmd);
+#	if($::Debug){print pm16c_getnow()."$rt\n";}
+	return($rt);
+}
+########## Added at 2012.6 #######
+sub mystarssend{
+	my $cmd=shift;
+	my $termto = shift;
+	if($termto){
+		$::tak->Send($cmd,$termto);
+		if($::Debug){print pm16c_getnow()."STARS SND: $termto $cmd\n";}
+	}else{
+		$::tak->Send($cmd);
+		if($::Debug){print pm16c_getnow()."STARS SND: $cmd\n";}
+	}
+	return;
+}
+
+# Print usage. ---------------------------------------------
+sub usage{
+## Todo: Please modify help message for "-h" option.
+  print "Usage: pm16c02 [-h] [-d] [-limitstatusenable] [-autoholdoffmotorallowlist <motorlistvalue>] MyNodeName\n";
+  print " motorlistvalue: motornumber list with delimiter ',' (ex: 0,11,13)\n";
+  exit(0);
+}
+
+
+# Command handler from Stars server ------------------------
+sub handler{
+## ToDo: Please modify handler sub routine.
+##  (The handler sub routine will be called when client
+##  receives a message from a Stars server.)
+	my ($from, $to, $mess) = @_;
+	my $rt;
+	my $messhead;
+	my $mname;
+
+	if($::Debug){print pm16c_getnow()."STARS RCV: $from>$to $mess\n";}
+
+## Controller commands ##
+	if($to eq $::NodeName){
+		if($mess eq 'hello'){
+			$rt = '@hello nice to meet you.';
+
+		}elsif($mess eq 'help'){
+			$rt = get_help_list('Cntrl');
+
+		}elsif($mess =~ /^help\s+(\S+)/){
+			$rt = get_help_list('Cntrl', $1);
+
+##### DEVELOP CODE: NOT AUTHORIZED.
+		}elsif($::Debug and ($mess eq 'GetAutoHoldOffEnable')){
+			$rt = $::PM16C_AUTOHOLDSWITCH_ENABLE;
+
+		}elsif($mess eq 'GetAutoHoldOffMotorList'){
+			if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+				$rt = join(" ", @::PM16C_AutoHoldSwitchEnable);
+			}else{
+				$::Error="Auto hold off function is disabled.";
+			}
+		}elsif($mess eq 'GetMotorList'){
+			$rt = join(" ", @::MotorName);
+
+		}elsif($mess =~ /^GetMotorName\s+(\d+)/){
+			$rt = num2name($1);
+
+		}elsif($mess =~ /^GetMotorNumber\s+(\S+)/){
+			$rt = name2num($1);
+
+		}elsif($mess eq 'GetSpeedList'){
+			$rt = join(" ", @::speed);
+
+		}elsif($mess eq 'GetAccRateList'){
+			$rt = join(" ", @::rate);
+
+		}elsif($mess =~ /^GetFunctionStatus$/){
+			$rt = Ctl_GetFunctionStatus();
+
+		}elsif($mess =~ /^GetFunction$/){
+			$rt = Ctl_GetFunction();
+
+		}elsif($mess =~ /^SetFunction\s+(\d+)$/){
+			$rt = Ctl_SetFunction($1);
+
+		}elsif($mess eq 'Remote'){
+			$rt = Ctl_SetFunction(1);
+
+		}elsif($mess eq 'Local'){
+			$rt = Ctl_SetFunction(0);
+
+		}elsif($mess eq 'SpeedLow'){
+			$rt = Ctl_Speed(0);
+
+		}elsif($mess eq 'SpeedMiddle'){
+			$rt = Ctl_Speed(1);
+
+		}elsif($mess eq 'SpeedHigh'){
+			$rt = Ctl_Speed(2);
+
+		}elsif($mess =~ /^Select\s+([AB])\s+(\d+)$/){
+			$rt = Ctl_Select($1, $2);
+
+		}elsif($mess =~ /^GetSelected\s+([AB])$/){
+			$rt = Ctl_GetSelected($1);
+
+		}elsif($mess =~ /^GetSelected\s+(\d+)$/){
+			$rt = Motor_GetSelected($1);
+
+		}elsif($mess =~ /^GetValue\s+([AB])$/){
+			$rt = Ctl_GetValue($1);
+
+		}elsif($mess =~ /^GetValue\s+(\d+)$/){
+			$rt = Motor_GetValue($1);
+
+		}elsif($mess =~ /^SetValue\s+([AB])\s+(-*\d+)$/){
+			$rt = Ctl_SetValue($1, $2, 'ABS');
+
+		}elsif($mess =~ /^SetValue\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_SetValue($1, $2, 'ABS');
+
+		}elsif($mess =~ /^SetValueREL\s+([AB])\s+(-*\d+)$/){
+			$rt = Ctl_SetValue($1, $2, 'REL');
+
+		}elsif($mess =~ /^SetValueREL\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_SetValue($1, $2, 'REL');
+
+		}elsif($mess =~ /^SetHold\s+([AB])\s+(\d)$/){
+			$rt = Ctl_SetHold($1, $2);
+
+		}elsif($mess=~/^GetLimitStatus\s+([AB])$/) {
+			$rt=Ctl_getlimitstatus($1);
+
+		}elsif($mess=~/^GetLimitStatus\s+(\d+)$/) {
+			$rt=Motor_getlimitstatus($1);
+
+		}elsif($mess =~ /^GetStatus\s+([AB])$/){
+			$rt = Ctl_getstatus($1);
+
+		}elsif($mess =~ /^GetStatus\s+(\d+)$/){
+			$rt = Motor_getstatus($1);
+
+		}elsif($mess =~ /^IsBusy\s+([AB])$/){
+			$rt = Ctl_IsBusy($1);
+
+		}elsif($mess =~ /^IsBusy\s+(\d+)$/){
+			$rt = Motor_IsBusy($1);
+
+		}elsif($mess eq "GetCtlIsBusy"){
+			$rt = Ctl_CtlIsBusy();
+
+		}elsif($mess =~ /^Standby$/){
+			$rt = Ctl_Standby();
+
+		}elsif($mess =~ /^SyncRun$/){
+			$rt = Ctl_SyncRun();
+
+		}elsif($mess eq 'Stop'){
+			$rt = Ctl_Stop();
+
+		}elsif($mess =~ /^Stop\s+([AB])$/){
+			$rt = Ctl_Stop($1);
+
+		}elsif($mess =~ /^Stop\s+(\d+)$/){
+			$rt = Motor_Stop($1);
+
+		}elsif($mess eq 'StopEmergency'){
+			$rt = Ctl_Stop(undef,1);
+
+		}elsif($mess =~ /^StopEmergency\s+([AB])$/){
+			$rt = Ctl_Stop($1, 1);
+
+		}elsif($mess =~ /^StopEmergency\s+(\d+)$/){
+			$rt = Motor_Stop($1, 1);
+
+		}elsif($mess =~ /^Preset\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_Preset($1, $2);
+
+		}elsif($mess =~ /^Preset\s+(\S+)\s+(-*\d+)$/){
+			$rt = Motor_Preset(name2num($1), $2);
+
+		}elsif($mess =~ /^GetDigitalCwLs\s+(\d+)$/){
+			$rt = pm16c_getm3bytes($1, '3');
+
+		}elsif($mess =~ /^SetDigitalCwLs\s+(\d+)\s+(-*\d+)$/){
+			$rt = pm16c_setm3bytes($1, '3', $2);
+
+		}elsif($mess =~ /^GetDigitalCcwLs\s+(\d+)$/){
+			$rt = pm16c_getm3bytes($1, '6');
+
+		}elsif($mess =~ /^SetDigitalCcwLs\s+(\d+)\s+(-*\d+)$/){
+			$rt = pm16c_setm3bytes($1, '6', $2);
+
+		}elsif($mess =~ /^GetHighSpeed\s+(\d+)$/){
+			$rt = Motor_GetHspeed($1);
+		
+		}elsif($mess =~ /^SetHighSpeed\s+(\d+)\s+(-*\d+)$/){
+			$rt = pm16c_setspeedcommon($1, $2 ,'9');
+
+		}elsif($mess =~ /^GetMiddleSpeed\s+(\d+)$/){
+			$rt = Motor_GetMspeed($1);
+		
+		}elsif($mess =~ /^SetMiddleSpeed\s+(\d+)\s+(-*\d+)$/){
+			$rt = pm16c_setspeedcommon($1, $2, 'A');
+
+		}elsif($mess =~ /^GetLowSpeed\s+(\d+)$/){
+			$rt = Motor_GetLspeed($1);
+		
+		}elsif($mess =~ /^SetLowSpeed\s+(\d+)\s+(-*\d+)$/){
+			$rt = pm16c_setspeedcommon($1, $2, 'B');
+
+		}elsif($mess =~ /^GetAccRate\s+(\d+)$/){
+			$rt = Motor_GetAccRate($1);
+		
+		}elsif($mess =~ /^SetAccRate\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_SetAccRate($1, $2);
+
+		}elsif($mess =~ /^GetLimits\s+(\d+)$/){
+			$rt = Motor_GetLimits($1);
+		
+		}elsif($mess =~ /^SetLimits\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_SetLimits($1, $2);
+
+		}elsif($mess =~ /^GetJogPulse\s+(\d+)$/){
+			$rt = Motor_GetJogPulse($1);
+		
+		}elsif($mess =~ /^SetJogPulse\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_SetJogPulse($1, $2);
+
+		}elsif($mess =~ /^GetCancelBacklash\s+(\d+)$/){
+			$rt = Motor_GetCancelBacklash($1);
+
+		}elsif(IsFILECancelBacklash() and $mess =~ /^SetCancelBacklash\s+(\d+)\s+([-|+])$/){	#Added 05/10/20 ReadError Backlash
+			if($::Debug){print "Call Motor_SetCancelBacklash\($1, $2\)\n";}
+			$rt = Motor_SetCancelBacklash($1, $2);
+
+		}elsif($mess =~ /^SetCancelBacklash\s+(\d+)\s+(-*\d+)$/){
+			$rt = Motor_SetCancelBacklash($1, $2);
+
+		}elsif($mess eq 'flushdata'){
+			$rt = pm16c_flushdata();
+
+		}elsif($mess eq 'flushdatatome'){
+			$rt = pm16c_flushdata($from);
+
+		}elsif($mess =~ /^JogCw\s+([AB])$/){
+			$rt = Ctl_Scan($1, 8);
+
+		}elsif($mess =~ /^JogCw\s+(\d+)$/){
+			$rt = Motor_Scan($1, 8);
+
+		}elsif($mess =~ /^JogCcw\s+([AB])$/){
+			$rt = Ctl_Scan($1, 9);
+
+		}elsif($mess =~ /^JogCcw\s+(\d+)$/){
+			$rt = Motor_Scan($1 ,9);
+
+		}elsif($mess =~ /^ScanCw\s+([AB])$/){
+			$rt = Ctl_Scan($1, 0x0e);
+
+		}elsif($mess =~ /^ScanCw\s+(\d+)$/){
+			$rt = Motor_Scan($1, 0x0e);
+
+		}elsif($mess =~ /^ScanCcw\s+([AB])$/){
+			$rt = Ctl_Scan($1, 0x0f);
+
+		}elsif($mess =~ /^ScanCcw\s+(\d+)$/){
+			$rt = Motor_Scan($1, 0x0f);
+
+		}elsif($mess =~ /^ScanCwConst\s+([AB])$/){
+			$rt = Ctl_Scan($1, 0x0c);
+
+		}elsif($mess =~ /^ScanCwConst\s+(\d+)$/){
+			$rt = Motor_Scan($1, 0x0c);
+
+		}elsif($mess =~ /^ScanCcwConst\s+([AB])$/){
+			$rt = Ctl_Scan($1, 0x0d);
+
+		}elsif($mess =~ /^ScanCcwConst\s+(\d+)$/){
+			$rt = Motor_Scan($1, 0x0d);
+
+		}elsif($mess =~ /^ScanCwHome\s+([AB])$/){
+			$rt = Ctl_Scan($1, 0x1e);
+
+		}elsif($mess =~ /^ScanCwHome\s+(\d+)$/){
+			$rt = Motor_Scan($1, 0x1e);
+
+		}elsif($mess =~ /^ScanCcwHome\s+([AB])$/){
+			$rt = Ctl_Scan($1, 0x1f);
+
+		}elsif($mess =~ /^ScanCcwHome\s+(\d+)$/){
+			$rt = Motor_Scan($1, 0x1f);
+
+		}elsif($mess eq 'GetRomVersion'){
+			$rt = GetRomVersion();
+
+		}elsif($mess =~ /^[_@]/){
+			return;
+		}else{
+			mystarssend("\@$mess Er: Bad command or parameter", $from);
+#			if($::Debug){
+#				print pm16c_getnow() ."STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+#			}
+			return();
+		}
+
+## Motor commands ##
+	}elsif($mname = CheckMotorName($to)){
+		if($mess eq 'hello'){
+			$rt = '@hello nice to meet you.';
+
+		}elsif($mess eq 'help'){
+			$rt = get_help_list($mname);
+
+		}elsif($mess =~ /^help\s+(\S+)/){
+			$rt = get_help_list($mname, $1);
+
+		}elsif($mess eq 'GetSpeedList'){
+			$rt = join(" ", @::speed);
+
+		}elsif($mess eq 'GetAccRateList'){
+			$rt = join(" ", @::rate);
+
+		}elsif($mess eq 'GetStatus'){
+			$rt=Motor_getstatus(name2num($mname));
+		
+		}elsif($mess eq 'GetLimitStatus'){
+			$rt=Motor_getlimitstatus(name2num($mname));
+
+		}elsif($mess eq 'GetSelected'){
+			$rt = Motor_GetSelected(name2num($mname));
+
+		}elsif($mess eq 'GetValue'){
+			$rt = Motor_GetValue(name2num($mname));
+
+		}elsif($mess =~ /^SetValue\s+(-*\d+)$/){
+			$rt = Motor_SetValue(name2num($mname), $1, 'ABS');
+
+		}elsif($mess =~ /^SetValueREL\s+(-*\d+)$/){
+			$rt = Motor_SetValue(name2num($mname), $1, 'REL');
+
+		}elsif($mess eq 'IsBusy'){
+			$rt = Motor_IsBusy(name2num($mname));
+
+		}elsif($mess eq 'Stop'){
+			$rt = Motor_Stop(name2num($mname));
+
+		}elsif($mess eq 'StopEmergency'){
+			$rt = Motor_Stop(name2num($mname), 1);
+
+		}elsif($mess =~ /^Preset\s+(-*\d+)$/){
+			$rt = Motor_Preset(name2num($mname), $1);
+
+		}elsif($mess eq 'GetDigitalCwLs'){
+			$rt = pm16c_getm3bytes(name2num($mname), '3');
+
+		}elsif($mess =~ /^SetDigitalCwLs\s+(-*\d+)$/){
+			$rt = pm16c_setm3bytes(name2num($mname), '3', $1);
+
+		}elsif($mess eq 'GetDigitalCcwLs'){
+			$rt = pm16c_getm3bytes(name2num($mname), '6');
+
+		}elsif($mess =~ /^SetDigitalCcwLs\s+(-*\d+)$/){
+			$rt = pm16c_setm3bytes(name2num($mname), '6', $1);
+
+		}elsif($mess eq 'GetHighSpeed'){
+			$rt = Motor_GetHspeed(name2num($mname));
+		
+		}elsif($mess =~ /^SetHighSpeed\s+(-*\d+)$/){
+			$rt = pm16c_setspeedcommon(name2num($mname), $1 ,'9');
+
+		}elsif($mess eq 'GetMiddleSpeed'){
+			$rt = Motor_GetMspeed(name2num($mname));
+		
+		}elsif($mess =~ /^SetMiddleSpeed\s+(-*\d+)$/){
+			$rt = pm16c_setspeedcommon(name2num($mname), $1, 'A');
+
+		}elsif($mess eq 'GetLowSpeed'){
+			$rt = Motor_GetLspeed(name2num($mname));
+		
+		}elsif($mess =~ /^SetLowSpeed\s+(-*\d+)$/){
+			$rt = pm16c_setspeedcommon(name2num($mname), $1, 'B');
+
+		}elsif($mess eq 'GetAccRate'){
+			$rt = Motor_GetAccRate(name2num($mname));
+		
+		}elsif($mess =~ /^SetAccRate\s+(-*\d+)$/){
+			$rt = Motor_SetAccRate(name2num($mname), $1);
+
+		}elsif($mess eq 'GetLimits'){
+			$rt = Motor_GetLimits(name2num($mname));
+		
+		}elsif($mess =~ /^SetLimits\s+(-*\d+)$/){
+			$rt = Motor_SetLimits(name2num($mname), $1);
+
+		}elsif($mess eq 'GetJogPulse'){
+			$rt = Motor_GetJogPulse(name2num($mname));
+		
+		}elsif($mess =~ /^SetJogPulse\s+(-*\d+)$/){
+			$rt = Motor_SetJogPulse(name2num($mname), $1);
+
+		}elsif($mess eq 'GetCancelBacklash'){
+			$rt = Motor_GetCancelBacklash(name2num($mname));
+
+		}elsif(IsFILECancelBacklash() and $mess =~ /^SetCancelBacklash\s+([-|+])$/){	#Added 05/10/20 ReadError Backlash
+			if($::Debug){print "Call Motor_SetCancelBacklash\(name2num\($mname\), $2\)\n";}
+			$rt = Motor_SetCancelBacklash(name2num($mname), $2);
+
+		}elsif($mess =~ /^SetCancelBacklash\s+(-*\d+)$/){
+			$rt = Motor_SetCancelBacklash(name2num($mname), $1);
+
+#		}elsif($mess eq 'flushdata'){
+#			$rt = pm16c_flushdata();
+#
+#		}elsif($mess eq 'flushdatatome'){
+#			$rt = pm16c_flushdata($from);
+#
+		}elsif($mess eq 'JogCw'){
+			$rt = Motor_Scan(name2num($mname), 8);
+
+		}elsif($mess eq 'JogCcw'){
+			$rt = Motor_Scan(name2num($mname) ,9);
+
+		}elsif($mess eq 'ScanCw'){
+			$rt = Motor_Scan(name2num($mname), 0x0e);
+
+		}elsif($mess eq 'ScanCcw'){
+			$rt = Motor_Scan(name2num($mname), 0x0f);
+
+		}elsif($mess eq 'ScanCwConst'){
+			$rt = Motor_Scan(name2num($mname), 0x0c);
+
+		}elsif($mess eq 'ScanCcwConst'){
+			$rt = Motor_Scan(name2num($mname), 0x0d);
+
+		}elsif($mess eq 'ScanCwHome'){
+			$rt = Motor_Scan(name2num($mname), 0x1e);
+
+		}elsif($mess eq 'ScanCcwHome'){
+			$rt = Motor_Scan(name2num($mname), 0x1f);
+
+##### DEVELOP CODE: NOT AUTHORIZED.
+		}elsif($::Debug and ($mess =~ /^GetHold$/)){
+			$rt = Motor_GetHold(name2num($mname));
+##### DEVELOP CODE: NOT AUTHORIZED.
+		}elsif($::Debug and ($mess =~ /^SetHold\s+(\d)$/)){
+			$rt = Motor_SetHold(name2num($mname), $1);
+
+		}elsif($mess =~ /^[_@]/){
+			return;
+		}else{
+			mystarssend("\@$mess Er: Bad command or parameter", $from);
+#			if($::Debug){
+#				print pm16c_getnow(). "STARS SND: $to>$from \@$mess Er: Bad command or parameter\n";
+#			}
+			return();
+		}
+
+## Bad device name ##
+	}else{
+		mystarssend("\@$mess Er: $to is down.", $from);
+#		if($::Debug){
+#			print pm16c_getnow(). "STARS SND: $::NodeName>$from \@$mess Er: $to is down.\n";
+#		}
+		return();
+	}
+
+## Response ##
+	if($rt eq ''){
+		mystarssend("$to>$from \@$mess Er: $::Error");
+#		if($::Debug){
+#			print pm16c_getnow(). "STARS SND: $to>$from \@$mess Er: $::Error\n";
+#		}
+	}else{
+		mystarssend("$to>$from \@$mess $rt"); 
+#		if($::Debug){
+#			print pm16c_getnow(). "STARS SND: $to>$from \@$mess $rt\n";
+#		}
+	}
+}
+
+#===========check motor name=====================
+sub CheckMotorName{
+	my $mname = shift;
+	my $motors;
+	unless($mname =~ s/$::NodeName\.//){
+		return(undef);
+	}
+	$motors = join(" ", @::MotorName);
+	if($motors =~ /(^| )$mname( |$)/){
+		return($mname);
+	}
+	return(undef);
+}
+
+sub autoholdonoff{
+	my($ch,$flg,$mn,$syncflg)=(uc(shift),shift,shift,shift);
+	if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+		if(($mn eq '') || ($mn<0) || ($mn>15)){
+			$::Error="Bad motor number $mn.";
+			return('');
+		}
+		unless($ch=~/^[AB]$/){
+			$::Error="Bad channel $ch.";
+			return('');
+		}
+		if($syncflg){
+			my $st=Motor_GetLimits($mn);
+			if($st&64){
+				if($::Debug){
+					print pm16c_getnow() ."SYNC HOLD_FLG [1] WITH STATUS $st to channel $ch, motor $mn\n";
+				}
+				Ctl_SetHold($ch,1);
+			}else{
+				if($::Debug){
+					print pm16c_getnow() ."SYNC HOLD_FLG [0] WITH STATUS $st to channel $ch, motor $mn\n";
+				}
+				Ctl_SetHold($ch,0);
+			}
+		}elsif($::PM16C_AutoHoldSwitchEnable[$mn] eq 1){
+			if($::Debug){
+				print pm16c_getnow() . "SETFORCE HOLD_FLG [$flg] to channel $ch, motor $mn\n";
+			}
+			if(Ctl_SetHold($ch,$flg,1) eq ''){
+				return('');
+			}
+		}else{
+			if($::Debug){
+				print pm16c_getnow() . "HOLD_FLG unchanged, motor $mn\n";
+			}
+		}
+	}
+	return(1);
+}
+#============Interval============================
+sub interval{
+	my $lp;
+
+	if($::Interval_Time == INTERVAL_STOP){
+		Ctl_GetFunction();
+		$::Buf_Interval = int(REFRESH_RUN/INTERVAL_RUN);
+		return();
+	}
+
+	$::Buf_Interval --;
+
+	if($::Buf_Interval <= 0){
+		if($::PM16C_LIMITSTATUS_ENABLE){
+			Ctl_GetFunction();
+		}
+		if($::Flg_Busy_A ne ''){
+		mystarssend("$::NodeName.".num2name($::Flg_Busy_A).">System _ChangedValue "
+			.Ctl_GetValue('A'));
+		}
+		if($::Flg_Busy_B ne ''){
+		mystarssend("$::NodeName.".num2name($::Flg_Busy_B).">System _ChangedValue "
+			.Ctl_GetValue('B'));
+		}
+		$::Buf_Interval = int(REFRESH_RUN/INTERVAL_RUN);
+	}
+
+	if($::Flg_Busy_A ne ''){
+		unless(pm16c_getstatus('A') & 1){
+			if($::PM16C_LIMITSTATUS_ENABLE){
+				Ctl_GetFunction();
+			}
+			if($::Flg_Busy_B ne ''){
+				mystarssend("System _ChangedCtlIsBusy 0");
+			}else{
+				$::Interval_Time = INTERVAL_STOP;
+			}
+			mystarssend("$::NodeName.".num2name($::Flg_Busy_A).">System _ChangedValue "
+				. Ctl_GetValue('A'));
+			if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+				autoholdonoff('A',0,$::Flg_Busy_A);
+			}
+			mystarssend("$::NodeName.".num2name($::Flg_Busy_A).">System _ChangedIsBusy 0");
+			$::Flg_Busy_A = '';
+		}
+	}
+	if($::Flg_Busy_B ne ''){
+		unless(pm16c_getstatus('B') & 1){
+			if($::PM16C_LIMITSTATUS_ENABLE){
+				Ctl_GetFunction();
+			}
+			if($::Flg_Busy_A ne ''){
+				mystarssend("System _ChangedCtlIsBusy 0");
+			}else{
+				$::Interval_Time = INTERVAL_STOP;
+			}
+			mystarssend("$::NodeName.".num2name($::Flg_Busy_B).">System _ChangedValue "
+				. Ctl_GetValue('B'));
+			if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+				autoholdonoff('B',0,$::Flg_Busy_B);
+			}
+			mystarssend("$::NodeName.".num2name($::Flg_Busy_B).">System _ChangedIsBusy 0");
+			$::Flg_Busy_B = '';
+		}
+	}
+}
+
+#=============for motor control==================================
+sub Ctl_getstatus{
+	my $ch = shift;
+	my $rt = pm16c_getstatus($ch);
+	if($rt eq ''){return('');}
+	if(lc($ch) eq 'a'){
+#		return($rt | $::Flg_Busy_A);
+		return($rt);
+	}elsif(lc($ch) eq 'b'){
+#		return($rt | $::Flg_Busy_B);
+		return($rt);
+	}else{
+		$::Error = "Bad channel.";
+		return('');
+	}
+}
+
+sub Motor_getstatus{
+	my $mn = shift;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	my $ch=Motor_GetSelected($mn);
+	if($ch eq 'N'){$::Error='Motor not selected.'; return('');}
+	return(Ctl_getstatus($ch));
+}
+
+sub Ctl_getlimitstatus{
+	my $ch = shift;
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if($::PM16C_LIMITSTATUS_ENABLE){
+		my ($cha, $chb) = Ctl_GetSelected();
+		if(lc($ch) eq 'a'){
+			return($::Flg_LimitStatus[$cha]);
+		}elsif(lc($ch) eq 'b'){
+			return($::Flg_LimitStatus[$chb]);
+		}else{
+			$::Error = "Bad channel.";
+			return('');
+		}
+	}else{
+		my $rth = Ctl_GetFunctionStatus(1);
+		$rth=~/(\S)(\S)$/;
+		my @sts=((hex($2) & 0x7)^0x7,(hex($1) & 0x7)^0x7);
+		if(lc($ch) eq 'a'){
+			return($sts[0]);
+		}elsif(lc($ch) eq 'b'){
+			return($sts[1]);
+		}else{
+			$::Error = "Bad channel.";
+			return('');
+		}
+	}
+}
+sub Motor_getlimitstatus{
+	my $mn = shift;
+	if($::PM16C_LIMITSTATUS_ENABLE){
+		if(($mn eq '') || ($mn<0) || ($mn>15)){
+			$::Error="Bad motor number.";
+			return('');
+		}
+		unless(Ctl_GetFunction()){
+			$::Error = "Offline.";
+			return('');
+		}
+		return($::Flg_LimitStatus[$mn]);
+	}else{
+		$::Error='Use with start option -limitstatusenable.';
+		return('');
+	}
+}
+
+#=============for motor control==================================
+sub GetRomVersion{
+	mydevwrite('VER?');
+	return(mydevread());
+}
+
+
+sub Motor_Preset{
+	my $mn = shift;
+	my $data = shift;
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+	my $rt = pm16c_setm3bytes($mn, '0', $data);
+	if($rt ne ''){
+		mystarssend("$::NodeName.".num2name($mn).">System _ChangedValue $data");
+	}
+	return($rt);
+}
+
+sub pm16c_flushdata{
+	my $from =shift;
+	my $lp;
+	my $cha;
+	my $chb;
+	my $rt;
+	unless($from){$from = 'System';}
+	($cha, $chb) = Ctl_GetSelected();
+	$rt=pm16c_getstatus('A');
+	if($rt & 1){
+#		mystarssend("$::NodeName.".num2name($cha).">$from _ChangedIsBusy 1");
+		$::Flg_Busy_A = "$cha";
+	}else{
+#		mystarssend("$::NodeName.".num2name($cha).">$from _ChangedIsBusy 0");
+		$::Flg_Busy_A = '';
+	}
+	$rt=pm16c_getstatus('B');
+	if($rt & 1){
+#		mystarssend("$::NodeName.".num2name($chb).">$from _ChangedIsBusy 1");
+		$::Flg_Busy_B = "$chb";
+	}else{
+#		mystarssend("$::NodeName.".num2name($chb).">$from _ChangedIsBusy 0");
+		$::Flg_Busy_B = '';
+	}
+	if($::Flg_Busy_A ne '' and $::Flg_Busy_B ne ''){
+		$rt=1;
+	}else{
+		$rt=0;
+	}
+	mystarssend("System _ChangedCtlIsBusy $rt");
+	Ctl_GetFunction($from);
+	return('Ok:');
+}
+
+#Cancel Backlash Add 05/10/20
+sub IsFILECancelBacklash {
+	$_=GetRomVersion();
+	
+	if($::Debug){print "RomVersion#$_#\n";}
+
+	if(~/(\d+\.*\d+)\s+(\d\d-\d\d-\d\d)/){
+		if($1>1.21){
+			return(0);
+		}else{
+			return(1);
+		}
+	} else {
+		return('');
+	}
+}
+
+sub Motor_SetCancelBacklash{
+	my($mn,$bk)=@_;
+	my($smn,$sbk);
+#	$::Error = "Function disabled By BLCO";
+#	return('');
+	if(($mn eq '') || ($bk eq '')){
+		if($mn ne ''){$mn = ' '.$mn;}
+		if($bk ne ''){$bk = ' '.$bk;}
+		$::Error = "No parameter";
+		return('');
+	}
+	if(($mn < 0) || ($mn > 15)){
+		$::Error = "Bad motor number";
+		return('');
+	}
+	if(($bk < -9999) || ($bk > 9999)){
+		$::Error = "Bad parameter";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+
+	#Added 05/10/20 ReadError Backlash Start
+	if(IsFILECancelBacklash()) { # Read From File
+		if($::Debug){print "Set TO FILE\n";}
+		$::CancelBacklash[$mn] = $bk; #Added 05/10/20 Backlash
+		open(BUFREG, ">./$::ReadCancelBacklash");
+		for($_=0;$_<16;$_++){
+			print BUFREG $::CancelBacklash[$_]."\n";
+		}
+		close(BUFREG);
+		if($bk =~ /^[+|-]$/) {return('Ok:');}
+	}
+	#Added 05/10/20 ReadError Backlash End
+	if($::Debug){print "Set TO PM16C\n";}
+
+	$smn = sprintf("%X",$mn);
+	$sbk = $bk;
+	$sbk = int($sbk);
+	if($sbk >= 0){$sbk = sprintf("+%04d",$sbk);
+	}else{		$sbk = sprintf("%05d" ,$sbk);}
+	mydevwrite("B$smn$sbk");
+	stars->Sleep(WAIT_MEMWRITE);
+	return('Ok:');
+}
+
+sub Motor_GetCancelBacklash{
+	my($mn)=@_;
+	my($smn,$rt);
+#	$::Error = "Function disabled By BLCO";
+#	return('');
+	if($mn eq ''){
+		$::Error = "Motor number required";
+		return('');
+	}
+	if(($mn < 0) || ($mn > 15)){
+		$::Error = "Bad motor number";
+		return('');
+	}
+	
+	#Added 05/10/20 ReadError Backlash Start
+	if(IsFILECancelBacklash()) { # Read From File
+		if($::Debug){print "Get FROM FILE\n";}
+		return($::CancelBacklash[$mn]);
+	}
+	#Added 05/10/20 ReadError Backlash End
+	if($::Debug){print "Get FROM PM16C\n";}
+	
+	$smn = sprintf("%X",$mn);
+	mydevwrite("B$smn?");
+	$rt=mydevread();
+	if($rt eq ''){return('');}
+	$rt += 0;
+	$::CancelBacklash[$mn] = $rt; #Added 05/10/20 Backlash
+	return("$rt");
+}
+
+#Jog Pulse
+sub Motor_SetJogPulse{
+	my($mn,$xx)=@_;
+	my($cmn,$cxx);
+	my($t1,$t2,$rt);
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+
+	$cmn=sprintf("%X",$mn);
+	if(($xx<1)||($xx>9999)){
+		$::Error='Jog pulse out of range.(1 to 9999)';
+		return('');
+	}
+	$cxx=sprintf("%04X",$xx);
+	unless($cxx =~ /(\S\S)(\S\S)/){
+		$::Error="System error.";
+		return('');
+	}
+	$t1=$1;
+	$t2=$2;
+	mydevwrite("S5$cmn"."E$t1");
+	stars->Sleep(WAIT_MEMWRITE);
+	mydevwrite("S5$cmn"."F$t2");
+	stars->Sleep(WAIT_MEMWRITE);
+	return('Ok:');
+}	
+
+
+sub Motor_GetJogPulse{
+	my($mn)=@_;
+	my($cmn);
+	my($xx);
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	$cmn=sprintf("%X",$mn);
+	mydevwrite("S4$cmn"."E");
+	$xx=mydevread();
+	unless($xx =~ /^R(\S\S\S\S)/){
+		$::Error="System error.";
+		return('');
+	}
+	return(hex($1));
+}	
+
+
+# Setting of limit switches
+
+sub Motor_SetLimits{
+	my($mn,$st)=@_;
+	my($obuff);
+	
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+	$obuff=sprintf("S5%1XD%02X",$mn,$st);
+	mydevwrite("$obuff");
+	stars->Sleep(WAIT_MEMWRITE);
+##### SET HOLD-OFF
+	if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+		my ($cha, $chb) = Ctl_GetSelected();
+		if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+#			if($::PM16C_AutoHoldSwitchEnable[$mn] eq 1){
+#			}else{
+				if($cha eq $mn){
+					autoholdonoff('A',0,$mn,1);
+				}elsif($chb eq $mn){
+					autoholdonoff('B',0,$mn,1);
+				}
+#			}
+		}
+	}
+#####
+	return('Ok:');
+}
+
+sub Motor_GetLimits{
+	my($mn)=@_;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	return(pm16c_getm1byte($mn,'D'));
+}
+
+#---Speed data
+sub Motor_SetAccRate{
+	my($mn,$speed)=@_;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+	if($speed<0){
+		$speed=0;
+	}
+	$mn=sprintf("%X",$mn);
+	$speed=pm16c_rate2hexcode($speed);
+	mydevwrite("S5$mn"."C$speed");
+	stars->Sleep(WAIT_MEMWRITE);
+	return(pm16c_code2rate(pm16c_getm1byte(hex($mn),'C')));
+}
+
+sub Motor_GetAccRate{
+	my($mn)=@_;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	return(pm16c_code2rate(pm16c_getm1byte($mn,'C')));
+}
+
+sub Motor_GetHspeed{
+	my($mn)=@_;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	return(pm16c_code2speed(pm16c_getm1byte($mn,'9')));
+}
+sub Motor_GetMspeed{
+	my($mn)=@_;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	return(pm16c_code2speed(pm16c_getm1byte($mn,'A')));
+}
+sub Motor_GetLspeed{
+	my($mn)=@_;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	return(pm16c_code2speed(pm16c_getm1byte($mn,'B')));
+}
+
+
+
+
+#------ Stop motor --------------------------------------------
+sub Motor_Stop{
+	my $mn = shift;
+	my $mode = shift;
+	my $rt;
+	if(($rt=Motor_GetSelected($mn)) eq ''){return('');}
+	if($rt eq 'N'){return('Ok:');}
+	return(Ctl_Stop($rt, $mode));
+}
+
+#------ Is the motor busy ? 1=busy 0=notbusy  -----------------
+sub Motor_IsBusy{
+	my $mn = shift;
+	if($::Flg_Busy_A ne '' and $::Flg_Busy_A == $mn){return(1);}
+	if($::Flg_Busy_B ne '' and $::Flg_Busy_B == $mn){return(1);}
+#	if($::Flg_Busy_A ne '' and $::Flg_Busy_B ne ''){return(1);}
+	return(0);
+}
+
+#------Is the motor selected ? A B N=notselected---------------
+sub Motor_GetSelected{
+	my($mn)=@_;
+	my($rt,$cha,$chb);
+	mydevwrite("S10");
+	$rt=mydevread();
+#	unless($rt =~ /^R(\S)(\S)$/){
+	unless($rt =~ /^R(\S)(\S)/){
+		$::Error="Could not get status.";
+		return('');
+	}
+	$cha=$1; $chb=$2;
+	if(hex($cha) == $mn){return('A');}
+	if(hex($chb) == $mn){return('B');}
+	return('N');
+}
+
+#get position data
+sub Motor_GetValue{
+	return(pm16c_getm3bytes($_[0],'0'));
+}
+
+#------Jog-------------------------------------------------------
+sub Motor_Scan{
+	my $mn = shift;
+	my $mode = shift;
+	my $cha;
+	my $chb;
+	if( ($mn < 0) || ($mn > 15) ){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn) or Ctl_IsBusy()){
+		$::Error = "Busy.";
+		return('');
+	}
+	($cha,$chb) = Ctl_GetSelected();
+	if($cha == $mn){
+		return(pm16c_Scan('A', $mn, $mode));
+	}elsif($chb == $mn){
+		return(pm16c_Scan('B', $mn, $mode));
+	}else{
+		if(not Ctl_IsBusy('A')){
+			if(Ctl_Select('A', $mn) eq ''){return('');}
+			return(pm16c_Scan('A', $mn, $mode));
+		}elsif(not Ctl_IsBusy('B')){
+			if(Ctl_Select('B', $mn) eq ''){return('');}
+			return(pm16c_Scan('B', $mn, $mode));
+		}else{
+			$::Error='Busy.';
+			return('');
+		}
+	}
+}
+
+sub Ctl_Scan{
+	my $ch = shift;
+	my $mode = shift;
+	my $mn;
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Ctl_IsBusy($ch)){
+		$::Error = "Busy.";
+		return('');
+	}
+	$mn = Ctl_GetSelected($ch);
+	if($mn eq ''){return('');}
+	return(pm16c_Scan($ch, $mn, $mode));
+}
+
+
+sub pm16c_Scan{
+	my $ch = uc(shift);
+	my $mn = shift;
+	my $mode = shift;
+	my $cmd;
+#mode (CW,CCW) => Jog:8,9 scan:0E,0F scan-const:0C,0D scan-home:1E,1F
+#direction     => 0:CW 1:CCW
+
+	my($cm,$scm,$relpos);
+
+	if($ch eq 'A'){
+		$cm = 'S30';
+		$::Flg_Busy_A=$mn;
+	}elsif($ch eq 'B'){
+		$cm = 'S31';
+		$::Flg_Busy_B=$mn;
+	}else{
+		$::Error="Bad channel.";
+		return('');
+	}
+
+	$cmd = sprintf("%s%02X", $cm, $mode);
+
+	if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+		autoholdonoff($ch,1,$mn);
+	}
+	mystarssend("$::NodeName.".num2name($mn).">System _ChangedIsBusy 1");
+
+	$::Interval_Time = INTERVAL_RUN;
+	if($::Flg_Busy_A ne '' and $::Flg_Busy_B ne ''){
+		mystarssend("System _ChangedCtlIsBusy 1");
+	}
+	return(mydevwrite($cmd));
+}	
+
+#------Stop------------------------------------------------------
+sub Ctl_Stop{
+	my $ch   = shift;
+	my $mode = shift;
+	my $cmd;
+	if($mode){
+		$cmd = '80';
+	}else{
+		$cmd = '40';
+	}
+	if(uc($ch) eq 'A'){
+		mydevwrite("S30$cmd");
+	}elsif(uc($ch) eq 'B'){
+		mydevwrite("S31$cmd");
+	}else{
+		mydevwrite("S30$cmd");
+		mydevwrite("S31$cmd");
+	}
+	return('Ok:');
+}
+
+#------Standby and run for pair----------------------------------
+sub Ctl_Standby{
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	mydevwrite('S3016');
+	return('Ok:');
+}
+
+sub Ctl_SyncRun{
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	mydevwrite('S3017');
+	return('Ok:');
+}
+
+
+#------hold on or off-------------------------------------------
+sub Ctl_SetHold{
+	my($ch,$hld,$busyignoreflg)=@_;
+	my($rt,$cm);
+
+	if(($ch eq 'a') || ($ch eq 'A')){	  $cm = 'S30';
+	}elsif(($ch eq 'b') || ($ch eq 'B')){  $cm = 'S31';
+	}else{
+		$::Error="Bad channel.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	unless($busyignoreflg){
+		if(Ctl_IsBusy($ch)){
+			$::Error = "Busy.";
+			return('');
+		}
+	}
+	if($hld){
+		mydevwrite($cm.'19');
+		stars->Sleep(WAIT_HOLD_ON);
+	}else{
+		stars->Sleep(WAIT_HOLD_OFF);
+		mydevwrite($cm.'18');
+	}
+	return('Ok:');
+}
+
+#------hold on or off-------------------------------------------
+sub Motor_SetHold{
+	my $mn = shift;
+	my $hld = shift;
+	if( ($mn < 0) || ($mn > 15) ){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless($hld=~/^[01]$/){
+		$::Error="Bad hold on/off value.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn) or Ctl_IsBusy()){
+		$::Error = "Busy.";
+		return('');
+	}
+	my $st=Motor_GetLimits($mn);
+	my $curhld=0;
+	if($st&64){
+		$curhld=1;
+	}
+	if($curhld eq $hld){
+		return('Ok:');
+	}
+	my $rt=Motor_SetLimits($mn,($st^64));
+	return($rt);
+}
+sub Motor_GetHold{
+	my $mn = shift;
+	if( ($mn < 0) || ($mn > 15) ){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	my $st=Motor_GetLimits($mn);
+	my $rt=0;
+	if($st&64){
+		$rt=1;
+	}
+	return($rt);
+}
+
+#------Is controller busy?------------------------------------
+sub Ctl_CtlIsBusy{
+	if(($::Flg_Busy_A ne '') and ($::Flg_Busy_B ne '')){return(1);}
+	return(0);
+}
+
+#------Is the channel busy?------------------------------------
+sub Ctl_IsBusy{
+	my $ch = shift;
+	unless($ch){
+		if($::Flg_Busy_A ne '' and $::Flg_Busy_B ne ''){
+			return(1);
+		}else{
+			return(0);
+		}
+	}
+	if(((lc($ch) eq 'a') and ($::Flg_Busy_A ne ''))
+	  or ((lc($ch) eq 'b') and ($::Flg_Busy_B ne ''))){
+		return(1);
+	}
+	return(0);
+}
+
+#---Set motor position
+sub Motor_SetValue{
+	my $mn = shift;
+	my $p = shift;
+	my $mode = shift;
+	my($rt,$cha,$chb);
+
+	if( ($mn < 0) || ($mn > 15) ){
+		$::Error="Bad motor number.";
+		return('');
+	}
+
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+
+	if(Motor_IsBusy($mn) or Ctl_IsBusy()){
+		$::Error = "Busy.";
+		return('');
+	}
+
+	($cha,$chb) = Ctl_GetSelected();
+	if($cha == $mn){
+		return(pm16c_SetValue('A', $p, $mn, $mode));
+	}elsif($chb == $mn){
+		return(pm16c_SetValue('B', $p, $mn, $mode));
+	}else{
+		if(not Ctl_IsBusy('A')){
+			if(Ctl_Select('A', $mn) eq ''){return('');}
+			return(pm16c_SetValue('A', $p, $mn, $mode));
+		}elsif(not Ctl_IsBusy('B')){
+			if(Ctl_Select('B', $mn) eq ''){return('');}
+			return(pm16c_SetValue('B', $p, $mn, $mode));
+		}else{
+			$::Error='Busy.';
+			return('');
+		}
+	}
+}
+
+#------get or set channel data----------------------------------
+sub Ctl_SetValue{
+	my $ch = shift;
+	my $pulse = shift;
+	my $mode = shift;
+	my $mn;
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Ctl_IsBusy($ch)){
+		$::Error = "Busy.";
+		return('');
+	}
+	$mn = Ctl_GetSelected($ch);
+	if($mn eq ''){return('');}
+	return(pm16c_SetValue($ch,$pulse,$mn,$mode));
+}
+
+sub pm16c_SetValue{
+	my $ch = uc(shift);
+	my $pulse = shift;
+	my $mn = shift;
+	my $mode = shift;
+
+
+	my $current;
+	my $relpos;
+	my $add_cbk;
+
+	my($cm,$scm,$relpos);
+	if($ch ne 'A' and $ch ne 'B'){
+		$::Error="Bad channel.";
+		return('');
+	}
+
+	$current = Ctl_GetValue($ch);
+
+#Comment 05/10/20 Backlash 10 Start
+#	if($mode eq 'REL'){
+#		$relpos = $current + $pulse;
+#		if(($relpos < -8388608)||($relpos > 8388607)){
+#			$::Error="Data out of range.";
+#			return('');
+#		}
+#		if($pulse < 0){$add_cbk = 'B';}else{$add_cbk = '';}
+#	}else{
+#		if($current > $pulse){$add_cbk = 'B';}else{$add_cbk = '';}
+#	}
+#Comment 05/10/20 Backlash 10 End
+
+#Added 05/10/20 Backlash Start
+	my $abs; # REL Backlash Error 05/10/20 By Naga
+	if($mode eq 'REL'){
+		$relpos = $current + $pulse;
+		if(($relpos < -8388608)||($relpos > 8388607)){
+			$::Error="Data out of range.";
+			return('');
+		}
+		$abs = $relpos; # REL Backlash Error 05/10/20 By Naga
+	}else{
+		$abs = $pulse; # REL Backlash Error 05/10/20 By Naga
+	}
+
+	if($::CancelBacklash[$mn] eq '+' and $abs > $current ){#Added 05/10/20 ReadError Backlash
+		$add_cbk = 'B';
+	}elsif($::CancelBacklash[$mn] eq '-' and $abs < $current){#Added 05/10/20 ReadError Backlash
+		$add_cbk = 'B';
+	}elsif($::CancelBacklash[$mn]>0 and $abs > $current){ # REL Backlash Error 05/10/20 By Naga
+		$add_cbk = 'B';
+	}elsif($::CancelBacklash[$mn]<0 and $abs < $current){ # REL Backlash Error 05/10/20 By Naga
+		$add_cbk = 'B';
+	}else{
+		$add_cbk = '';
+	}
+	if($::Debug) {print "SetValue $abs from $current to $mn with \'$add_cbk\'. CancelBacklash#$::CancelBacklash[$mn]#\n"};
+#Added 05/10/20 Backlash End
+
+	$pulse=pm16c_dec2hex($pulse);
+	if($pulse eq ''){
+		return('');
+	}
+
+	if($ch eq 'A' and $mode eq 'ABS'){
+		$cm='S32'; $scm='13'.$add_cbk; $::Flg_Busy_A=$mn;
+	}elsif($ch eq 'B' and $mode eq 'ABS'){
+		$cm='S33'; $scm='13'.$add_cbk; $::Flg_Busy_B=$mn;
+	}elsif($ch eq 'A' and $mode eq 'REL'){
+		$cm='S32'; $scm='12'.$add_cbk; $::Flg_Busy_A=$mn;
+	}elsif($ch eq 'B' and $mode eq 'REL'){
+		$cm='S33'; $scm='12'.$add_cbk; $::Flg_Busy_B=$mn;
+	}
+
+	if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+		autoholdonoff($ch,1,$mn);
+	}
+	mystarssend("$::NodeName.".num2name($mn).">System _ChangedIsBusy 1");
+
+	$::Interval_Time = INTERVAL_RUN;
+	if($::Flg_Busy_A ne '' and $::Flg_Busy_B ne ''){
+		mystarssend("System _ChangedCtlIsBusy 1");
+	}
+	mydevwrite("$cm$pulse$scm");
+	return('Ok:');
+}	
+
+# I hope PM16C02n's Bug!! (cancel backlash) will be fixed and,
+# I will be able to use these codes instead of upper code....... some day.
+# 2004-04-13
+#
+#sub pm16c_SetValue{
+#	my $ch = uc(shift);
+#	my $pulse = shift;
+#	my $mn = shift;
+#	my $mode = shift;
+#
+#	my($cm,$scm,$relpos);
+#	if($ch ne 'A' and $ch ne 'B'){
+#		$::Error="Bad channel.";
+#		return('');
+#	}
+#
+#	if($mode eq 'REL'){
+#		$relpos = $pulse + Ctl_GetValue($ch);
+#		if(($relpos < -8388608)||($relpos > 8388607)){
+#			$::Error="Data out of range.";
+#			return('');
+#		}
+#	}
+#
+#	$pulse=pm16c_dec2hex($pulse);
+#	if($pulse eq ''){
+#		return('');
+#	}
+#
+#	if($ch eq 'A' and $mode eq 'ABS'){
+#		$cm='S32'; $scm='13B'; $::Flg_Busy_A=$mn;
+#	}elsif($ch eq 'B' and $mode eq 'ABS'){
+#		$cm='S33'; $scm='13B'; $::Flg_Busy_B=$mn;
+#	}elsif($ch eq 'A' and $mode eq 'REL'){
+#		$cm='S32'; $scm='12B'; $::Flg_Busy_A=$mn;
+#	}elsif($ch eq 'B' and $mode eq 'REL'){
+#		$cm='S33'; $scm='12B'; $::Flg_Busy_B=$mn;
+#	}
+#
+#	if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+#		autoholdonoff($ch,1,$mn);
+#	}
+#	mystarssend("$::NodeName.".num2name($mn).">System _ChangedIsBusy 1");
+#
+#	$::Interval_Time = INTERVAL_RUN;
+#	if($::Flg_Busy_A ne '' and $::Flg_Busy_B ne ''){
+#		mystarssend("System _ChangedCtlIsBusy 1");
+#	}
+#	mydevwrite("$cm$pulse$scm");
+#	return('Ok:');
+#}	
+
+sub Ctl_GetValue{
+	my($ch)=@_;
+	my($cm,$xx);
+	if(($ch eq 'a') || ($ch eq 'A')){
+		$cm = 'S20';
+	}elsif(($ch eq 'b') || ($ch eq 'B')){
+		$cm = 'S22';
+	}else{
+		$::Error="Bad channel.";
+		return('');
+	}
+	mydevwrite($cm);
+	$xx=mydevread();
+	$xx =~ s/R//;
+	$xx = hex($xx);
+	if($xx & 0x800000){
+		$xx=($xx ^ 0xffffff)* (-1) - 1;
+	}
+	return($xx);
+}
+
+
+
+#------select channel-------------------------------------
+sub Ctl_GetSelected{
+	my $ch = shift;
+	my($rt,$cha,$chb);
+	mydevwrite("S10");
+	$rt=mydevread();
+#	unless($rt =~ /^R(\S)(\S)$/){
+	unless($rt =~ /^R(\S)(\S)/){
+		$::Error="Could not get status.";
+		return('');
+	}
+	$cha=$1; $chb=$2;
+	if(wantarray){
+		return(hex($cha), hex($chb));
+	}
+	if(($ch eq 'a') || ($ch eq 'A') ){
+		return(hex($cha));
+	}elsif(($ch eq 'b') || ($ch eq 'B')){
+		return(hex($chb));
+	}else{
+		$::Error="Bad channel.";
+		return('');
+	}
+}
+
+sub Ctl_Select{
+	my($ch,$mn) = @_;
+	my($mn2, $sel, $status, $wloop);
+
+	if(($ch eq 'a') || ($ch eq 'A') ){
+		$sel='S11';
+	}elsif(($ch eq 'b') || ($ch eq 'B')){
+		$sel='S12';
+	}else{
+		$::Error="Bad channel.";
+		return('');
+	}
+	if( ($mn < 0) || ($mn > 15) ){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Ctl_IsBusy($ch)){
+		$::Error = "Busy.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+
+	$mn=sprintf("%X",$mn);
+	mydevwrite("S10");
+	$status=mydevread();
+	if(($ch =~ /^A$/i)&&($status =~ /^R(\S)(\S)/)){$status = $1; $mn2 = $2;}
+	if(($ch =~ /^B$/i)&&($status =~ /^R(\S)(\S)/)){$status = $2; $mn2 = $1;}
+	if($mn2 eq $mn){
+		$::Error="Already selected on the other channel.";
+		return('');
+	}
+	if($status eq $mn){return('Ok:');}
+	mydevwrite("$sel$mn");
+	for($wloop=0;$wloop<5;$wloop++){
+		mydevwrite("S10");
+		$status=mydevread();
+		if(($ch =~ /^A$/i)&&($status =~ /^R(\S)\S/)){$status = $1;}
+		if(($ch =~ /^B$/i)&&($status =~ /^R\S(\S)/)){$status = $1;}
+		if($status eq $mn){
+			if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+				my $mnd=hex($mn);
+				autoholdonoff($ch,0,$mnd,1);
+			}
+			return('Ok:');
+		}
+		stars->Sleep(WAIT_SELECT);
+	}
+	$::Error= "Could not select.";
+	return("");
+}
+
+#Speed ---------------------------------------------------------------
+sub Ctl_Speed{
+	my $speed = shift;
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Ctl_IsBusy('A') or Ctl_IsBusy('B')){
+		$::Error = "Busy.";
+		return('');
+	}
+	if($speed < 1){      #Low
+		mydevwrite('S34');
+	}elsif($speed == 1){ #Middle
+		mydevwrite('S35');
+	}else{               #High
+		mydevwrite('S36');
+	}
+	return('Ok:');
+}
+
+#Remote or Local ------------------------------------------------------
+sub Ctl_SetFunction{
+	my($fc)=@_;
+	my $lp;
+	if($fc == 1){
+		mydevwrite("S1R");
+	}elsif($fc == 0){
+		mydevwrite("S1L");
+	}else{
+		$::Error="Bad function switch.";
+		return('');
+	}
+	for($lp=0; $lp<10; $lp++){
+		stars->Sleep(WAIT_SELECT);
+		if(Ctl_GetFunction() == $fc){
+			return('Ok:');
+		}
+	}
+	$::Error = "Could not changed function.";
+	return('');
+}
+
+sub Ctl_GetFunction{
+	my $from = shift;
+	my $flg_from=0;
+	my $lp;
+	my $rth = Ctl_GetFunctionStatus(1);
+	$rth=~/(\S)(\S)$/;
+#	my @sts=((hex($2) | 0x7),(hex($1) | 0x7));	
+	my @sts=((hex($2) & 0x7)^0x7,(hex($1) & 0x7)^0x7);
+	my $rt=hex($rth);
+	my ($cha, $chb);
+	if($::PM16C_LIMITSTATUS_ENABLE or $::PM16C_AUTOHOLDSWITCH_ENABLE){
+		($cha, $chb) = Ctl_GetSelected();
+	}
+	unless($from){$from = 'System';}else{$flg_from=1;}
+	if($rt & 8){
+		$rt=1;
+	}else{
+		$rt=0;
+	}
+	my $flg_changed=0;
+	if($::Flg_remote != $rt){
+		$flg_changed=1;
+	}
+	if($flg_from or $::Flg_remote != $rt){
+		mystarssend("_ChangedFunction $rt", $from);
+		$::Flg_remote = $rt;
+		if($flg_from or $::Flg_remote){
+			for($lp = 0; $lp <= 15; $lp++){
+				Motor_GetCancelBacklash($lp); #Added 05/10/20 Backlash
+				$rt = Motor_GetValue($lp);
+				mystarssend(sprintf("%s.%s>%s _ChangedValue %d", $::NodeName, num2name($lp), $from, $rt));
+				mystarssend(sprintf("%s.%s>%s _ChangedIsBusy %d", $::NodeName, num2name($lp), $from, Motor_IsBusy($lp)));
+				if($::PM16C_LIMITSTATUS_ENABLE){
+					if($cha eq $lp){
+						mystarssend(sprintf("%s.%s>%s _ChangedLimitStatus %d", $::NodeName, num2name($lp), $from,$sts[0]));
+						$::Flg_LimitStatus[$lp]=$sts[0];
+					}elsif($chb eq $lp){
+						mystarssend(sprintf("%s.%s>%s _ChangedLimitStatus %d", $::NodeName, num2name($lp), $from,$sts[1]));
+						$::Flg_LimitStatus[$lp]=$sts[1];
+					}else{
+						mystarssend(sprintf("%s.%s>%s _ChangedLimitStatus %d", $::NodeName, num2name($lp), $from,$::Flg_LimitStatus[$lp]));
+					}
+				}
+			}
+		}
+		if($flg_changed and $::Flg_remote){
+			if($::PM16C_AUTOHOLDSWITCH_ENABLE){
+				autoholdonoff('A',0,$cha,1);
+				autoholdonoff('B',0,$chb,1);
+			}
+		}
+	}elsif($::PM16C_LIMITSTATUS_ENABLE and $::Flg_remote){
+		$lp=$cha;
+		unless($::Flg_LimitStatus[$lp] eq $sts[0]){
+			mystarssend(sprintf("%s.%s>%s _ChangedLimitStatus %d", $::NodeName, num2name($lp), $from,$sts[0]));
+			$::Flg_LimitStatus[$lp]=$sts[0];
+		}
+		$lp=$chb;
+		unless($::Flg_LimitStatus[$lp] eq $sts[1]){
+			mystarssend(sprintf("%s.%s>%s _ChangedLimitStatus %d", $::NodeName, num2name($lp), $from,$sts[1]));
+			$::Flg_LimitStatus[$lp]=$sts[1];
+		}
+	}
+	return($::Flg_remote);
+}
+
+sub Ctl_GetFunctionStatus{
+	my $hexflg=shift;
+	my($rt);
+	mydevwrite("S6");
+	while(1){
+		$rt=mydevread(1);
+		unless($rt=~/^\s*$/){
+			unless($rt =~ /^R(\S\S)/){
+				$::Error="Could not get function. $rt";
+				return('');
+			}
+			if($hexflg){
+				return($1);
+			}
+			return(hex($1));
+		}
+	}
+}
+
+#=====for internal=============================================
+sub pm16c_disconnect{
+	Ctl_Stop();
+	return('QuitControl');
+}
+
+sub pm16c_getstatus($ch){
+	my($ch)=@_;
+	my($cm,$rt);
+	if(($ch eq 'a') || ($ch eq 'A')){	  $cm = 'S21';
+	}elsif(($ch eq 'b') || ($ch eq 'B')){  $cm = 'S23';
+	}else{
+		$::Error="Bad channel.";
+		return('');
+	}
+	unless(mydevwrite("$cm")){return('');}
+	unless($rt=mydevread()){return('');};
+	unless($rt =~ /R(\S{2})/){$::Error="Data error.";return('')};
+	return(hex($1));
+}
+
+#------- dec to 6 hex -------------------------------
+sub pm16c_dec2hex{
+	my($xx)=@_;
+	if(($xx < -8388608)||($xx > 8388607)){
+		$::Error="Data out of range.";
+		return('');
+	}
+	if($xx < 0){
+		$xx = (($xx + 1) * (-1)) ^ 0xffffff;
+	}
+	return(sprintf("%06X",$xx));
+}
+
+#------get 1byte data-----------------------------------
+sub pm16c_getm1byte{
+	my($mn,$start)=@_;
+	my $xx;
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	$mn=sprintf("%X",$mn);
+	mydevwrite("S4$mn$start");
+	$xx=mydevread();
+	if($xx =~ /R(\S\S)\S+/){
+		return(hex($1));
+	}
+	return(-1);
+}	
+
+
+#------get 3bytes data-----------------------------------
+sub pm16c_getm3bytes{
+	my($mn,$start)=@_;
+	my($xx);
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	$mn=sprintf("%X",$mn);
+	mydevwrite("S4$mn$start");
+	$xx=mydevread();
+#	$xx =~ s/^R([0-9A-F]{6}$)/$1/; #Test use pm16c04
+	$xx =~ s/R//;#Comment Test use pm16c04
+	$xx = hex($xx);
+	if($xx & 0x800000){
+		$xx=($xx ^ 0xffffff)* (-1) - 1;
+	}
+	return($xx);	
+}
+
+#------ set 3bytes data -----------------------------------------
+sub pm16c_setm3bytes{
+	my($mn,$addr,$xx)=@_;
+	my($c1,$c2,$c3);
+	my($b1,$b2,$b3);
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+	$mn=sprintf("%X",$mn);
+	$c1=sprintf("%X",$addr);
+	$c2=sprintf("%X",$addr+1);
+	$c3=sprintf("%X",$addr+2);
+	$xx=pm16c_dec2hex($xx);
+	if($xx eq ''){
+		return('');
+	}
+	unless($xx =~ /(\S\S)(\S\S)(\S\S)/){
+		$::Error="System error.";
+		return('');
+	}
+	($b1,$b2,$b3)=($1,$2,$3);
+	mydevwrite("S5$mn$c1$b1");
+	stars->Sleep(WAIT_MEMWRITE);
+	mydevwrite("S5$mn$c2$b2");
+	stars->Sleep(WAIT_MEMWRITE);
+	mydevwrite("S5$mn$c3$b3");
+	stars->Sleep(WAIT_MEMWRITE);
+	return('Ok:');
+}
+
+#------ code to speed or rate------------------------------------
+sub pm16c_code2speed{
+	my($code)=@_;
+	return($::speed[$code]);
+}
+sub pm16c_code2rate{
+	my($code)=@_;
+	return($::rate[$code]);
+}
+
+
+#------ speed to code ------------------------------------
+sub pm16c_speed2hexcode{
+	my($spd)=@_;
+	my($code);
+	for($code=1;$code <= 0xbb;$code++){
+		if($::speed[$code] > $spd){
+			return(sprintf("%02X",$code-1));
+		}
+	}
+	return('BB');
+}
+
+sub pm16c_rate2hexcode{
+	my($spd)=@_;
+	my($code);
+	for($code=1;$code <= 0x12;$code++){
+		if($::rate[$code] < $spd){
+			return(sprintf("%02X",$code-1));
+		}
+	}
+	return('12');
+}
+
+sub pm16c_setspeedcommon{
+	my($mn,$speed,$select)=@_;
+	unless($select){
+		$::Error="System error.";
+		return('');
+	}
+	if(($mn eq '') || ($mn<0) || ($mn>15)){
+		$::Error="Bad motor number.";
+		return('');
+	}
+	unless(Ctl_GetFunction()){
+		$::Error = "Offline.";
+		return('');
+	}
+	if(Motor_IsBusy($mn)){
+		$::Error = "Busy.";
+		return('');
+	}
+	if($speed<0){
+		$speed=0;
+	}
+	$mn=sprintf("%X",$mn);
+	$speed=pm16c_speed2hexcode($speed);
+	mydevwrite("S5$mn$select$speed");
+	stars->Sleep(WAIT_MEMWRITE);
+	return(pm16c_code2speed(pm16c_getm1byte(hex($mn),$select)));
+}
+
+sub name2num{
+	my $mname=shift;
+	if(defined($::MotorName{$mname})){
+		return($::MotorName{$mname});
+	}
+	return(-1);
+}
+
+sub num2name{
+	my $mnum=shift;
+	if($mnum >= 0 and $mnum <= 15){
+		return($::MotorName[$mnum]);
+	}
+	$::Error = "Bad motor number.";
+	return('');
+}
+
+sub get_help_list{
+	my $target = shift;
+	my $cmd = shift;
+	if($target eq 'Cntrl'){
+		unless($cmd){return(join(" ", sort(keys(%::helpcntrl))));}
+		unless(defined($::helpcntrl{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";
+			return('');
+		}
+		return($::helpcntrl{$cmd});
+	}else{
+		unless($cmd){return(join(" ", sort(keys(%::helpmotor))));}
+		unless(defined($::helpmotor{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";
+			return('');
+		}
+		return($::helpmotor{$cmd});
+	}
+}
+
+sub set_help_list{
+	my $title='';
+	my $titlenew;
+	my $buf='';
+	my $target='';
+	while(<DATA>){
+		if(/^(?:Usage|Event): (\w+)( |$)/){
+			$titlenew = $1;
+			if($title){
+				$buf =~ s/\r//gm;
+				$buf =~ s/\n/\\n/gm;
+				if($target =~ /Motor/){
+					$::helpmotor{$title} = $buf;
+				}
+				if($target =~ /Controller/){
+					$::helpcntrl{$title} = $buf;
+				}
+				$buf = '';
+			}
+			$title = $1;
+		}
+		if(/Target: (.+)/){
+			$target=$1;
+			next;
+		}
+		$buf .= $_;
+	}
+	$buf =~ s/\r//gm;
+	$buf =~ s/\n/\\n/gm;
+	if($target =~ /Motor/){
+		$::helpmotor{$title} = $buf;
+	}
+	if($target =~ /Controller/){
+		$::helpcntrl{$title} = $buf;
+	}
+}
+
+__DATA__
+#STARS Commands
+Usage: help [Commmand]
+Target: Controller, Motor
+    List commands or show usage (with "command")
+
+Usage: hello
+Target: Controller, Motor
+    The client returns "@hello nice to meet you."
+
+Usage: flushdata
+Target: Controller
+    Get all status of PM16C-02 and send event messages to "System".
+
+Usage: flushdatatome
+Target: Controller
+    Get all status of PM16C-02 and send event messages to me.
+
+#Status read
+Usage: GetAccRate MotorNumber
+Target: Controller
+    Get acceleration rate of "MotorNumber" (0 to 16).
+
+Usage: GetAccRate
+Target: Motor
+    Get acceleration rate.
+
+Usage: GetCancelBacklash MotorNumber
+Target: Controller
+    Get cancel backlash of "MotorNumber" (0 to 16).
+
+Usage: GetCancelBacklash
+Target: Motor
+    Get cancel backlash.
+
+Usage: GetDigitalCcwLs MotorNumber
+Target: Controller
+    Get CCW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16).
+
+Usage: GetDigitalCcwLs
+Target: Motor
+    Get CCW software limit switch (DIGITAL LS).
+
+Usage: GetDigitalCwLs MotorName|MotorNumber
+Target: Controller
+    Get CW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16).
+
+Usage: GetDigitalCwLs
+Target: Motor
+    Get CW software limit switch (DIGITAL LS).
+
+Usage: GetFunction
+Target: Controller
+    Get function "Remote/Local".
+
+Usage: GetFunctionStatus
+Target: Controller
+    Get limit switch and "remote/local" status on channel A and B.
+    bit 0: A POS CW LS, 1: A POS CCW LS, 2: A POS Z. LS, 3: STATUS CPU/MANU
+        4: B POS CW LS, 5: B POS CCW LS, 6: B POS Z. LS
+
+Usage: GetHighSpeed MotorNumber
+Target: Controller
+    Get high speed value of "MotorNumber" (0 to 16).
+
+Usage: GetHighSpeed
+Target: Motor
+    Get high speed value.
+
+Usage: GetJogPulse MotorNumber
+Target: Controller
+    Get jog pulse value of "MotorNumber" (0 to 16).
+
+Usage: GetJogPulse
+Target: Motor
+    Get jog pulse value.
+
+Usage: GetLimits MotorNumber
+Target: Controller
+    Get limit switches value of "MotorNumber" (0 to 16) in register.
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: GetLimits
+Target: Motor
+    Get limit switches value in register.
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: GetLowSpeed MotorNumber
+Target: Controller
+    Get low speed value of "MotorNumber" (0 to 16).
+
+Usage: GetLowSpeed
+Target: Motor
+    Get low speed value of "MotorName" or "MotorNumber" (0 to 16).
+
+Usage: GetMiddleSpeed MotorNumber
+Target: Controller
+    Get middle speed value of "MotorNumber" (0 to 16).
+
+Usage: GetMiddleSpeed
+Target: Motor
+    Get middle speed value.
+
+Usage: GetValue Channel MotorNumber
+Target: Controller
+    Get postion data of "Channle" (A or B) or "MotorNumber" (0 to 16).
+
+Usage: GetValue
+Target: Motor
+    Get postion data.
+
+Usage: GetStatus Channel
+Target: Controller
+    Get status register value of "Channel" (A or B). 
+    bit 0: BUSY, 1: DRIVE, 2: not used, 3: not used
+        4: COMERR, 5: LDEND, 6: SSEND, 7: ESEND
+
+Usage: GetStatus
+Target: Motor
+    If the motor is selected,
+    get status register value of "Channel" (A or B) by using the motor value.
+    bit 0: BUSY, 1: DRIVE, 2: not used, 3: not used
+        4: COMERR, 5: LDEND, 6: SSEND, 7: ESEND
+
+Usage: GetLimitStatus Channel
+Target: Controller
+    Get limit status register value of "Channel" (A or B). 
+    bit 0: CW LS ON, 1: CCW LS ON, 2: Z. LS ON 3: reserved
+
+Usage: GetLimitStatus
+Target: Motor
+   (Optional: Use with statr option -limitstatusenable)
+    Get limit status register value of motor by using the motor value. 
+    bit 0: CW LS ON, 1: CCW LS ON, 2: Z. LS ON 3: reserved
+
+Usage: IsBusy Channel|MotorNumber
+Target: Controller
+    Check, is motor busy?
+
+Usage: IsBusy
+Target: Motor
+    Check, is motor busy?
+
+Usage: GetCtlIsBusy
+Target: Controller
+	Check, is controller busy? 
+
+Usage: GetSelected Channel|MotorNumber
+Target: Controller
+    Get selected channel (A or B or N = not selected) with
+    "MotorName" or "MotorNumber" (0 to 16) or get selected motor number with
+    "Channel" (A or B).
+
+Usage: GetSelected
+Target: Motor
+    Get selected channel (A or B or N = not selected).
+
+#PM16C Commands
+Usage: Standby
+Target: Controller
+    Standby motor(s). The "Standby" command is used for starting 2 motors at
+    the same time with "SyncRun" command.
+
+Usage: SyncRun
+Target: Controller
+    Start motor(s). The "SyncRun" command is used for starting 2 motors at
+    the same time with "Standby" command.
+
+Usage: Remote
+Target: Controller
+    Set function to "Remote". (Same as "SetFunction 1")
+
+Usage: Local
+Target: Controller
+    Set function to "Local". (Same as "SetFunction 0")
+
+Usage: SpeedLow
+Target: Controller
+    Set speed to "Low".
+
+Usage: SpeedMiddle
+Target: Controller
+    Set speed to "Middle".
+
+Usage: SpeedHigh
+Target: Controller
+    Set speed to "High".
+
+Usage: GetSpeedList
+Target: Controller, Motor
+    Get list of settable motor speed.
+
+Usage: GetAccRateList
+Target: Controller, Motor
+    Get list of settable motor acceleration rate.
+
+Usage: GetMotorList
+Target: Controller
+    List motor names.
+
+Usage: GetMotorName MotorNumber
+Target: Controller
+    Get motor name of "MotorNumber".
+
+Usage: GetMotorNumber MotorName
+Target: Controller
+    Get motor number of "MotorName".
+
+#Set Commandst
+Usage: Preset MotorNumber Value
+Target: Controller
+    Set motor position data of "MotorNumber" (0 to 16) into "Value".
+
+Usage: Preset Value
+Target: Motor
+    Set motor position data into "Value".
+
+Usage: Select Channel MotorNumber
+Target: Controller
+    Select "MotorName" or "MotorNumber" (0 to 16) on "Channel" (A or B).
+
+Usage: SetAccRate MotorNumber Value
+Target: Controller
+    Set acceleration rate of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetAccRate Value
+Target: Motor
+    Set acceleration rate into "Value".
+
+Usage: SetCancelBacklash MotorNumber Value
+Target: Controller
+    Set cancel backlash value of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetCancelBacklash Value
+Target: Motor
+    Set cancel backlash value into "Value".
+
+Usage: SetDigitalCcwLs MotorNumber Value
+Target: Controller
+    Set CCW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16)
+    into "Value".
+
+Usage: SetDigitalCcwLs Value
+Target: Motor
+    Set CCW software limit switch (DIGITAL LS) into "Value".
+
+Usage: SetDigitalCwLs MotorNumber Value
+Target: Controller
+    Set CW software limit switch (DIGITAL LS) of "MotorNumber" (0 to 16)
+    into "Value".
+
+Usage: SetDigitalCwLs Value
+Target: Motor
+    Set CW software limit switch (DIGITAL LS) into "Value".
+
+Usage: SetFunction 1|0
+Target: Controller
+    Set function (Remote=1, Local=0).
+
+Usage: SetHighSpeed MotorNumber Value
+Target: Controller
+    Set high speed of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetHighSpeed Value
+Target: Motor
+    Set high speed into "Value".
+
+Usage: SetHold Channel 1|0
+Target: Controller
+    Set hold (=1) or free (=0) motor on "Channel" (A or B).
+
+Usage: SetJogPulse MotorNumber Value
+Target: Controller
+    Set jog pulse value of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetJogPulse Value
+Target: Motor
+    Set jog pulse value into "Value".
+
+Usage: SetLimits MotorNumber Value
+Target: Controller
+    Set limit switches value of "MotorNumber" (0 to 16) into "Value".
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: SetLimits
+Target: Motor
+    Set limit switches value into "Value".
+    bit 0: CW LS A/B, 1: CCW LS A/B, 2: Z LS A/B, 3: CW LS ENABLE
+        4: CCW LS ENABLE, 5: DIGITAL LS ENABLE, 6: HOLD, 7: MOTOR OFF
+
+Usage: SetLowSpeed MotorNumber Value
+Target: Controller
+    Set low speed of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetLowSpeed Value
+Target: Motor
+    Set low speed into "Value".
+
+Usage: SetMiddleSpeed MotorNumber Value
+Target: Controller
+    Set middle speed of "MotorNumber" (0 to 16) into "Value".
+
+Usage: SetMiddleSpeed Value
+Target: Motor
+    Set middle speed into "Value".
+
+#Move and stop
+Usage: SetValue Channel|MotorNumber Value
+Target: Controller
+    Move motor which is shown "MotorNumber" or "Channel" to "Value" absolutely.
+
+Usage: SetValue Value
+Target: Motor
+    Move motor to "Value" absolutely.
+
+Usage: SetValueREL Channel|MotorNumber Value
+Target: Controller
+    Move motor which is shown "MotorNumber" or "Channel" to "Value" relatively.
+
+Usage: SetValueREL Value
+Target: Motor
+    Move motor to "Value" relatively.
+
+Usage: JogCw Channel|MotorNumber
+Target: Controller
+    Send CW jog command to "Channel" (A or B) or "MotorNumber" (0 to 16).
+
+Usage: JogCw
+Target: Motor
+    Send CW jog command.
+
+Usage: JogCcw Channel|MotorNumber
+Target: Controller
+    Send CCW jog command to "Channel" (A or B) or "MotorNumber" (0 to 16).
+
+Usage: JogCcw
+Target: Motor
+    Send CCW jog command.
+
+Usage: ScanCw Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A or B) or "MotorNumber" (0 to 16) to "CW" with scan mode.
+
+Usage: ScanCw
+Target: Motor
+    Move "CW" direction with scan mode.
+
+Usage: ScanCcw Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A or B) or "MotorNumber" (0 to 16) to "CCW" with scan mode.
+
+Usage: ScanCcw
+Target: Motor
+    Move "CCW" direction with scan mode.
+
+Usage: ScanCwConst Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A or B) or "MotorNumber" (0 to 16) to "CW" with
+    constant scan mode.
+
+Usage: ScanCwConst
+Target: Motor
+    Move "CW" direction with constant scan mode.
+
+Usage: ScanCcwConst Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A or B) or "MotorNumber" (0 to 16) to "CCW" with
+    constant scan mode.
+
+Usage: ScanCcwConst
+Target: Motor
+    Move "CCW" direction with constant scan mode.
+
+Usage: ScanCwHome Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A or B) or "MotorNumber" (0 to 16) to "CW" for finding
+    home position.
+
+Usage: ScanCwHome
+Target: Motor
+    Move "CW" direction for finding home position.
+
+Usage: ScanCcwHome Channel|MotorNumber
+Target: Controller
+    Move "Channel" (A or B) or "MotorNumber" (0 to 16) to "CCW" for finding
+    home position.
+
+Usage: ScanCcwHome
+Target: Motor
+    Move "CCW" direction for finding home position.
+
+Usage: Stop [Channel|MotorNumber]
+Target: Controller
+    Stop motors(s) which shown "Channel" or "MotorNumber". If they are
+    not specified, all motors will be stopped.
+
+Usage: Stop
+Target: Motor
+    Stop motor.
+
+Usage: StopEmergency [Channel|MotorNumber]
+Target: Controller
+    Make a sudden stop which shown "Channel" or "MotorNumber". If they are
+    not specified, all motors will be stopped.
+
+Usage: StopEmergency
+Target: Motor
+    Make a sudden stop.
+
+#Events
+Event: _ChangedIsBusy Value
+    _ChangedIsBusy event shows that the status of motor has been changed.
+    1 is busy, 0 is free.
+
+Event: _ChangedValue Value
+    _ChangedValue event shows that the position of motor has been changed.
+
+Event: _ChangedFunction Value
+    _ChangedFunction event event shows that the function has been changed.
+    0 is Local, 1 is Remote.
+
+Event: _ChangedLimitValue Value
+   (Optional: Use with start option -limitstatusenable)
+     _ChangedLimitValue event shows that the limit status of motor has been changed.

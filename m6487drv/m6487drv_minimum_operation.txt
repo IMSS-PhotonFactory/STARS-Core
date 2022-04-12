@@ -1,0 +1,24 @@
+計測するのに最低限必要な操作について
+
+１．電源導入を投入する
+
+２．計測前準備
+	(1)Keithley6487の設定を*RSTデフォルト条件に戻します
+   	        (*RST:default settings for remote operation)
+		m6487drv Reset
+		m6487drv>term1 @Reset Ok
+	(2) GetValueで返される値のフォーマットを設定する
+		m6487drv SetDataFormatElements READ
+		m6487drv>term1 @SetDataFormatElements READ Ok:
+    	(3) ゼロチェックをオフにします
+		m6487drv SetZeroCheckEnable 0
+		m6487drv>term1 @SetZeroCheckEnable 0 Ok:
+
+３．計測　・・・(1)(2)を繰り返します
+	(1)値を読み取りバッファへ転送する
+          （実行する度新しい計測値がバッファに転送される）
+		m6487drv Run
+		m6487drv>term1 @Run Ok:
+	(2)バッファの値を取得する
+		m6487drv GetValue
+		m6487drv>term1 @GetValue +5.855276E-13

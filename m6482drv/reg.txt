@@ -1,0 +1,17 @@
+m6482drv.ch1:Range=DEFAULT
+m6482drv.ch2:Range=DEFAULT
+m6482drv.ch1:AutoRangeEnable=1
+m6482drv.ch2:AutoRangeEnable=1
+m6482drv.ch1.AverageEnable=0
+m6482drv.ch2.AverageEnable=0
+m6482drv.ch1.AverageCount=DEFAULT
+m6482drv.ch2.AverageCount=DEFAULT
+m6482drv:NPLCycles=DEFAULT
+m6482drv:TraceFeedControl=NEXT
+m6482drv:TriggerDelay=DEFAULT
+m6482drv:TriggerArmSource=IMM
+m6482drv:TriggerSource=IMM
+m6482drv:TriggerArmCount=1
+m6482drv:TriggerCount=1
+m6482drv:TracePoints=1
+m6482drv:DataFormatTraceDataElements=CURRENT1,CURRENT2
