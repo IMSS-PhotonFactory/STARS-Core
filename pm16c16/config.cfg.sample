@@ -1,0 +1,14 @@
+[pm16c16]
+StarsServerHost=localhost
+
+DeviceHost=192.168.1.55
+#DevicePort=7777
+
+#ChannelNameList=att,s1l,s1r,s1t,s1b,s2l,s2r,s2t,s2b,s3t,s3b,s3l,s3r,c_x,c_y,c_z
+
+#LimitStatusChannelList=*
+#PM16C04Compatible=True
+#RawEnable=True
+#AllReplyEnable=True
+
+#Debug=True
