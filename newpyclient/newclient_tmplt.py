@@ -16,7 +16,7 @@ class <<client_name>>():
         self.st = stars.StarsInterface(node, host, key, port)
 
         # Use the follow value if you need interval function
-        #self.intervaltime = 0.5
+        self.intervaltime = 0.5
 
         #Enable debug print
         #self.st.setdebug(True)
@@ -92,12 +92,12 @@ class <<client_name>>():
                 print("!!Callback stopped!!")
                 break
 
-            """
             time.sleep(self.intervaltime)
-            # If you need interval funciton write codes here and comment out codes below
+            # If you need interval funciton write codes here.
 
+
+            # If you need block intervel until gets some string from STDIN...
             """
-
             sbuf = sys.stdin.readline().rstrip('\n')
             if sbuf == 'quit':
                 break
@@ -107,6 +107,7 @@ class <<client_name>>():
             #This sleep is for avoiding CPU load increasing in background.
             else:
                 time.sleep(1)
+            """
 
         #============================================================
         self.st.disconnect()
