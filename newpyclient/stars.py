@@ -9,12 +9,16 @@
         0.2    Upgrade          2016.12.20    Y.Nagatani
 
         0.201  +--Change term 'read' to 'receive'   2017.02.17    Y.Nagatani
+
+        0.202  +--Fixed bug in 'receive' (limitation of buffer size)  2020.04.10  T.Kosuge
+
+        0.21  upgrade 'receive' function (processing speed increased) 2020.04.22 J.Szczesny
 """
 
 # Define: program info
 __author__ = 'T.Kosuge, Y.Nagatani'
-__version__ = '0.201'
-__date__ = '2017-02-17'
+__version__ = '0.21'
+__date__ = '2020-04-22'
 __license__ = 'MIT'
 
 import sys
@@ -44,22 +48,22 @@ class StarsMessage(str):
     def __init__(self, message):
         self.allmessage = message
         try:
-            mess   = message.split(' ', 1)
+            mess = message.split(' ', 1)
             fromto = mess[0].split('>')
-            self.nodefrom   = fromto[0]
-            self.nodeto     = fromto[1]
-            self.message    = mess[1]
-            mess   = mess[1].split(' ', 1)
-            self.command    = mess[0]
+            self.nodefrom = fromto[0]
+            self.nodeto = fromto[1]
+            self.message = mess[1]
+            mess = mess[1].split(' ', 1)
+            self.command = mess[0]
             if len(mess) > 1:
                 self.parameters = mess[1]
             else:
                 self.parameters = ''
         except:
-            self.nodefrom   = ''
-            self.nodeto     = ''
-            self.command    = ''
-            self.message    = ''
+            self.nodefrom = ''
+            self.nodeto = ''
+            self.command = ''
+            self.message = ''
             self.parameters = ''
 
 #----------------------------------------------------------------
@@ -91,16 +95,16 @@ class StarsInterface():
             nodename -- (string) is so-called 'STARS nodename'.
 
             srvhost  -- (string) is the IP address or the hostname of STARS server.
-            
+
             keyfile  -- (optional string) is the filepath of the STARS keyfile. If omitted, nodename + '.key' will be used.
 
             srvport  -- (optional integer) is the port value of STARS server. If omitted, 6057(=DEFAULT_PORT) will be used.
 
 
     """
-    
-    DEFAULT_PORT    = 6057
-    DEFAULT_TIMEOUT =   10
+
+    DEFAULT_PORT = 6057
+    DEFAULT_TIMEOUT = 10
     TCP_BUFFER_SIZE = 4096
 
     #----------------------------------------------------------------
@@ -112,7 +116,7 @@ class StarsInterface():
               Returns:
                 (string) the last error message text.
         """
-        return(self.error)
+        return self.error
 
     #----------------------------------------------------------------
     # debug functions
@@ -123,16 +127,15 @@ class StarsInterface():
               Parameters:
                 b -- (bool) set True to print debug infomation text to stdout.
         """
-        if(b == True):
+        if b:
             self._debug = b
         else:
             self._debug = False
-        return
 
-    def _debugprint(self,msg):
-        if(self._debug == True):
+    def _debugprint(self, msg):
+        if self._debug:
             try:
-                ct=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
+                ct = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime())
                 sys.stdout.write(ct+' '+msg)
             except Exception as e:
                 return
@@ -141,16 +144,16 @@ class StarsInterface():
     #----------------------------------------------------------------
     # Initialize
     #----------------------------------------------------------------
-    def __init__(self, nodename, srvhost, keyfile = '', srvport = DEFAULT_PORT):
+    def __init__(self, nodename, srvhost, keyfile='', srvport=DEFAULT_PORT):
         self.nodename = nodename
-        self.srvhost  = srvhost
+        self.srvhost = srvhost
         if keyfile == '':
             self.keyfile = nodename + '.key'
         else:
-            self.keyfile  = keyfile
-        self.srvport    = srvport
-        self.keywords   = ''
-        self.error      = ''
+            self.keyfile = keyfile
+        self.srvport = srvport
+        self.keywords = ''
+        self.error = ''
         self.readbuffer = ''
 
         #Added by Y.Nagatani
@@ -158,7 +161,7 @@ class StarsInterface():
         self._connectiontimeout = socket.getdefaulttimeout()
         self._readtimeout = StarsInterface.DEFAULT_TIMEOUT
         self._lastexception = sys.exc_info()
-        self._debug=False
+        self._debug = False
         self._callbackrunning = False
 
     #****************************************************************
@@ -172,9 +175,9 @@ class StarsInterface():
 
                 (None) If no socket is assinged for STARS.
         """
-        if hasattr(self,'s'):
-            return(self.s)
-        return(None)
+        if hasattr(self, 's'):
+            return self.s
+        return None
 
     #****************************************************************
     # Property functions: Socket timeout
@@ -188,19 +191,19 @@ class StarsInterface():
               Returns:
                 (bool) True if the timeout value is valid, otherwise False.
         """
-        if(isinstance(timeout, int) or isinstance(timeout, float) or (sys.version_info.major<3 and isinstance(timeout, long))):
-            if(timeout>0):
+        if(isinstance(timeout, int) or isinstance(timeout, float)):
+            if timeout > 0:
                 self._connectiontimeout = timeout
-                return True;
+                return True
             else:
-                rt="setdefaultconnectiontimeout value invalid. (%s)" %(timeout)
+                rt = "setdefaultconnectiontimeout value invalid. (%s)" %(timeout)
                 self.error = "%s" %(rt)
                 self._debugprint("[setdefaultconnectiontimeout] (%s)\n" %(self.error))
                 return(False)
-        rt="setdefaultconnectiontimeout type invalid. (%s)" %(type(timeout))
+        rt = "setdefaultconnectiontimeout type invalid. (%s)" %(type(timeout))
         self.error = "%s" %(rt)
         self._debugprint("[setdefaultconnectiontimeout] (%s)\n" %(self.error))
-        return(False)
+        return False
 
     def setdefaultreceivetimeout(self, timeout):
         """ setdefaultreceivetimeout: Set the socket receive timeout value(in seconds).
@@ -213,28 +216,28 @@ class StarsInterface():
               Returns:
                 (bool) True if the timeout value is valid, otherwise False.
         """
-        if(timeout is None):
+        if timeout is None:
             self._readtimeout = timeout
-            return True;
-        if(isinstance(timeout, int) or isinstance(timeout, float) or (sys.version_info.major<3 and isinstance(timeout, long))):
-            if(timeout>0):
+            return True
+        if(isinstance(timeout, int) or isinstance(timeout, float)):
+            if timeout > 0:
                 self._readtimeout = timeout
-                return True;
+                return True
             else:
-                rt="setdefaultreceivetimeout value invalid. (%s)" %(timeout)
+                rt = "setdefaultreceivetimeout value invalid. (%s)" %(timeout)
                 self.error = "%s" %(rt)
                 self._debugprint("[setdefaultreceivetimeout] (%s)\n" %(self.error))
                 return(False)
-        rt="setdefaultreceivetimeout type invalid. (%s)" %(type(timeout))
+        rt = "setdefaultreceivetimeout type invalid. (%s)" %(type(timeout))
         self.error = "%s" %(rt)
         self._debugprint("[setdefaultreceivetimeout] (%s)\n" %(self.error))
-        return(False)
+        return False
 
     def getdefaultreceivetimeout(self):
         """ getdefaultreceivetimeout: Return the socket receive timeout value(in seconds).
 
               Returns:
-                (numeric or None) the socket receive timeout value(in seconds). 
+                (numeric or None) the socket receive timeout value(in seconds).
         """
         return(self._readtimeout)
 
@@ -253,24 +256,24 @@ class StarsInterface():
             self.s.settimeout(self._connectiontimeout)
         except Exception as e:
             self._lastexception = sys.exc_info()
-            rt="socket.settimeout failure. (%s, %s)\n" %(str(self._connectiontimeout), type(e))
+            rt = "socket.settimeout failure. (%s, %s)\n" %(str(self._connectiontimeout), type(e))
             self.error = "%s" %(rt)
             self._debugprint("%s\n" %(self.error))
             self.s = None
-            return(False)
+            return False
         #self._debugprint("settimeout %s\n" %(str(self._connectiontimeout)))
 
         try:
             self.s.connect((self.srvhost, self.srvport))
         except Exception as e:
             self._lastexception = sys.exc_info()
-            rt="Connection failure. (%s:%s, %s)" %(self.srvhost, self.srvport, type(e))
+            rt = "Connection failure. (%s:%s, %s)" %(self.srvhost, self.srvport, type(e))
             self.error = "%s" %(rt)
             self._debugprint("%s\n" %(self.error))
             self.s = None
-            return(False)
+            return False
         #self._debugprint("STARS server detected.\n")
- 
+
         try:
             rt = self.s.recv(StarsInterface.TCP_BUFFER_SIZE).decode()
             rt = rt.strip('\r\n')
@@ -280,38 +283,38 @@ class StarsInterface():
             rt = self.s.recv(StarsInterface.TCP_BUFFER_SIZE).decode()
         except Exception as e:
             self._lastexception = sys.exc_info()
-            rt="Connection process failure. (%s)" %(type(e))
+            rt = "Connection process failure. (%s)" %(type(e))
             self.error = "%s" %(rt)
             self._debugprint("%s\n" %(self.error))
             self._debugprint("%s\n" %(e))
             self.disconnect()
-            return(False)
+            return False
 
         rt = rt.strip('\r\n')
         if rt.startswith('System>'):
             if rt.endswith(' Ok:'):
-                rt="[Connected] %s:%s" %(self.srvhost, self.srvport)
+                rt = "[Connected] %s:%s" %(self.srvhost, self.srvport)
                 self._debugprint("%s\n" %(rt))
                 return 'Ok:'
             rt = rt.replace('System>', '')
-            rt = rt.replace('Er:','')
+            rt = rt.replace('Er:', '')
         rt = rt.strip()
         self.error = rt
         self._debugprint("%s\n" %(rt))
         self.disconnect()
-        return(False)
+        return False
 
     def disconnect(self):
         """ disconnect: Disconnect from STARS server
         """
         fh = self.gethandle()
-        if(fh is not None):
+        if fh is not None:
             try:
                 fh.close()
                 self.s = None
             except Exception as e:
                 self._lastexception = sys.exc_info()
-                rt="Disconnection failure. (%s)" %(type(e))
+                rt = "Disconnection failure. (%s)" %(type(e))
                 self.s = None
         return
 
@@ -331,7 +334,7 @@ class StarsInterface():
     #----------------------------------------------------------------
     # Send
     #----------------------------------------------------------------
-    def send(self, arg1, arg2 = '', arg3 = ''):
+    def send(self, arg1, arg2='', arg3=''):
         """ send: Send STARS message to STARS server.
 
               Parameters:
@@ -352,10 +355,10 @@ class StarsInterface():
                 (bool) True if sended, otherwise False.
         """
         fh = self.gethandle()
-        if(fh is not None):
+        if fh is not None:
             msg = ''
             if arg2 != '':
-                if arg3 !='':
+                if arg3 != '':
                     msg = arg1 + '>' + arg2 + ' ' + arg3
                 else:
                     msg = arg1 + ' ' + arg2
@@ -367,15 +370,15 @@ class StarsInterface():
                 fh.sendall(msg.encode())
             except Exception as e:
                 self._lastexception = sys.exc_info()
-                rt="Send failure. (%s, %s)" %(msg, type(e))
+                rt = "Send failure. (%s, %s)" %(msg, type(e))
                 self.error = "%s" %(rt)
                 self._debugprint("%s\n" %self.error)
                 self._debugprint("%s\n" %(e))
                 return(False)
             self._debugprint("[Send] %s" %(msg))
             return(True)
-        self.error="No socket."
-        return(False)
+        self.error = "No socket."
+        return False
 
     #----------------------------------------------------------------
     # Receive
@@ -389,7 +392,7 @@ class StarsInterface():
         self.readbuffer = self.readbuffer[dp+1:]
         return rtmess
 
-    def receive(self, timeout = '', exceptionret = StarsMessage('')):
+    def receive(self, timeout='', exceptionret=StarsMessage('')):
         """ receive: Read STARS message from STARS Server.
 
               Parameters:
@@ -402,10 +405,11 @@ class StarsInterface():
 
                 (StarsMessage object) if the socket timeout detected, return StarsMessage('').
 
-                The value of 'exceptionret' when the fatal error(kind of connection lost, timeout value error...) detected. 
+                The value of 'exceptionret' when the fatal error(kind of connection lost, timeout value error...) detected.
         """
         fh = self.gethandle()
-        if(fh is not None):
+        if fh is not None:
+
             ### Check read buffer.
             if self.readbuffer != '':
                 rtmsg = self._process_message('')
@@ -414,49 +418,56 @@ class StarsInterface():
                     return StarsMessage(rtmsg)
 
             ### Set timeout.
-            if(timeout == ''):
+            if timeout == '':
                 timeout = self.getdefaultreceivetimeout()
             try:
                 self.s.settimeout(timeout)
             except Exception as e:
                 self._lastexception = sys.exc_info()
-                rt="settimeout failure. (%s)" %(type(e))
+                rt = "settimeout failure. (%s)" %(type(e))
                 self.error = "%s" %(rt)
                 self._debugprint("[Recv] (%s)\n" %(self.error))
-                return(exceptionret)
+                return exceptionret
 
-            ### Read socket
-            msg = ''
-            try:
-                msg = self.s.recv(StarsInterface.TCP_BUFFER_SIZE).decode()
-                ### Disconnect deteceted.
-                if(len(msg) == 0):
-                    self.error = 'Lost connection.'
+            while True:
+                ### Read socket
+                msg = ''
+                try:
+                    datafragments = []
+                    while True:
+                        datapiece = self.s.recv(StarsInterface.TCP_BUFFER_SIZE).decode()
+                        datafragments.append(datapiece)
+                        if '\n' in datapiece:
+                            break
+                        if len(datapiece) == 0:
+                            break
+                    msg = ''.join(datafragments)
+                    ### Disconnect deteceted.
+                    if len(msg) == 0:
+                        self.error = 'Lost connection.'
+                        self._debugprint("[Recv] (%s)\n" %(self.error))
+                        return exceptionret
+                except socket.timeout:
+                    self.error = 'Timeout'
                     self._debugprint("[Recv] (%s)\n" %(self.error))
-                    return(exceptionret)
-            except socket.timeout:
-                self.error = 'Timeout'
-                self._debugprint("[Recv] (%s)\n" %(self.error))
-                return(StarsMessage(''))
-            except Exception as e:
-                self._lastexception = e
-                rt="Receive failure. (%s)" %(type(e))
-                self.error = "%s" %(rt)
-                self._debugprint("[Recv] (%s)\n" %(self.error))
-                self._debugprint("%s\n" %(e))
-                return(exceptionret)
+                    return StarsMessage('')
+                except Exception as e:
+                    self._lastexception = e
+                    rt = "Receive failure. (%s)" %(type(e))
+                    self.error = "%s" %(rt)
+                    self._debugprint("[Recv] (%s)\n" %(self.error))
+                    self._debugprint("%s\n" %(e))
+                    return exceptionret
 
-            ### Process STARS message
-            rtmsg = self._process_message(msg)
-            if rtmsg != '':
-                rtmsg = rtmsg.replace('\r', '')
-                self._debugprint("[Recv] %s\n" %(rtmsg))
-                return StarsMessage(rtmsg)
-            self.error = 'Timeout'
-            self._debugprint("[Recv] (%s)\n" %(self.error))
-            return(StarsMessage(rtmsg))
-        self.error="No socket."
-        return(exceptionret)
+                ### Process STARS message
+                rtmsg = self._process_message(msg)
+                if rtmsg != '':
+                    rtmsg = rtmsg.replace('\r', '')
+                    self._debugprint("[Recv] %s\n" %(rtmsg))
+                    return StarsMessage(rtmsg)
+
+        self.error = "No socket."
+        return exceptionret
 
     #----------------------------------------------------------------
     # Callback
@@ -474,7 +485,7 @@ class StarsInterface():
 
               Parameters:
                 callback is a python 'callable' function which takes arguments (StarsMessage stmess).
-        """     
+        """
         self.callback = callback
         th = _CallbackThread(self)
         th.setDaemon(True)
