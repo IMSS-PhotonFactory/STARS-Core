@@ -1,6 +1,8 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 9.00
-# Visual C# Express 2005
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33829.357
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarsInterface", "StarsInterface\StarsInterface.csproj", "{1AD7AE88-920E-4A32-A74F-F2E383E6AE3E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StarsInterfaceWinForm", "StarsInterfaceWinForm\StarsInterfaceWinForm.csproj", "{836EC423-B706-43D9-8715-2ED373D21F85}"
@@ -22,5 +24,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {217F5A68-20A0-46D8-AFFD-39A705B0FAFD}
 	EndGlobalSection
 EndGlobal
