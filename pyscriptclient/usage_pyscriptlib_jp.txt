@@ -1,0 +1,63 @@
+
+                    【【【【STARS用簡易スクリプトPython版実行ライブラリ】】】】
+
+
+
+.概要
+本PythonライブラリはSTARS用の簡単なスクリプト(scriptclient)を作成する際に有効なライブラリです。
+なお、scriptclientは基本的にターミナル上やWindowsのコマンドプロンプト上で動作します(Python3が必要)
+
+
+.前準備
+..キーファイルのコピー
+あらかじめ"scriptclient.key"をSTARSサーバのtakaserv-libの下にコピーしてください。
+また、scliptclient.cfgを適宜編集してください。
+
+[stars]
+starsserver = localhost
+mynodename  = scriptclient
+keyfile     = scriptclient.key
+starsport   = 6057
+timeout     = 10
+
+[file]
+datadir = ./data
+currentdata = currentdata.txt
+
+
+
+
+..基本スクリプトの準備
+scriptclientにはサンプルのほかに基本的なスクリプトプログラムが用意されています。これらを使用するとテンプレートをもとに新たにスクリプトプログラムを開発するなどが可能となります。
+
+Windowsの場合は、Anaconda Prompt等で、Linux等の場合はターミナルから、scriptclientのディレクトリに移動してください。
+
+
+.ライブラリの利用
+
+あらかじめプログラムのはじめの部分に
+import scriptlib
+としてください。
+その後
+sc = scriptlib.ScriptLib()
+のようにすると利用可能になります。
+
+例:
+import scriptlib
+sc = scriptlib.ScriptLib()
+sc.data_file = 'test1.csv' #データファイル名の設定
+
+for t in range(20):
+    rt = sc.send_command('sanwadmm','GetValue')    #コマンドの送信と結果の受信
+    sc.write_file("{},{}".format(t,rt.parameters)) #データファイルへ結果を出力
+    sc.sleep(5)                                    #5秒のインターバル
+
+
+
+.Methods
+scriptlibがあるディレクトリに移動して
+
+python3 -c 'import scriptlib;help(scriptlib)'
+
+と入力してください。helpが表示されます。
+
