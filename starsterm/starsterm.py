@@ -98,7 +98,7 @@ class starsterm():
             return
 
     def run(self):
-        prompt = "Enter STARS messge. (Eenter \">h\" if you need help.)"
+        prompt = "Enter STARS messge. (Enter \">h\" if you need help.)"
         prev_mess = ""
         # Connect to STARS server
         rtflag = self.st.connect()
