@@ -1,7 +1,7 @@
 package stars;
 
 #STARS interface module
-#2004-03-31 Ver.1.3 Takashi Kosuge
+#2006-08-24 Ver.1.4 Takashi Kosuge
 #Org. 2001-10-03
 
 
@@ -50,13 +50,16 @@ sub addcallback{
 
 #Usage: stars->Mainloop([\&sub, timeout|\timeout]);
 #Changed, timeout can be reference. 2002-02-22
+#Changed, Input will be checked each 40msec at callback mode. 2006-08-24
 sub Mainloop{
 	my $dummy=shift;
 	my $handler=shift;
 	my $timeoutval=shift;
 	my $timeout;
-	my $fintimeout;
+	my $fintimeout = -1;
+	my $timeoutbuf;
 	my $ready;
+	my $prevtimeout;
 
 	my $s;
 	my $buf;
@@ -67,19 +70,27 @@ sub Mainloop{
 	}else{
 		$timeout = \-1;
 	}
+	$prevtimeout = $$timeout;
 
 	while(1){
 		if($$timeout < 0){
-			$fintimeout = undef;
+			($ready)=IO::Select->select($stars::cbobj,undef,undef,undef);
 		}else{
-			$fintimeout = $$timeout/1000;
+			if($fintimeout<=0 or $$timeout != $prevtimeout){$fintimeout = $$timeout;}
+			while($fintimeout>=0){
+				if($fintimeout > 40){$timeoutbuf=0.04;}else{$timeoutbuf=$fintimeout/1000;}
+				if(($ready)=IO::Select->select($stars::cbobj,undef,undef,$timeoutbuf)){last;}
+				$fintimeout -= 40;
+			}
+			if(!$ready and $handler ne ''){
+				$handler->();
+				next;
+			}
 		}
-		unless(($ready)=IO::Select->select($stars::cbobj,undef,undef,$fintimeout)){
-			if($handler ne ''){$handler->();}
-			next;
-		}
+
 		foreach $s (@$ready){
 			if($stars::cbmode{$s} eq 'Detect'){
+				print "DETECT\n";
 				$stars::cbhandler{$s}->();
 			}elsif(sysread($s, $buf, 512)){
 				if($stars::cbmode{$s} eq 'Direct'){

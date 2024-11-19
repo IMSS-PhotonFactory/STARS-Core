@@ -3,51 +3,59 @@
 # keithley picoanmenter 6485 STARS client
 # 2006-05-20 Yasuko Nagatani
 ##-------------------------------------------------------
-## CVS $Revision: 1.1 $ $Date: 2010-01-19 02:43:50 $ $Author: yasukon $
+## CVS $Revision: 1.1 $ $Date: 2014/07/11 00:00:00 $ $Author: yasukon $
 ##-------------------------------------------------------
 ## Updated
+# Date     Ver Description
+#2010.01.19 1.0 Trial Version : 1st Release.
+#2014.07.11 2.0 ValueGet Speed approvement, add channel funciton (only 1 channel)
 #################################################################
 use strict;
 use Getopt::Long;
 use stars;
-
 #################################################################
 ## ToDo: Constant Variables here.
-use constant WAIT_DONE => 2000;    # Wait for Command End.
-use constant WAIT_MEMWRITE => 100; # Wait for Write to memories.
-use constant WAIT_RESET    => 100; # Wait for Write to memories.
+use constant PGM_VERSION       =>  2.0; # PGM Ver.No
+use constant WAIT_DONE         => 2000; # Wait for Command End.
+use constant WAIT_MEMWRITESEND =>   50; # Wait for Write to memories.
+use constant WAIT_MEMWRITEREAD =>    1; # Wait for Write to memories.
+use constant WAIT_RESET         => 100; # Wait for Write to memories.
 use constant STAT_OK   => 'Ok:';
 use constant STAT_ERR  => '';
-use constant MSG_ARGMISSING  => '1 Parameter Required.';
+use constant MSG_ARGMISSING  => 'Parameter Required.';
 use constant MSG_ARG0ONLY    => 'No Parameter Required.';
-#use constant PGM_VERSION => '1.0'; # PGM Ver.No
-use constant PGM_VERSION => 2.0; # PGM Ver.No
-$::Model = '';                     # AutoSetup: 6485 or 6487
+@::Regkey=();
+%::Reg=();
+$::RegFile="reg.txt";
+$::Model = '';                          # AutoSetup: 6485 or 6487
+$::CONFIG_ADDOK = '';
+$::NOREG='';
 #################################################################
 ## ToDo: Set parameters here.
 $::Server      = 'localhost';    # Default Stars Server.
 $::NodeName    = 'm6485drv';     # Default Node Name
-$::Debug       = '';
 $::PGMVersion  = PGM_VERSION;    # Default Program Version
-$::CONFIG_ADDOK = '';
-#$::ADDOK       =1;    		 # Default Program Version
+$::Debug       = '';
 #################################################################
 ## ToDo: Globals for Control Device. Internal Use Only.
-$::LINE_FREQUENCY = '';
-$::ARM_SOURCE     = '';
-$::ARM_COUNT      = '';
-#$::TRIG_SOURCE    = '';         # for future use
-$::TRIG_COUNT     = '';
+#                       0 
+@::ChannelName     = qw(ch1);
+%::ChannelName =();
+$::CheckTriggerFlag=0;
+$::RAWENABLE = 0;
+$::DISABLEAUTORESET = 0;
 #################################################################
 ## ToDo: Globals for Users.
-#$::USER_GETVALUE_ELEMENTS = 'READ,UNIT'; # GetValue Format
 #################################################################
 
 # ToDo: You can set option switchs. See help 'Getopt::Long'.
 GetOptions(
 'h'      => \&usage,
 'd'      => \$::Debug,
-'ok'     => \$::CONFIG_ADDOK
+'ok'     => \$::CONFIG_ADDOK,
+'noreg'  => \$::NOREG,
+'rawenable'  => \$::RAWENABLE,
+'disableautoreset'  => \$::DISABLEAUTORESET,
 ) or die 'Bad switch.\n';
 
 $|=1;
@@ -55,48 +63,70 @@ $|=1;
 if($_ = shift(@ARGV)){$::NodeName = $_;}
 require 'config.pl';
 if($::CONFIG_ADDOK){
-	$::ADDOK       = 1;			 # Add OK : 1
+	$::ADDOK       = 1;		 # Add OK : 1
 }elsif($::PGMVersion>=2.0){
 	$::ADDOK       = '';		 # Add OK : n/a
 }else{
-	$::ADDOK       = 1;			 # Add OK : 1
+	$::ADDOK       = 1;		 # Add OK : 1
+}
+if($::NOREG){
+	$::RegFile="";
 }
 ################################################################
 # Interface library
 # Prease include your own interface library.
 # "device_read", "device_write" and "device_init" must be included
 # in the library.
-require 'nportsvr.pl';    #For nport server
-require 'm6485sub.pl';   #For PGM
+require 'nportsvr_n.pl';    #For nport server
 ################################################################
 ## Open device.
-device_init();
-$_=devAct('*IDN?'); # Get ModelType
-unless(/MODEL\s+(\d+)[\s,]/){
+my $dev=device_init();
+my $rt=devAct('*IDN?'); # Get ModelType
+unless($rt=~/MODEL\s+(\d+)[\s,]/){
 	print "Device Connect Error. Restart Device then start $::NodeName.";
 	exit(0);
 }else{
 	$::Model=$1;
 	if($::Debug){print ">>>>>>>>>>>>>>Model $::Model\n";}
 }
-$_=devAct(':SYST:VERS?'); # Get SCPI Version
-unless($_){
-	print "Device Connect Error. Restart Device then start $::NodeName.";
+if($::Model eq '6485'){
+	require 'm6485sub.pl';
+}elsif($::Model eq '6487'){
+	require 'm6487sub.pl';
+}else{
+	print "Bad Model. $::Model";
+	exit(0);
+}
+$rt=devAct(':SYST:VERS?'); # Get SCPI Version
+unless($rt){
+	print "Device Connect Error. Restart Device then start $::NodeName.\n";
 	exit(0);
 }else{
-	if($::Debug){print ">>>>>>>>>>>>>>SCPI Revision $_\n";}
+	if($::Debug){print ">>>>>>>>>>>>>>SCPI Revision $rt\n";}
 }
-#$_=syncLocal(0);
-#unless($_){
-#	print "Device Connect Error. Restart Device then start $::NodeName.";
-#	exit(0);
-#}
+unless($::DISABLEAUTORESET){
+	$rt=devAct('*RST'); # Get SCPI Version
 
+}else{
+	if($::Debug){print ">>>>>>>>>>>>>>Skip autoreset\n";}
+}
+loadcache();
+loadconfig($::DISABLEAUTORESET);
+TriggerEnvCheck(0);
+
+for(my $i=0;$i<=$#::ChannelName;$i++){
+	$::ChannelName{$::ChannelName[$i]} = $i;
+	if($::Debug){
+		print "Channel$::ChannelName{$::ChannelName[$i]} name=> $::ChannelName[$i]\n";
+	}
+}
 ## Open Stars server. $::tak is a Stars object.
 $::tak = stars->new($::NodeName, $::Server)
 	or die 'Could not connect Stars server';
 
 $::tak->addcallback(\&handler);
+$::tak->addcallback(\&detect_handler,$dev,'Detect');
+
 
 #%::helpcntrl=();
 #set_help_list();
@@ -128,33 +158,59 @@ sub handler{
 		return;
 	}
 ## Model Command Check ##
-	if($::Model eq '6485'){
-		if(($mess=~/^(\S+)$/) and defined($::MODEL6485_KEITHLEY{$1})){
-			$cmd=$1;
-		}elsif(($mess=~/^(\S+)\s(.*)/) and defined($::MODEL6485_KEITHLEY{$1})){
-			$cmd=$1;$arg=$2;$argflag=1;
-		}else{
-			$::tak->Send("$to>$from \@$mess Er: Bad Command");
-			return;
-		}
-		## Controller Commands ##
-		if($to=~/^$::NodeName$/){
-#			$::ADDOK=1;
-			$::Error='';devwrite('*CLS');donecheck();
-			$rt=Ctl_handler6458($from, $to, $cmd, $argflag, $arg);
-#		}elsif($to=~/^$::NodeName\.([^\.\s]+)$/){ # Bad Device Name
-#			$::tak->Send("\@$mess Er: $to is down.", $from);
-#			return;
-		}else{ # Bad Device Name
-			$::tak->Send("\@$mess Er: $to is down.", $from);
-			return;
-		}
+	if(($mess=~/^(\S+)$/) and defined($::MODEL_KEITHLEY{$1})){
+		$cmd=$1;
+	}elsif(($mess=~/^(\S+)\s(.*)/) and defined($::MODEL_KEITHLEY{$1})){
+		$cmd=$1;$arg=$2;$argflag=1;
 	}else{
-		$::Error='Bad Model $::Model';
+		$::tak->Send("$to>$from \@$mess Er: Bad Command");
+		return;
+	}
+	## Controller Commands ##
+	if($to=~/^$::NodeName$/){
+		if($cmd=~/^hello$/){
+			$rt='nice to meet you.';
+			$::tak->Send("$to>$from \@$mess $rt");return;
+		}elsif($cmd=~/^help$/){
+			unless($argflag){$rt=get_help_list($::Model,'Cntrl');
+			}else{$rt=get_help_list($::Model,'Cntrl',$arg);}
+			$::tak->Send("$to>$from \@$mess $rt");return;
+		}elsif($cmd=~/^SendRawCommand$/){
+			if($::RAWENABLE and $argflag){
+				device_clearreadbuffer();
+				$rt="Ok:";
+				devwrite($arg);
+				if($arg=~/\?/){
+					$rt=devread();
+				}
+			}else{
+				$::tak->Send("$to>$from \@$mess Er: Bad command or parameter.");
+				return;
+			}
+			$::tak->Send("$to>$from \@$mess $rt");return;
+		}
+		
+		$::Error='';devwrite('*CLS');
+		$rt=Ctl_handler($from, $to, $cmd, $argflag, $arg);
+	}elsif($to=~/^$::NodeName\.([^\.\s]+)$/){ # Bad Device Name
+		if($::ChannelName{$1} eq ""){
+			$::tak->Send("\@$mess Er: $to is down.", $from);return;
+		}elsif($cmd=~/^hello$/){
+			$rt='nice to meet you.';
+			$::tak->Send("$to>$from \@$mess $rt");return;
+		}elsif($cmd=~/^help$/){
+			unless($argflag){$rt=get_help_list($::Model,'Motor');
+			}else{$rt=get_help_list($::Model,'Motor',$arg);}
+			$::tak->Send("$to>$from \@$mess $rt");return;
+		}
+		$::Error='';devwrite('*CLS');
+		$rt=Motor_handler($from, $to, $cmd, $argflag, $arg, $::ChannelName{$1});
+	}else{ # Bad Device Name
+		$::tak->Send("\@$mess Er: $to is down.", $from);return;
 	}
 ## Response ##
 	if(($rt eq '') and ($::Error=~/^Ng:/)){
-		$::tak->Send("$to>$from \@$mess $::Error");
+		$::tak->Send("$to>$from \@$mess Er: $::Error");
 	}elsif($rt eq ''){
 		$::tak->Send("$to>$from \@$mess Er: $::Error");
 	}elsif($rt=~/^Ok:/ or (!($::ADDOK))){
@@ -167,22 +223,19 @@ sub handler{
 #############################################################
 ## Ctl_handler called by handler
 #############################################################
-sub Ctl_handler6458{
+sub Ctl_handler{
 	my ($from, $to, $cmd, $argflag, $arg) = @_;
 	my $rt='';
 	my($scmd,$kcmd,$karg,$kchk)=('','','','');
 	
 	if($::Debug){print "MAIN RCV: $from>$to $cmd $arg\n";}
-	
-	if($cmd=~/^hello$/){
-		$::ADDOK=0;
-		$rt='nice to meet you.';
-	}elsif($cmd=~/^help$/){
-		$::ADDOK=0;
-		unless($argflag){$rt=get_help_list($::Model,'Cntrl');
-		}else{$rt=get_help_list($::Model,'Cntrl',$arg);}
+	if($cmd=~/^GetDeviceList$/){
+		$rt=join(",",@::ChannelName);
+	}elsif($cmd=~/^Local$/){
+		unless($argflag){{$rt=GoLocal();}
+		}else{$::Error=MSG_ARG0ONLY;}
 	}elsif($cmd=~/^Reset$/){
-		unless($argflag){$rt=devReset(0,'*RST');
+		unless($argflag){$rt=devReset(1,'*RST');
 		}else{$::Error=MSG_ARG0ONLY;}
 	}elsif($cmd=~/^Preset$/){
 		unless($argflag){$rt=devReset(0,':SYST:PRES');
@@ -196,29 +249,71 @@ sub Ctl_handler6458{
 	}elsif($cmd=~/^GoIdle$/){
 		unless($argflag){$rt=dev2Idle();
 		}else{$::Error=MSG_ARG0ONLY;}
-	}elsif($cmd=~/^Run$/){
+	}elsif($cmd=~/^TriggerRun$/){
 		unless($argflag){
 			dev2Idle();
-			unless(syncLocal(0) eq STAT_ERR){
-				$_=$::ARM_COUNT*$::TRIG_COUNT;
-				if($_<=2500 and $_>0){
-					if(devSend(":TRAC:POIN ".$_)){
-						if(devSend(":TRAC:FEED:CONT NEXT")){
-							devwrite(":INIT");$rt=donecheck();
-						}
-					}
-				}else{
-				# Unreached Condition: check done by keithley.
-					$::Error="Buffer Overflow: size must be 0 to 2500.";
-				}
+			unless($::CheckTriggerFlag){$rt=TriggerEnvCheck(0);}
+			if($::CheckTriggerFlag){
+				$rt=devwrite(":INIT");$rt=donecheck();
 			}
 		}else{$::Error=MSG_ARG0ONLY;}
+	}elsif($cmd=~/^Run$/){
+		unless($argflag){
+			$rt=STAT_OK;
+		}else{$::Error=MSG_ARG0ONLY;}
+	}elsif($cmd=~/^GetValue$/){
+		unless($argflag){
+			unless($::CheckTriggerFlag){$rt=TriggerEnvCheck(0);}
+			if($::CheckTriggerFlag){
+				#$rt=devwrite(":READ?");$rt=devread();
+				device_clearreadbuffer();
+				$rt=devAct(":READ?",10);
+				#if($::Debug){
+				#	my @vals=split(",",$rt);
+				#	print "array $#vals\n";
+				#}
+			}
+		}else{
+			my @chs=();
+			foreach my $ch (split(",",$arg)){
+				if(defined($::ChannelName{$ch})){
+					push(@chs,$::ChannelName{$ch});
+				}else{
+					$::Error="Bad Parameter $ch";
+					$rt=STAT_ERR;
+					last;
+				}
+			}
+			if($#chs>=0){
+				unless($::CheckTriggerFlag){$rt=TriggerEnvCheck(0);}
+				if($::CheckTriggerFlag){
+					device_clearreadbuffer();
+					$rt=devAct(":READ?",10);
+					unless($rt eq STAT_ERR){
+						my @vals=split(",",$rt,$#::ChannelName+1);
+						for(my $i=0;$i<=$#chs;$i++){
+							$chs[$i]=$vals[$chs[$i]];
+						}
+						$rt=join(",",@chs);
+					}
+				}
+			}
+		}
+	}elsif($cmd=~/^GetTraceData$/){
+		$rt=devAct(":TRAC:DATA?");
 	}elsif($argflag eq 0){
 		$scmd=$cmd;$kchk=0;$kcmd=$::CMD_KEITHLEY{$scmd};
-		if(defined($::PRE_KEITHLEY{$scmd})){
-			if($::Debug){print "PRE#$::PRE_KEITHLEY{$scmd}#ARG#$karg#\n";}
-			$kchk=1;
-			$rt=$::PRE_KEITHLEY{$scmd}->();
+		if(IsChannelCommand($kcmd)){
+			#$kchk=1;
+			#$::Error="Channel missing.";
+			#$rt=STAT_ERR;
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			if(defined($::PRE_KEITHLEY{$scmd})){
+				if($::Debug){print "PRE#$::PRE_KEITHLEY{$scmd}#ARG#$karg#\n";}
+				$kchk=1;
+				$rt=$::PRE_KEITHLEY{$scmd}->();
+			}
 		}
 		unless($kchk and ($rt eq STAT_ERR)){
 			if(defined($::CHECK_KEITHLEY{$scmd})){
@@ -251,6 +346,13 @@ sub Ctl_handler6458{
 			$rt=STAT_ERR;
 		}
 		unless($kchk and ($rt eq STAT_ERR)){
+			if(IsChannelCommand($kcmd)){
+				$kchk=1;
+				$::Error="Channel missing.";
+				$rt=STAT_ERR;
+			}
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
 			if(defined($::PRE_KEITHLEY{$scmd})){
 				if($::Debug){print "PRE#$::PRE_KEITHLEY{$scmd}#ARG#$karg#\n";}
 				$kchk=1;
@@ -277,46 +379,271 @@ sub Ctl_handler6458{
 	}
 	return($rt);
 }
+#############################################################
+## Motor_handler called by handler
+#############################################################
+sub Motor_handler{
+	my ($from, $to, $cmd, $argflag, $arg, $ch) = @_;
+	my $rt='';
+	my($scmd,$kcmd,$karg,$kchk)=('','','','');
+	if($::Debug){print "MAIN RCV: $from>$to $cmd $arg $ch\n";}
+	if($cmd=~/^GetValue$/){
+		unless($argflag){
+			$rt=STAT_OK;
+			if($rt){
+				device_clearreadbuffer();
+				$rt=devAct(":READ?",10);
+				unless($rt eq STAT_ERR){
+					$rt=(split(",",$rt,$#::ChannelName+1))[$ch];
+				}
+			}
+		}else{$::Error=MSG_ARG0ONLY;}
+	}elsif($argflag eq 0){
+		$scmd=$cmd;$kchk=0;$kcmd=$::CMD_KEITHLEY{$scmd};
+		$rt=STAT_OK;
+		unless(IsChannelCommand($kcmd)){
+			$kchk=1;
+			$::Error="Bad command or parameter.";
+			$rt=STAT_ERR;
+		}else{
+			$kcmd=postConvertChannelCommand($::CMD_KEITHLEY{$scmd},$ch);
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			if(defined($::PRE_KEITHLEY{$scmd,$ch})){
+				if($::Debug){print "PRE#$::PRE_KEITHLEY{$scmd}#ARG#$karg#\n";}
+				$kchk=1;
+				$rt=$::PRE_KEITHLEY{$scmd}->();
+			}
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			if(defined($::CHECK_KEITHLEY{$scmd,$ch})){
+				if($::Debug){print "CHECK#$::CHECK_KEITHLEY{$scmd}#\n";}
+				$kchk=1;
+				$rt=$::CHECK_KEITHLEY{$scmd}->();
+			}
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			if($kcmd=~/\?$/){
+				$rt=devAct($kcmd);
+				if($rt eq STAT_ERR and $::Error=~/^Timeout$/){
+					$::Error="Ng: No Data";
+				}
+			}else{
+				$rt=devSend($kcmd);
+			}
+			if(($rt ne STAT_ERR) and defined($::POST_KEITHLEY{$scmd})){
+				if($::Debug){print "POST#$::POST_KEITHLEY{$scmd}#\n";}
+				$_=$::POST_KEITHLEY{$scmd,$ch}->($rt);
+				unless($kcmd=~/\?$/){$rt=$_;}
+			}
+		}
+	}elsif($argflag eq 1){
+		$scmd=$cmd;$karg=$arg;$kchk=0;$kcmd=$::CMD_KEITHLEY{$scmd};
+		$rt=STAT_OK;
+		unless(IsChannelCommand($kcmd)){
+			$kchk=1;
+			$::Error="Bad command or parameter.";
+			$rt=STAT_ERR;
+		}else{
+			if($kcmd=~/\?$/){
+				$kchk=1;
+				$::Error=MSG_ARG0ONLY;
+				$rt=STAT_ERR;
+			}else{
+				$kcmd=postConvertChannelCommand($::CMD_KEITHLEY{$scmd},$ch);
+			}
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			if(defined($::PRE_KEITHLEY{$scmd})){
+				if($::Debug){print "PRE#$::PRE_KEITHLEY{$scmd}#ARG#$karg#\n";}
+				$kchk=1;
+				$rt=$::PRE_KEITHLEY{$scmd}->($karg,$ch);
+			}
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			if(defined($::CHECK_KEITHLEY{$scmd})){
+				if($::Debug){print "CHECK#$::CHECK_KEITHLEY{$scmd}#ARG#$karg#\n";}
+				$kchk=1;
+				$rt=$::CHECK_KEITHLEY{$scmd}->($karg,$ch);
+				if($rt ne STAT_ERR){$karg=$rt;}
+			}
+		}
+		unless($kchk and ($rt eq STAT_ERR)){
+			$rt=devSend("$kcmd $karg");
+			if(($rt ne STAT_ERR) and defined($::POST_KEITHLEY{$scmd})){
+				if($::Debug){print "POST#$::POST_KEITHLEY{$scmd}#\n";}
+				$rt=$::POST_KEITHLEY{$scmd}->($rt,$ch);			}
+		}
+	}else{
+		# Unreached Condition: remain check for Program Error.
+		$::Error='Program Error[argflag:$argflag]'; 
+	}
+	return($rt);
+}
+# ==============================================================
+sub loadconfig{
+	my $checkonly = shift;
+	my $rt=subloadconfig($::NodeName,"",$checkonly);
+	unless($rt){return($rt);}
+	my $ch=0;
+	foreach (@::ChannelName){
+		$rt=subloadconfig("$::NodeName.$_",$ch,$checkonly);
+		unless($rt){return($rt);}
+		$ch++;
+	}
+	return($rt);
+}
+sub detect_handler{
+        while(1){
+                my $rt=device_read(0.01);
+		if($::Debug){print "DETECT : #$rt#\n";}
+                unless(defined($rt)){
+                        $::tak->Send("System _Alert Lost device connection.");
+                        $::tak->Send("System _Alert Bye $::NodeName.");
+                        exit(1);
+                }
+                $::tak->Send("System _Alert Device read detected.($rt)");
+                if($rt eq ''){
+                        last;
+                }
+        }
+}
+# ==============================================================
+sub subloadconfig{
+	my $node = shift;
+	my $ch = shift;
+	my $checkonly = shift;
+	my $rt='';
+	if($checkonly){
+		foreach (split(/\t/,getcacheregex($node,""))){
+			my($scmd,$karg)=split("=",$_,2);
+			if($scmd eq 'default'){next;}
+			$scmd="Set$scmd";
+			unless(defined($::CMD_KEITHLEY{$scmd})) {
+				$::Error="Configuration file error:$scmd";
+				return('');
+			}
+			if(defined($::PRE_KEITHLEY{$scmd})){
+				$rt=$::PRE_KEITHLEY{$scmd}->($karg,$ch);
+				unless($rt){return($rt);}
+			}
+		}
+		return(STAT_OK);
+	}
+	foreach (split(/\t/,getcacheregex($node,""))){
+		my($scmd,$karg)=split("=",$_,2);
+		if($scmd eq 'default'){next;}
+		$scmd="Set$scmd";
+		if(defined($::CMD_KEITHLEY{$scmd})){
+			my $kcmd=postConvertChannelCommand($::CMD_KEITHLEY{$scmd},$ch);
+			$rt=devSend("$kcmd $karg");
+			unless($rt){return($rt);}
+		}
+		if(defined($::POST_KEITHLEY{$scmd})){
+			$rt=$::POST_KEITHLEY{$scmd}->($karg,$ch);
+			unless($rt){return($rt);}
+		}
+	}
+	return(STAT_OK);
+}
+# ==============================================================
+sub loadcache{
+	unless(-f $::RegFile){return(STAT_OK);}
+	open(BUFREG, $::RegFile);
+	while(<BUFREG>){
+		chomp;s/\r//;
+		if(/^#/){next;}
+		if(/^([^=]+)=(.*)/){
+			push(@::Regkey,$1);
+			$::Reg{$1} = $2;
+			if($::Debug){
+				print "Load Cache#$1#$2#\n";
+			}
+		}
+	}
+	return(STAT_OK);
+}
+# ==============================================================
+sub getcache{
+	my $node = shift;
+	my $property = shift;
+#	my $key = "$::NodeName:$property";
+	my $key = "$node:$property";
+	if($::Debug){
+		print "GETCACHE#$key#\n";
+	}
+	unless(defined($::Reg{$key})){
+		$::Error = 'There is no property.';
+		return('');
+	}
+	if($::Reg{$key} eq ''){return('default');}
+	return($::Reg{$key});
+}
+# ==============================================================
+sub getcacheregex{
+	my $node = shift;
+	my $buf;
+	my $key;
+#	my @ckeys = keys(%::Reg);
+	my @ckeys = @::Regkey;
+	@ckeys = grep(/^$node:/, @ckeys);
+	my @vals = ();
+	for $key (@ckeys){
+		$buf=$key;
+		$buf =~ s/^[^:]+://;
+		push(@vals, "$buf=".$::Reg{$key});
+	}
+	$buf=join("\t", @vals);
+	if($::Debug){
+	    print "GETCACHEREGX#$node: $buf\n";
+	}
+	if($buf eq ''){return('default');}
+	return($buf);
+}
 # ==============================================================
 sub devReset{
 	my($resetflg,$cmd)=@_;
 	my $rt;
-	
 	dev2Idle();
 	if($cmd){
 		devwrite($cmd);stars->Sleep(WAIT_RESET);donecheck();
 		$rt=statuscheck();unless($rt){return($rt);}
 	}
-	if($resetflg){
-		if($::USER_GETVALUE_ELEMENTS){
-			$rt=devSend(":FORM:ELEM $::USER_GETVALUE_ELEMENTS");
-			unless($rt){return($rt);}
-		}
-	}
-#	$rt=syncLocal(0);
+	if($resetflg){$rt=loadconfig();unless($rt){return($rt);}}
+	$rt=TriggerEnvCheck(0);
 	return($rt);
 }
 # ==============================================================
 sub syncLocal(){
 	my($autoflg)=@_;
-#	unless(syncLineFrequency(STAT_OK)){
-#		return(STAT_ERR);
-#	}
+	return(STAT_OK);
+}
+# ==============================================================
+sub GoLocal(){
+	my($autoflg)=@_;
+	devwrite(':SYST:KEY 32');
+	devwrite(':SYST:KEY 1');
+	devwrite(':SYST:KEY 1');
+	return(STAT_OK);
+}
+# ==============================================================
+sub TriggerEnvCheck(){
+	my($autoflg)=@_;
+	$::CheckTriggerFlag=0;
 	unless(syncTRIGArmSource(STAT_OK,$autoflg)){return(STAT_ERR);}
 	unless(syncTRIGArmCount(STAT_OK,$autoflg)){return(STAT_ERR);}
 	unless(syncTRIGSource(STAT_OK,$autoflg)){return(STAT_ERR);}
 	unless(syncTRIGCount(STAT_OK,$autoflg)){return(STAT_ERR);}
+	unless(syncTRIGCount(STAT_OK,$autoflg)){return(STAT_ERR);}
+	$::CheckTriggerFlag=1;
 	return(STAT_OK);
-}
-# ==============================================================
+ }
+#==============================================================
 sub dev2Idle{
-	devwrite(':SYST:LOCAL');donecheck();   #Config/Local
-	devwrite(':SYST:KEY 28');donecheck();  #Store
-	devwrite(':SYST:KEY 32');donecheck();  #Exit
-	devwrite(':SYST:REMOTE');donecheck();  #Config/Local
+	my $feedskipflg=shift;
 	devwrite(':ABORT');donecheck();
 	devwrite(':TRIG:CLE');donecheck();
-	devwrite(':TRAC:CLE');donecheck();
+ 	devwrite(':TRAC:CLE');donecheck();
 	devwrite('*CLS');donecheck();
 	return(STAT_OK);
 }
@@ -324,7 +651,7 @@ sub dev2Idle{
 ## Sub Function
 ################################################################
 sub devSend{
-	my($cmd)=shift;devwrite($cmd);stars->Sleep(WAIT_MEMWRITE);
+	my($cmd)=shift;devwrite($cmd);stars->Sleep(WAIT_MEMWRITESEND);
 	donecheck();my $rt=statuscheck();return($rt);
 }
 # ==============================================================
@@ -346,12 +673,15 @@ sub donecheck{
 }
 # ==============================================================
 sub devAct{
-	my($cmd)=shift;devwrite($cmd);stars->Sleep(WAIT_MEMWRITE);
-	my $rt=devread();return($rt);
+	my($cmd)=shift;
+	my($timout)=shift;
+	devwrite($cmd);stars->Sleep(WAIT_MEMWRITEREAD);
+	my $rt=devread($timout);return($rt);
 }
 # ==============================================================
 sub devread{
-	my $rt=device_read();s/\r//;s/\n//;
+	my $timout=shift;
+	my $rt=device_read($timout);s/\r//;s/\n//;
 	if($::Debug){print ">>>REPLY#$rt#\n";}return($rt);
 }
 # ==============================================================
@@ -367,16 +697,30 @@ sub get_help_list{
 	my $target = shift;
 	my $cmd = shift;
 
-	if($model eq '6485'){
-		if($target eq 'Cntrl'){
-			unless($cmd){return(join(" ", sort(keys(%::MODEL6485_KEITHLEY))));}
-			unless(defined($::MODEL6485_KEITHLEY{$cmd})){
-				$::Error = "Command \"$cmd\" not found.";return(STAT_ERR);
-			}
-			return($::HELP_KEITHLEY{$cmd});
-		}else{
-			$::Error = "Not Supported.";return(STAT_ERR);
+	if($target eq 'Cntrl'){
+		unless($cmd){return(join(" ", sort(keys(%::MODEL_KEITHLEY))));}
+		unless(defined($::MODEL_KEITHLEY{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";return(STAT_ERR);
 		}
+		return($::HELP_KEITHLEY{$cmd});
+	}elsif($target eq 'Motor'){
+		unless($cmd){
+			my @cmds=sort(keys(%::MODEL_KEITHLEY));
+			my @ocmds=();
+			foreach my $scmd (@cmds){
+				if(IsChannelCommand($::CMD_KEITHLEY{$scmd})){
+					push(@ocmds,$scmd);
+				}
+			}
+			return(join(" ", @ocmds));
+		}
+		unless(defined($::MODEL_KEITHLEY{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";return(STAT_ERR);
+		}
+		if(!IsChannelCommand($::CMD_KEITHLEY{$cmd})){
+			$::Error = "Command \"$cmd\" not found.";return(STAT_ERR);
+		}
+		return($::HELP_KEITHLEY{$cmd});
 	}else{
 		$::Error = "Not Supported.";return(STAT_ERR);
 	}

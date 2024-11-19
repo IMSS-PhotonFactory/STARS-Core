@@ -1,13 +1,30 @@
 ###################################
 # Globals
 ###################################
-%::MODEL6485_KEITHLEY=();
+%::MODEL_KEITHLEY=();
 %::CMD_KEITHLEY=();
 %::PRE_KEITHLEY=();
 %::CHECK_KEITHLEY=();
 %::VER_KEITHLEY=();
 %::HELP_KEITHLEY=();
 setCMDTBL();
+
+###################################
+# Post Functions
+###################################
+sub postConvertChannelCommand{
+	my $val=shift;
+	my $ch=shift;
+	return($val);
+}
+sub IsChannelCommand{
+	my $val=shift;
+	if($val=~/(CALC[12]|:TRAC:DATA?)/){
+		return(1);
+	}else{
+		return(0);
+	}
+}
 
 ###################################
 # Check Functions
@@ -44,6 +61,7 @@ sub convEtoN{
 #--------------------------------------------------------------------
 sub checkPreGetValue{
 	my $val=uc(shift);
+	my $ch=shift;
 	my $rt=devAct(':TRAC:POIN:ACT?');if($rt eq STAT_ERR){return($rt);}
 	unless($rt<=0){
 		return(STAT_OK);
@@ -55,6 +73,7 @@ sub checkPreGetValue{
 
 sub checkONOFF{
 	my $val=uc(shift);
+	my $ch=shift;
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 
 	if($val=~/^(0|1|OFF|ON)$/){
@@ -66,6 +85,7 @@ sub checkONOFF{
 }
 sub checkRangeMinMax2{
 	my $val=uc(shift);
+	my $ch=shift;
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 	return($val);
 
@@ -83,6 +103,7 @@ sub checkRangeMinMax2{
 #--------------------------------------------------------------------
 sub checkMathFormat{
 	my $val=uc(shift);
+	my $ch=shift;
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 	return($val);
 
@@ -96,11 +117,13 @@ sub checkMathFormat{
 #--------------------------------------------------------------------
 sub checkKMathMBFactor{
 	my $val=uc(shift);
+	my $ch=shift;
 	return(checkRangeMinMax2($val));
 }
 #--------------------------------------------------------------------
 sub checkKMathUnits{
 	my $val=uc(shift);
+	my $ch=shift;
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 	
 	if($val=~/^[A-Z]$/){
@@ -116,7 +139,9 @@ sub checkKMathUnits{
 #--------------------------------------------------------------------
 sub checkPreGetValueKMath{
 	my $val=uc(shift);
-	my $rt=devAct(':CALC:STAT?');if($rt eq STAT_ERR){return($rt);}
+	my $ch=shift;
+	
+	my $rt=devAct(":CALC:STAT?");if($rt eq STAT_ERR){return($rt);}
 	if($rt=~/^(ON|1)$/){
 		$rt=checkPreGetValue();if($rt eq STAT_ERR){return($rt);}
 		return(STAT_OK);
@@ -127,6 +152,7 @@ sub checkPreGetValueKMath{
 #--------------------------------------------------------------------
 sub checkCalc2InputPath{
 	my $val=uc(shift);
+	my $ch=shift;
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 	return($val);
 
@@ -145,7 +171,9 @@ sub checkCalc2Range{
 #--------------------------------------------------------------------
 sub checkPreGetValueREL{
 	my $val=uc(shift);
-	my $rt=devAct(':CALC2:NULL:STAT?');if($rt eq STAT_ERR){return($rt);}
+	my $ch=shift;
+
+	my $rt=devAct(":CALC2:NULL:STAT?");if($rt eq STAT_ERR){return($rt);}
 	if($rt=~/^(ON|1)$/){
 		$rt=checkPreGetValue();if($rt eq STAT_ERR){return($rt);}
 		return(STAT_OK);
@@ -156,6 +184,7 @@ sub checkPreGetValueREL{
 #--------------------------------------------------------------------
 sub checkTRCSTATICTYPE{
 	my $val=uc(shift);
+	my $ch=shift;
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 	return($val);
 
@@ -207,6 +236,20 @@ sub checkDATAELEMENTS{
 	return($val);
 }
 #--------------------------------------------------------------------
+sub checkTRACEDATAELEMENTS{
+	my $val=uc(shift);
+	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
+	return($val);
+
+	foreach (split(/\,/,$val)){
+		unless(/^(READ|UNIT|TIME|STAT)$/){
+			$::Error="Specify among READ(ing),UNIT(s),TIME and STAT(us).";
+			return(STAT_ERR);
+		}
+	}
+	return($val);
+}
+#--------------------------------------------------------------------
 sub checkLineFrequency{
 	my $val=uc(shift);
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
@@ -219,6 +262,7 @@ sub checkLineFrequency{
 		return(STAT_ERR);
   	}
 }
+#--------------------------------------------------------------------
 sub syncLineFrequency{
 	my $val=shift;
 	my $lfr=devAct(':SYST:LFR?');
@@ -227,8 +271,9 @@ sub syncLineFrequency{
 	}else{
 		$::LINE_FREQUENCY=$lfr;
 		return(STAT_OK);
-}	}
-
+	}
+}
+#--------------------------------------------------------------------
 sub checkAmpNPLC{
 	my $val=uc(shift);
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
@@ -333,6 +378,7 @@ sub checkMEDRANK{
 #--------------------------------------------------------------------
 sub checkDataStatistic{
 	my $val=uc(shift);
+#	return(STAT_OK);
 	my $rt=devAct(":TRAC:POIN:ACT?");
 	unless($rt eq STAT_ERR){
 		if($rt<=0){
@@ -365,9 +411,10 @@ sub checkTRCFEED{
 sub checkTRCTIMEFORMAT{
 	my $val=uc(shift);
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
-	return($val);
+#	return($val);
 
-	if($val=~/^(ABS|DELT)$/){
+#	if($val=~/^(ABS|DELT)$/){
+	if($val=~/^(ABS(OLUTE)?|DELT(A)?)$/){
 		return($val);
 	}else{
 		$::Error='Specify ABS(olute) or DEL(ta).';
@@ -375,19 +422,33 @@ sub checkTRCTIMEFORMAT{
 	}
 }
 #--------------------------------------------------------------------
-sub checkTRCFEED{
+sub checkTRCPOINTS{
 	my $val=uc(shift);
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
-	return($val);
-	
-	if($val=~/^(SENS1|CALC|CALC2)$/){
+
+	unless($val=~/^(-?)(\d+)$/){
+		$::Error='Invalid numeric format.';
+	}else{
+		if($val>=1 and $val<=3000){
+			return($val);
+		}else{
+			$::Error='Specify size of buffer (1 to 3000).';
+		}
+	}
+	return(STAT_ERR);
+}	
+#--------------------------------------------------------------------
+sub checkTRCFEEDCONTROL{
+	my $val=uc(shift);
+	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
+
+	if($val=~/^(NEVER|NEXT)$/){
 		return($val);
 	}else{
-		$::Error='Specify CALC(ulate[1]) or CALC2(CALCulate2) or SENS1(SENse[1]).';
+		$::Error='Specify buffer control mode (NEVER or NEXT).';
 		return(STAT_ERR);
 	}
-}
-
+}	
 #--------------------------------------------------------------------
 sub checkTRIGArmSource{
 	my $val=uc(shift);
@@ -409,6 +470,7 @@ sub checkTRIGArmSource{
 		return(STAT_ERR);
 	}
 }
+#--------------------------------------------------------------------
 sub syncTRIGArmSource{
 	my($rt,$autosetflg)=@_;
 	my $src=devAct(':ARM:SOUR?');
@@ -450,7 +512,7 @@ sub checkTRIGArmCount{
 	my $val=uc(shift);
 	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
 
-	if($cal=~/^INF$/ or $val=~/^\+9\.9E37$/){
+	if($val=~/^INF$/ or $val=~/^\+9\.9E37$/){
 		$::Error='Ng: Sorry. INF(inite) this program not supported.';
 		return(STAT_ERR);
 	}
@@ -608,7 +670,19 @@ sub checkTRIGDELAY{
 		}
 	}
 }
+#--------------------------------------------------------------------
+sub checkSourceClearAutoMode{
+	my $val=uc(shift);
+	if(checkArgMissing($val) eq STAT_ERR){return(STAT_ERR);}
+#	return($val);
 
+	if($val=~/^(ALW(AYS)?|TCO(UNT)?)$/){
+		return($val);
+	}else{
+		$::Error='Specify ALW(ays) or TCO(unt).';
+		return(STAT_ERR);
+	}
+}
 ###################################
 # READ COMMAND PARAMETERS
 ###################################
@@ -629,7 +703,7 @@ sub setCMDTBL{
 			}
 			$::VER_KEITHLEY{$arrays[0]}=$arrays[5];
 			if($arrays[6]=~/^[,]*(6485)[,]*$/){
-				$::MODEL6485_KEITHLEY{$arrays[0]}=1;
+				$::MODEL_KEITHLEY{$arrays[0]}=1;
 			}
 			$::HELP_KEITHLEY{$arrays[0]}=$arrays[7];
 		}
@@ -640,7 +714,9 @@ sub setCMDTBL{
 # COMMAND PARAMETERS
 ###################################
 __DATA__
-#
+#-----------------------------------------------
+# CALC[1] SECTION
+#-----------------------------------------------
 SetMathFormat#:CALC1:FORM##\&checkMathFormat##1.0#6485#[CALC1]Select math format; MXB (mX+b) or RECiprocal(m/X+b), or LOG10.
 GetMathFormat#:CALC1:FORM?####1.0#6485#[CALC1]Query math format.
 SetKMathMFactor#:CALC1:KMAT:MMF##\&checkKMathMBFactor##1.0#6485#[CALC1]Configure math calculations: Set gmh for mX+b and m/X+b calculation; -9.99999e20 to 9.99999e20.
@@ -652,7 +728,9 @@ GetKMathUnits#:CALC1:KMAT:MUN?####1.0#6485#[CALC1]Configure math calculations: Q
 SetMathEnable#:CALC1:STAT##\&checkONOFF##1.0#6485#[CALC1]Enable or disable selected math calculation.
 GetMathEnable#:CALC1:STAT?####1.0#6485#[CALC1]Query state of selected math calculation.
 GetValueMath#:CALC1:DATA?##\&checkPreGetValueKMath##1.0#6485#[CALC1]Return all math calculation results triggered by INITiate.
-#
+#-----------------------------------------------
+# CALC[2] SECTION
+#-----------------------------------------------
 SetLimitTestInputPath#:CALC2:FEED##\&checkCalc2InputPath##1.0#6485#[CALC2]Select input path for limit testing; CALCulate[1]or SENSe[1].
 GetLimitTestInputPath#:CALC2:FEED?####1.0#6485#[CALC2]Query input path for limit tests.
 SetRELInputPath#:CALC2:FEED##\&checkCalc2InputPath##1.0#6485#[CALC2]Select input path for limit testing; CALCulate[1]or SENSe[1].
@@ -677,21 +755,27 @@ GetRELOffset#:CALC2:NULL:OFFS?####1.0#6485#[CALC2]Configure and control Rel: Que
 SetRELEnable#:CALC2:NULL:STAT##\&checkONOFF##1.0#6485#[CALC2]Configure and control Rel: Enable or disable Rel.
 GetRELEnable#:CALC2:NULL:STAT?####1.0#6485#[CALC2]Configure and control Rel: Query state of Rel.
 GetValueREL#:CALC2:DATA?##\&checkPreGetValueREL##1.0#6485#[CALC2]Return all [CALC2]readings triggered by INITiate.
-#
+#-----------------------------------------------
+# CALC3 SECTION:
+#-----------------------------------------------
 SetTraceStatisticType#:CALC3:FORM##\&checkTRCSTATICTYPE##1.0#6485#[CALC3]Select buffer statistic; MEAN, SDEViation, Maximum, MINimum or PKPK.
 GetTraceStatisticType#:CALC3:FORM?####1.0#6485#[CALC3]Query selected statistic.
 GetValueStatistic#:CALC3:DATA?##\&checkDataStatistic##1.0#6485#[CALC3]: Read the selected buffer statistic.
-#
+#-----------------------------------------------
+# DISPLAY SECTION
+#-----------------------------------------------
 SetDisplayDigits#:DISP:DIG##\&checkDisplayDigits##1.0#6485#[DISPLAY]Set display resolution; 4 to 7.
 GetDisplayDigits#:DISP:DIG?####1.0#6485#[DISPLAY]Query display resolution.
 SetDisplayEnable#:DISP:ENAB##\&checkONOFF##1.0#6485#[DISPLAY]Turn fron panel display enable or disable.
 GetDisplayEnable#:DISP:ENAB?####1.0#6485#[DISPLAY]Query state of display.
-#
+#-----------------------------------------------
+# FORMAT SECTION
+#-----------------------------------------------
 SetDataFormatElements#:FORM:ELEM##\&checkDATAELEMENTS##1.0#6485#[FORMAT]Specify data elements; READing, UNITs, TIME, and STATus.
 GetDataFormatElements#:FORM:ELEM?####1.0#6485#[FORMAT]Query data format elements.
-#
-SetNPLCycles#:SENS:CURR:DC:NPLC##\&checkAmpNPLC##1.0#6485#[SENSE]Amps function: Set integration rate in line cycles (PLC); 0.01 to 6.0 (60 Hz) or 5.0 (50Hz).
-GetNPLCycles#:SENS:CURR:DC:NPLC?####1.0#6485#[SENSE]Amps function: Query NPLC.
+#-----------------------------------------------
+# SENSE[1,2] SECTION
+#-----------------------------------------------
 SetRange#:SENS:CURR:DC:RANGe##\&checkAmpRANGE##1.0#6485#[SENSE]Amps function: Configure measurement range: Select range; 2.1E-9 to 2.1E-2 (amps).
 GetRange#:SENS:CURR:DC:RANGe?####1.0#6485#[SENSE]Amps function: Query range value.
 SetAutoRangeEnable#:SENS:CURR:DC:RANGe:AUTO##\&checkONOFF##1.0#6485#[SENSE]Amps function: Enable or disable autorange.
@@ -700,6 +784,8 @@ SetAutoRangeMax#:SENS:CURR:DC:RANGe:AUTO:ULIM##\&checkAmpRANGE##1.0#6485#[SENSE]
 GetAutoRangeMax#:SENS:CURR:DC:RANGe:AUTO:ULIM?####1.0#6485#[SENSE]Amps function: Query upper limit for autorange.
 SetAutoRangeMin#:SENS:CURR:DC:RANGe:AUTO:LLIM##\&checkAmpRANGE##1.0#6485#[SENSE]Amps function: Select autorange lower limit; 2.1E-9 to 2.1E-2 (amps).
 GetAutoRangeMin#:SENS:CURR:DC:RANGe:AUTO:LLIM?####1.0#6485#[SENSE]Amps function: Query lower limit for autorange.
+SetNPLCycles#:SENS:CURR:DC:NPLC##\&checkAmpNPLC##1.0#6485#[SENSE]Amps function: Set integration rate in line cycles (PLC); 0.01 to 6.0 (60 Hz) or 5.0 (50Hz).
+GetNPLCycles#:SENS:CURR:DC:NPLC?####1.0#6485#[SENSE]Amps function: Query NPLC.
 SetAverageEnable#:SENS:AVER##\&checkONOFF##1.0#6485#[SENSE]Amps function: Query state of digital filter.
 GetAverageEnable#:SENS:AVER?####1.0#6485#[SENSE]Amps function: Query state of advanced filter.
 SetAverageTControl#:SENS:AVER:TCON##\&checkTCON##1.0#6485#[SENSE]Amps function: Select Digital filter control; MOVing or REPeat. MOV
@@ -714,43 +800,59 @@ SetMedianEnable#:SENS:MED##\&checkONOFF##1.0#6485#[SENSE]Amps function:Enable or
 GetMedianEnable#:SENS:MED?####1.0#6485#[SENSE]Amps function: Query state of median filter.
 SetMedianRank#:SENS:MED:RANK##\&checkMEDRANK##1.0#6485#[SENSE]Amps function: Specify gnh for rank; 1 to 5 (rank = 2n+1).
 GetMedianRank#:SENS:MED:RANK?####1.0#6485#[SENSE]Amps function: Query rank.
-#
+#-----------------------------------------------
+# SYSTEM SECTION
+#-----------------------------------------------
+SetAutoZeroEnable#:SYST:AZERO##\&checkONOFF##1.0#6485#[SENSE]Amps function: Enable or disable autozero.
+GetAutoZeroEnable#:SYST:AZERO?####1.0#6485#[SENSE]Amps function: Query state of autozero.
+SetLineFrequency#:SYST:LFR##\&checkLineFrequency#\&syncLineFrequency#1.0#6485#[SENSE]Amps function: Select power line frequency; 50 or 60 (Hz).
+GetLineFrequency#:SYST:LFR?####1.0#6485#[SENSE]Amps function: Query frequency setting.
+SetLineFrequencyAutoEnable#:SYST:LFR:AUTO##\&checkONOFF#\&syncLineFrequency#1.0#6485#[SENSE]Amps function: Enable or disable auto frequency.
+GetLineFrequencyAutoEnable#:SYST:LFR:AUTO?###\&syncLineFrequency#1.0#6485#[SENSE]Amps function: Query state of auto frequency.
+ResetTimeStamp#:SYST:TIME:RES####1.0#6485#[SENSE]Amps function: Reset timestamp to 0 seconds.
 SetZeroCheckEnable#:SYST:ZCH##\&checkONOFF##1.0#6485#[SENSE]Amps function: Enable or disable zero check.
 GetZeroCheckEnable#:SYST:ZCH?####1.0#6485#[SENSE]Amps function: Query state of zero check.
 SetZeroCorrectEnable#:SYST:ZCOR##\&checkONOFF##1.0#6485#[SENSE]Amps function: Enable or disable zero correct.
 GetZeroCorrectEnable#:SYST:ZCOR?####1.0#6485#[SENSE]Amps function: Query state of zero correct.
 AcquireZeroCorrect#:SYST:ZCOR:ACQ####1.0#6485#[SENSE]Amps function: Acquire a new zero correct value.
-SetLineFrequency#:SYST:LFR##\&checkLineFrequency#\&syncLineFrequency#1.0#6485#[SENSE]Amps function: Select power line frequency; 50 or 60 (Hz).
-GetLineFrequency#:SYST:LFR?####1.0#6485#[SENSE]Amps function: Query frequency setting.
-SetLineFrequencyAutoEnable#:SYST:LFR:AUTO##\&checkONOFF#\&syncLineFrequency#1.0#6485#[SENSE]Amps function: Enable or disable auto frequency.
-GetLineFrequencyAutoEnable#:SYST:LFR:AUTO?###\&syncLineFrequency#1.0#6485#[SENSE]Amps function: Query state of auto frequency.
-SetAutoZeroEnable#:SYST:AZERO##\&checkONOFF##1.0#6485#[SENSE]Amps function: Enable or disable autozero.
-GetAutoZeroEnable#:SYST:AZERO?####1.0#6485#[SENSE]Amps function: Query state of autozero.
-ResetTimeStamp#:SYST:TIME:RES####1.0#6485#[SENSE]Amps function: Reset timestamp to 0 seconds.
-#
+#-----------------------------------------------
+# TRACE SECTION
+#-----------------------------------------------
+#GetValue#:TRAC:DATA?#\&checkPreGetValue###1.0#6485#
+GetValue#:TRAC:DATA?####1.0#6485#
+GetTraceData#####1.0#6485#
+SetTraceTimeFormat#:TRAC:TST:FORM##\&checkTRCTIMEFORMAT##1.0#6485#[TRACE]Select timestamp format; ABSolute or DELta.
+GetTraceTimeFormat#:TRAC:TST:FORM?####1.0#6485#[TRACE]Query timestamp format.
+SetTracePoints#:TRAC:POIN##\&checkTRCPOINTS##1.0#6485#[TRACE]Specify size of buffer: 1 to 3000.
+GetTracePoints#:TRAC:POIN?####1.0#6485#[TRACE]Query buffer size.
+SetTraceFeedControl#:TRAC:FEED:CONT##\&checkTRCFEEDCONTROL##1.0#6485#[TRACE]Specify buffer control mode (NEVER or NEXT).
+GetTraceFeedControl#:TRAC:FEED:CONT?####1.0#6485#[TRACE]Query buffer control mode.
 SetTraceFeed#:TRAC:FEED##\&checkTRCFEED##1.0#6485#[TRACE]Select source of readings for buffer.; CALCulate[1]orCALCulate[2]orSENSe[1].
 GetTraceFeed#:TRAC:FEED?####1.0#6485#[TRACE]Query source of readings for buffer.
-SetTraceTimeFormat#:TRAC:TST:FORM##\&checkTRCTIMEFORMAT##1.0#6485#[TRACE]Select timestamp format; ABSolute or DELta. ABS
-GetTraceTimeFormat#:TRAC:TST:FORM?####1.0#6485#[TRACE]Query timestamp format.
-GetValue#:TRAC:DATA?#\&checkPreGetValue###1.0#6485#
-#
+ClearTraceBuffer#:TRAC:CLEAR####1.0#6485#[TRACE]Clear readings from buffer.
+#-----------------------------------------------
+# ARM SECTION
+#-----------------------------------------------
 SetTriggerArmSource#:ARM:SOUR##\&checkTRIGArmSource#\&syncTRIGArmSource#10#6485#[TRIGGER]Select control source; IMMediate, TIMer, BUS,TLINk, or MANual.
 GetTriggerArmSource#:ARM:SOUR?###\&syncTRIGArmSource#1.0#6485#[TRIGGER]Query arm control source.
 SetTriggerArmTimer#:ARM:TIM##\&checkTRIGArmTimer##1.0#6485#[TRIGGER]Set timer interval; 0.001 to 99999.999 (sec).
 GetTriggerArmTimer#:ARM:TIM?####1.0#6485#[TRIGGER]Query timer interval.
+SetTriggerArmCount#:ARM:COUN#\&dev2Idle#\&checkTRIGArmCount#\&syncTRIGArmCount#1.0#6485#[TRIGGER]Set measure count of arm control; 1 to 2500.
+GetTriggerArmCount#:ARM:COUN?####1.0#6485#[TRIGGER]Query measure count of arm control.
+#-----------------------------------------------
+# TRIGGER SECTION
+#-----------------------------------------------
 SetTriggerSource#:TRIG:SOUR##\&checkTRIGSource##1.0#6485#[TRIGGER]Select control source; IMMediate or TLINk.
 GetTriggerSource#:TRIG:SOUR?####1.0#6485#[TRIGGER]Query trigger control source.
 SetTriggerDelay#:TRIG:DEL##\&checkTRIGDELAY##1.0#6485#[TRIGGER]Set trigger delay; 0 to 999.9999 (sec).
 GetTriggerDelay#:TRIG:DEL?####1.0#6485#[TRIGGER]Query trigger delay value.
-SetTriggerAutoDelayEnable#:TRIG:DEL:AUTO##\&checkONOFF##1.0#6485#[TRIGGER]Enable or disable auto delay.
-GetTriggerAutoDelayEnable#:TRIG:DEL:AUTO?####1.0#6485#[TRIGGER]Query state of auto delay.
-SetTriggerArmCount#:ARM:COUN#\&dev2Idle#\&checkTRIGArmCount#\&syncTRIGArmCount#1.0#6485#[TRIGGER]Set measure count of arm control; 1 to 2500.
-GetTriggerArmCount#:ARM:COUN?####1.0#6485#[TRIGGER]Query measure count of arm control.
 SetTriggerCount#:TRIG:COUN#\&dev2Idle#\&checkTRIGCount#\&syncTRIGCount#1.0#6485#[TRIGGER]Set measure count of trigger control; 1 to 2500.
 GetTriggerCount#:TRIG:COUN?####1.0#6485#[TRIGGER]Query measure count of trigger control.
-hello#####1.0#6485#return reply message.'@hello nice to meet you.'
-help#####1.0#6485#no parameter -> return command list. <paramater> -> show command <paramater> help. 
-#help Only Code Embedded
+SetTriggerAutoDelayEnable#:TRIG:DEL:AUTO##\&checkONOFF##1.0#6485#[TRIGGER]Enable or disable auto delay.
+GetTriggerAutoDelayEnable#:TRIG:DEL:AUTO?####1.0#6485#[TRIGGER]Query state of auto delay.
+#-----------------------------------------------
+# COMMON SECTION
+#-----------------------------------------------
 hello#####1.0#6485#return reply message.'@hello nice to meet you.'
 help#####1.0#6485#no parameter -> return command list. <Using paramater> -> show command <paramater> help. 
 Reset#####1.0#6485#Reset Command. Return the Model 6485 to the *RST default conditions.
@@ -758,4 +860,8 @@ Preset#####1.0#6485#Preset Command. Return the Model 6485 to the :SYST:PRES defa
 LoadUserSetup#####1.0#6485#Recall Command. Return the Model 6485 to the setup configuration stored in the specified memory location.
 SaveToUserSetup#####1.0#6485#Save Command. Saves the current setup to the specified memory location.
 Run#####1.0#6485#Initiate one trigger cycle. Run measurement. 
+GetDeviceList#####1.0#6485#
+TriggerRun#####1.0#6485#Initiate one trigger cycle. Run measurement. 
 GoIdle#####1.0#6485#Reset Trigger system(goes to idle state).
+Local#:SYST:Local####1.0#6485#[SENSE]Amps function: Goto Local
+SendRawCommand#####1.0#6485#Send device command. Option -rawenable required.
