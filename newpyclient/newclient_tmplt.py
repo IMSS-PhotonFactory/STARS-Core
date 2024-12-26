@@ -85,7 +85,7 @@ class <<client_name>>():
         # Wait 0.5 seconds to make return value of iscallbackrunning() True
         time.sleep(0.5)
 
-        # Interval or waiting for keybord input
+        # Interval or waiting for keyboard input
         #============================================================
         while True:
             if self.st.iscallbackrunning() is False:
