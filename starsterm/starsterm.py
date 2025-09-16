@@ -79,7 +79,7 @@ class starsterm():
                 if pn > 9:
                     break
                 mess = mess.replace("${}".format(pn), params[pn])
-            if re.search('\$\d+', mess):
+            if re.search('r\$\d+', mess):
                 print("Error: parameter is not enough.: {}".format(mess))
                 return None
             return mess
