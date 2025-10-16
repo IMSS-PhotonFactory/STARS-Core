@@ -1,21 +1,8 @@
-﻿History
------------------------------------------------------
- 2016-08-24 (Wed) refresh executables
- 2016-06-17 (Fri) beta starsbridge based python.
+﻿## History
+ 2025-10-15:	Fixed errors in python 3.12 caused by the removal of SafeConfigParser. Added new feature "Autoflgon".
+ 2016-08-24:	Initial release
+ 2016-06-17:	StarsBridge-based Python beta version.
 
------------------------------------------------------
-Tested
------------------------------------------------------
-    EXE
-        2016-10-25 ■Installed on Windows7 64bit(Ver.2016-08-24)
-        2016-08-24 ■32bit Windows7(Ver.2016-08-24)
-        2016-06-17 ■64bit Windows10(Ver.2016-06-17)
-
-    動作確認
-        2016-08-24 ■python 3.4.4 on Windows7 32bit
-        2016-08-24 ■python 3.5.1 on Windows7 32bit
-        2016-06-17 ■python 2.7.10 on Windows10 64bit
-        2016-06-17 ■python 2.6.6 on Linux
-
-py setup.py build [python setup.py build]
-でbuild以下にPythonをインストールしなくても使用できるEXEファイルができる。
+## Tested
+ Windows 10 64-bit: Python 3.12.2
+ 

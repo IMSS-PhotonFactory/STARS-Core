@@ -5,12 +5,14 @@
     History:
        0.1b     Beta version     2016.06.17    Yasuko Nagatani
        1.0      1st release      2016.08.24    1st Installed for KEK-PF SAX-BL
+       1.1      Development                    Add new function "Autoflgon" 
+       1.2      2nd release      2025.10.15    Fix 3.12 errors due to SafeConfigParser removal 
 """
 
 # Define: program info
 __author__ = 'Yasuko Nagatani'
-__version__ = '1.0'
-__date__ = '2016-08-24'
+__version__ = '1.2'
+__date__ = '2025-10-15'
 __license__ = 'KEK'
 
 ###############################################################################
@@ -29,10 +31,10 @@ if __name__ == '__main__':
     import threading
 
     try:
-        from configparser import ConfigParser, SafeConfigParser,NoSectionError
+        from configparser import ConfigParser,NoSectionError
     except ImportError:
         try:
-            from ConfigParser import ConfigParser, SafeConfigParser,NoSectionError
+            from ConfigParser import ConfigParser,NoSectionError
         except ImportError:
             stderr.write('Install configparser for python 3.x')
             stderr.write(', ConfigParser for python 2.x')
@@ -139,7 +141,7 @@ if __name__ == '__main__':
         def mystart_cb_handler(self, callback):
             self.callback = callback
             th = _myCallbackThread(self)
-            th.setDaemon(True)
+            th.daemon = True
             th.start()
 
     ##################################################################
@@ -249,6 +251,13 @@ if __name__ == '__main__':
                 # Command message: ignore, command request from node system never comes
                 else:
                     _outputlog(WARNING, '[' + si.nodename + '] Unexpected. ' + allmess)
+
+            # Send to me as AUTOFLGONLIST
+            elif allmess.nodeto.startswith(si.nodename + '.'+si.nodename + '.AUTOFLGONLIST'):
+                if(si.postautoflgoncommandlist is not None):
+                    v = si.postautoflgoncommandlist
+                    for item in v.splitlines():
+                        rt = mystarssend(si, item)
 
             # Send back to client with System alias
             elif allmess.nodeto.startswith(si.nodename + '.System.'):
@@ -438,7 +447,7 @@ if __name__ == '__main__':
         _configfile = _opthandle.config
         if(path.exists(_configfile) == True):
             if(path.isfile(_configfile) == True):
-                _confighandle = SafeConfigParser()
+                _confighandle = ConfigParser()
                 _confighandle.read(_configfile)
             else:
                 stderr.write('Option --config: Config is not file. [' + _opthandle.config + ']')
@@ -451,7 +460,7 @@ if __name__ == '__main__':
         _configfile = ScriptPath + '/' + 'config.cfg'
         if(path.exists(_configfile) == True):
             if(path.isfile(_configfile) == True):
-                _confighandle = SafeConfigParser()
+                _confighandle = ConfigParser()
                 _confighandle.read(_configfile)
 
     # Read config: STARS section
@@ -573,22 +582,38 @@ if __name__ == '__main__':
     if(_confighandle is not None):
         # Read config of STARS section
         v=_readconfig(_confighandle, StarsNodeName1, 'autoflgonlist')
+        st.postautoflgoncommandlist = None
         if(v is not None):
             for item in v.splitlines():
+                if(item.strip()==''):
+                    continue
+                _outputlog(INFO, 'autoflgon='+item+'\n')
                 rt = mystarssend(st, st.nodename + '>System flgon ' + item)
+        _outputlog(INFO, st.nodename + '.' + st.nodename+'.AUTOFLGONLIST' + '>System hello'+'\n')
+        rt = mystarssend(st, st.nodename + '.' + st.nodename+'.AUTOFLGONLIST' + '>System hello')
         v=_readconfig(_confighandle, StarsNodeName1, 'postautoflgoncommandlist')
         if(v is not None):
-            for item in v.splitlines():
-                rt = mystarssend(st, item)
-                
+            st.postautoflgoncommandlist = v
+            _outputlog(INFO, 'postautoflgon='+st.postautoflgoncommandlist+'\n')
+            #for item in v.splitlines():
+            #    rt = mystarssend(st, item)
+
         v=_readconfig(_confighandle, StarsNodeName2, 'autoflgonlist')
+        st2.postautoflgoncommandlist = None
         if(v is not None):
             for item in v.splitlines():
+                if(item.strip()==''):
+                    continue
+                _outputlog(INFO, 'autoflgon='+item+'\n')
                 rt = mystarssend(st2, st2.nodename + '>System flgon ' + item)
+        _outputlog(INFO, st2.nodename + '.' + st2.nodename+'.AUTOFLGONLIST' + '>System hello'+'\n')
+        rt = mystarssend(st2, st2.nodename + '.' + st2.nodename+'.AUTOFLGONLIST' + '>System hello')
         v=_readconfig(_confighandle, StarsNodeName2, 'postautoflgoncommandlist')
         if(v is not None):
-            for item in v.splitlines():
-                rt = mystarssend(st2, item)
+            st2.postautoflgoncommandlist = v
+            _outputlog(INFO, 'postautoflgon='+st2.postautoflgoncommandlist+'\n')
+            #for item in v.splitlines():
+            #    rt = mystarssend(st2, item)
 
     st.mystart_cb_handler(starshandler_server1)
     st2.mystart_cb_handler(starshandler_server2)
@@ -653,6 +678,50 @@ if __name__ == '__main__':
             
 
     ### Final
+    ## Alert disconnect
+    def stars_alertdisconnect(si,si2):
+        rt1=mystarsisconnect(si)
+        rt2=mystarsisconnect(si2)
+
+        if(rt1):
+            if(si2.postautoflgoncommandlist is not None):
+                mdict=dict()
+                v = si2.postautoflgoncommandlist
+                for item in v.splitlines():
+                    buf=item.strip()
+                    if(buf==''):
+                        continue
+                    mesg=stars.StarsMessage(buf)
+                    if(mesg.nodefrom == ''):
+                        mesg=stars.StarsMessage(si.nodename + '>' + buf)
+                        if(mesg.nodefrom == ''):
+                            _outputlog(INFO, 'Ignored invalid string in postautoflgoncommandlist:' + buf + '.\n')
+                            continue
+                    if(mesg.nodeto in mdict):
+                        continue
+                    mdict[mesg.nodeto] = 1
+                    rt = mystarssend(si, si.nodename+'.'+mesg.nodeto+'>System _Disconnected')
+                    
+        if(rt2):
+            if(si.postautoflgoncommandlist is not None):
+                mdict=dict()
+                v = si.postautoflgoncommandlist
+                for item in v.splitlines():
+                    buf=item.strip()
+                    if(buf==''):
+                        continue
+                    mesg=stars.StarsMessage(buf)
+                    if(mesg.nodefrom == ''):
+                        mesg=stars.StarsMessage(si.nodename + '>' + buf)
+                        if(mesg.nodefrom == ''):
+                            _outputlog(INFO, 'Ignored invalid string in postautoflgoncommandlist:' + buf + '.\n')
+                            continue
+                    if(mesg.nodeto in mdict):
+                        continue
+                    rt = mystarssend(si2, si2.nodename+'.'+mesg.nodeto+'>System _Disconnected')
+        return
+
+    stars_alertdisconnect(st,st2)
     mystarsdisconnect(st)
     mystarsdisconnect(st2)
     _outputlog(INFO, 'Bye.')
