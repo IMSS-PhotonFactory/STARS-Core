@@ -15,16 +15,19 @@
               XonXoff    = No
               RtsCts     = No
               DsrDtr     = No
+           This version does not have changing timeout function.
+           Use DEFAULT_TIMEOUT.
     History:
         1.0    2021-04-27 Takashi Kosuge
         1.1    2022-08-03 Takashi Kosuge added compatibility with nportserv.py. Some methods came from the library.
         1.2    2023-07-11 Takashi Kosuge changed a few points of comment for help function.
         1.3    2023-10-25 Takashi Kosuge fixed bug on readb.
+        1.4    2025-11-26 Takashi Kosuge fixed bug on readline.
 """
 # Define: program info
 __author__ = 'Takashi Kosuge'
-__version__ = '1.3'
-__date__ = '2023-10-25'
+__version__ = '1.4'
+__date__ = '2025-11-26'
 __license__ = 'MIT'
 
 import serial
@@ -204,15 +207,17 @@ class PfiPySerial():
         self._debugprint("[read] {}".format(buf))
         return buf
 
-    def readline(self):
+    def readline(self, delimiter = None):
         """Read from serial port with delimiter.
             ** Not recommended for compatibility with nportserv.py **
         """
+        if delimiter == None:
+            delimiter == self.recvdelimiter
         while True:
-            mtchd = re.match('[^{0:}]+{0:}'.format(self.recvdelimiter), self.rdlbuf)
+            mtchd = re.match('[^{0:}]+{0:}'.format(delimiter), self.rdlbuf)
             if mtchd != None:
-                self.rdlbuf = re.sub(mtchd.group(), '', self.rdlbuf, 1)
-                return mtchd.group().replace(self.recvdelimiter, '')
+                self.rdlbuf = self.rdlbuf.replace(mtchd.group(), '', 1)
+                return mtchd.group().replace(delimiter, '')
             buf = self.read()
             if len(buf) == 0:
                 return(buf)
@@ -231,15 +236,15 @@ class PfiPySerial():
     def receive(self, timeout='', delimiter=None, exceptionret = None):
         """Receieve message
              Return received data.
-             Set the arguments - timeout, delimieter if change temporarily the default value.
-             Value exceptonret is dummy for compativility.
+             Set the arguments - delimieter if change temporarily the default value.
+             Value timeout and exceptonret is dummy for compativility.
         """
         if delimiter is None:
             delimiter = self.recvdelimiter
         if delimiter == '':
             return self.read()
         else:
-            return self.readline()
+            return self.readline(delimiter)
 
     def connect(self, force=False):
         """Dummy for compatibility with nportserv.py.
