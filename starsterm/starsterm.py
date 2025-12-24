@@ -4,8 +4,8 @@
 #################################################################################
 # Define: program info
 __author__ = 'T.Kosuge'
-__version__ = '1.1'
-__date__ = '2025-09-16'
+__version__ = '1.2'
+__date__ = '2025-12-24'
 __license__ = 'MIT'
 
 import time
@@ -79,7 +79,7 @@ class starsterm():
                 if pn > 9:
                     break
                 mess = mess.replace("${}".format(pn), params[pn])
-            if re.search('r\$\d+', mess):
+            if re.search(r'\$\d+', mess):
                 print("Error: parameter is not enough.: {}".format(mess))
                 return None
             return mess
