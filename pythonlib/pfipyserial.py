@@ -23,11 +23,12 @@
         1.2    2023-07-11 Takashi Kosuge changed a few points of comment for help function.
         1.3    2023-10-25 Takashi Kosuge fixed bug on readb.
         1.4    2025-11-26 Takashi Kosuge fixed bug on readline.
+        1.5    2026-07-16 Takashi Kosuge fixed bug on default timeout from config file and settimeout.
 """
 # Define: program info
 __author__ = 'Takashi Kosuge'
-__version__ = '1.4'
-__date__ = '2025-11-26'
+__version__ = '1.5'
+__date__ = '2026-07-16'
 __license__ = 'MIT'
 
 import serial
@@ -101,7 +102,7 @@ class PfiPySerial():
             if re.match('(YES|TRUE)', cfg['DsrDtr'], re.IGNORECASE):
                 rs['dsrdtr'] = True
         if 'Timeout' in cfg:
-            rs['timeout'] = int(cfg['Timeout'])
+            rs['timeout'] = float(cfg['Timeout'])
             self.initialtimeout = rs['timeout']
 
         self.tty = serial.Serial(**rs)
@@ -129,6 +130,7 @@ class PfiPySerial():
         elif timeout<0:
             self.error="timeout value {} error. [timeout>=0]".format(timeout)
             return False
+        self.tty.timeout = timeout
         return True
 
     def getrecvdelimiter(self):
